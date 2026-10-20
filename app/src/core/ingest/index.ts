@@ -70,7 +70,9 @@ export async function parseBytes(bytes: ArrayBuffer, name: string, opts: ParseOp
   const format = detectFormat(name) ?? (await sniff(bytes));
   if (!format) throw new IngestError('unsupported', `${name}: only .txt, .md, .docx, .pdf and .epub files can be read.`);
   const loader = await loaderFor(format);
-  const raw = await loader(bytes, { name, ...(opts.onProgress ? { onProgress: opts.onProgress } : {}) });
+  // Loaders get their own copy: pdf.js transfers (detaches) the buffer it is given, and the
+  // caller still needs the original bytes to store as the source.
+  const raw = await loader(bytes.slice(0), { name, ...(opts.onProgress ? { onProgress: opts.onProgress } : {}) });
   const doc = buildDocument(raw, { format, fallbackTitle: stripExtension(name), ...(opts.locale ? { locale: opts.locale } : {}) });
   if (doc.blocks.every((b) => b.sentences.every((s) => s.speakText === ''))) {
     throw new IngestError('empty', `No readable text found in ${name}.`);

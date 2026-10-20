@@ -1,6 +1,16 @@
 // Web Speech engine (spec 7.2). In Edge this reaches Microsoft's online natural voices.
 import type { EngineAvailability, SpeakOptions, Voice, VoiceEngine } from '../types';
 
+/** Plain-English reasons for SpeechSynthesisErrorEvent.error codes the user can act on. */
+const SPEECH_ERRORS: Record<string, string> = {
+  'not-allowed': 'the browser blocked speech until you click or press a key on the page',
+  network: 'the voice service could not be reached; check the internet connection',
+  'synthesis-unavailable': 'no speech engine is available in this browser',
+  'audio-busy': 'another app is using the audio output',
+  'audio-hardware': 'no audio output device was found',
+  'voice-unavailable': 'the chosen voice is no longer available',
+};
+
 /** The engine could not confirm the text was spoken (ADR-14). The player must not advance. */
 export class SpeechStalledError extends Error {
   constructor(reason: string) {
@@ -171,7 +181,7 @@ export class WebSpeechEngine implements VoiceEngine {
       };
       u.onerror = (ev) => {
         // Our own cancel is handled by onAbort. Anything else means the text was not heard.
-        settle(() => reject(new SpeechStalledError(`speech error "${ev.error}"`)));
+        settle(() => reject(new SpeechStalledError(SPEECH_ERRORS[ev.error] ?? `speech error "${ev.error}"`)));
       };
 
       if (synth.paused) synth.resume();

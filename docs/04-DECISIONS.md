@@ -124,3 +124,39 @@ fails, Azure moves forward as the primary engine.
   join-only-before-lowercase (etc., e.g., i.e., ...). The spec's single list
   would have split "Dr. Smith" because the next word is capitalised.
 - 6.2: a dash between two numbers reads as "to" ("1990–1995").
+
+## ADR-19 · 2026-10-21 · Storage contract additions made in Step 9
+- A `summaries` store holds one small `DocSummary` per document. The library
+  list reads only these, so opening the app never loads multi-MB `DocRecord`s.
+  Every write to `docs` writes the summary in the same transaction.
+- `sources` stores `{ docId, bytes: ArrayBuffer }`, not a `Blob`. ArrayBuffers
+  clone reliably in every IndexedDB, including the one the tests use, and the
+  re-parse path needs bytes anyway.
+- `PositionRecord.ordinal` (optional) is the sentence's reading-order index.
+  The library shows progress as `ordinal / sentenceCount` without opening the
+  document. Positions from old exports without it still import.
+- Spec sections 4 and 9.1 are updated to match. The schema stays at version 1
+  because nothing was released before these changes.
+
+## ADR-20 · 2026-10-21 · Fixes from the Step 16 browser check
+Found by driving the built app in a browser, not by the unit tests:
+- pdf.js transfers (detaches) the `ArrayBuffer` it is given, so storing the
+  original bytes afterwards failed. `parseBytes` now gives every loader its own
+  copy (`bytes.slice(0)`), and a test checks the caller's buffer is untouched.
+- That failure also exposed a non-atomic add: `put()` threw synchronously, the
+  requests already queued committed, and the library showed a document with no
+  source. `addDocument` now aborts the transaction on any failure (test added).
+- mammoth reports each unknown Word style twice in its own wording. These are
+  merged into one line: "Word styles not recognised: X. Their text is read as
+  normal paragraphs." Other mammoth messages pass through unchanged.
+- Speech error codes become plain reasons. Edge returns `not-allowed` when
+  speech starts without a click or key press; the app now says so.
+- Phone layout: the bottom-sheet panel was fixed to the screen bottom with a
+  120 px allowance, but the controls are about 168 px tall, so the last
+  contents entries sat under them. The sheet is now anchored to the bottom of
+  the reading area, which ends where the controls begin, whatever their height.
+- Step 16's "Update available" toast was missing. It now appears when a new
+  service worker takes over a page that already had one (not on first install).
+- `app/start-readaloud.cmd` serves `app/dist` on `http://127.0.0.1:4173` and
+  opens Edge, because Rockson's PC has no Node on the PATH. This is the "local
+  static server" CLAUDE.md allows; nothing is deployed or published.

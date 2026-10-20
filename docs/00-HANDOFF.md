@@ -52,27 +52,29 @@ See `04-DECISIONS.md` for the reasoning. Summary:
 
 ## 4. What exists right now
 
-Only documents. No code. The folder:
+Phase 1 (Steps 1–16) is built, tested and committed. `docs/PROGRESS.md` has
+the step-by-step status, the manual checks done, and what still needs Rockson.
 
 ```
 ReadAloudApp/
-  CLAUDE.md             instructions for you
-  BUILD-APPROACH.md     the original overview (why, options, phases)
-  docs/
-    00-HANDOFF.md       this file
-    01-DESIGN-SPEC.md   the contract
-    02-BUILD-PLAN.md    ordered steps with acceptance checks
-    03-TEST-PLAN.md     fixtures, unit tests, manual scripts
-    04-DECISIONS.md     decision log
-    PROGRESS.md         status board (you maintain it)
+  CLAUDE.md, BUILD-APPROACH.md, docs/      as before
+  app/
+    src/core/        no UI imports: types, text/, ingest/ (txt md docx epub pdf),
+                     model.ts, store/ (db, repo, settings, export), engines/
+                     (webspeech, registry), player/, flags/
+    src/ui/          Preact: screens/ (Library, Reader, Settings), components/,
+                     hooks/, styles/ (base, reader, mobile)
+    test/            vitest, one file per unit-test group, helpers/ build
+                     sample .docx and .epub in memory
+    vite.config.ts   PWA manifest + file handlers, CSP meta (build only)
 ```
 
 ## 5. Where to start
 
-Open `02-BUILD-PLAN.md`, Phase 1, Step 1 (scaffold). Work one step per turn.
-Phase 1 ends when Rockson can listen to a chapter of his book in Edge, press
-one key to flag a mistake, and export `corrections.md`. That alone is useful to
-him, so get there before polishing anything.
+Phase 1 is waiting on Rockson for its gate (see PROGRESS "Needs Rockson"):
+listen by ear in Edge, then proof one real chapter in the installed app. Do
+not start Phase 2 until that gate is ticked, unless Rockson says otherwise.
+Phase 2 starts at Step 17 and needs his Azure key.
 
 ## 6. Gotchas that will otherwise cost hours
 
@@ -135,7 +137,30 @@ Phone (Phase 3):
 
 ## 7. Toolchain
 
-- Windows has Node 22 and pnpm available for `pnpm dev/test/build`.
+- **There is no Node on the Windows PATH.** Phase 1 was built with a portable
+  Node 22 copied into a Claude session scratchpad:
+  `<session scratchpad>/nodewin/`
+  (`env.sh` beside it puts it on PATH and `cd`s into `app/`). pnpm 11 comes
+  from `corepack`. That folder is temporary. If it is gone, ask Rockson to
+  install Node 22 LTS, or unpack the official portable zip into your own
+  scratchpad. Then update the two ReadAloud entries in the parent
+  `Fable/.claude/launch.json`.
+- Rockson starts the built app with `app/start-readaloud.cmd` (double-click).
+  It uses system Node if present, else the portable one above, serves
+  `app/dist` on `http://127.0.0.1:4173` and opens Edge. Rebuild before he
+  uses a change.
+- The preview tool reads `launch.json` from the **parent** `Fable/` folder,
+  not from `ReadAloudApp/`. The `readaloud-preview` entry serves `app/dist` on
+  `http://127.0.0.1:4173` (run `pnpm build` first). `localhost` does not reach
+  it from the browser pane, because the pane resolves `localhost` to IPv6.
+- After a rebuild, the service worker serves the previous build once; the
+  second load shows the new one. Reload twice before judging a change.
+- The browser pane has only Basic Windows voices. Natural voices need real
+  Edge. To check them without sound, start Edge with `--headless=new
+  --mute-audio --remote-debugging-port=<port> --user-data-dir=<your scratchpad>/edge-qa`
+  and drive it over CDP. Pass `userGesture: true` to `Runtime.evaluate`,
+  otherwise Edge refuses speech with `not-allowed`. Stop it afterwards by its
+  `--user-data-dir` only: Rockson's own Edge is usually running.
 - Android builds (Phase 3b only) are done in WSL Ubuntu, not Windows: the
   Windows sandbox blocks the JVM loopback socket Gradle needs. JDK 21 and the
   Android SDK (platform 36) are already under `~/.local` in WSL from an earlier

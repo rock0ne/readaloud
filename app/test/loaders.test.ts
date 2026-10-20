@@ -87,7 +87,16 @@ describe('U7 docx loader', () => {
       ['paragraph', 'The second body paragraph.'],
     ]);
     expect(doc.title).toBe('My Chapter');
-    expect(doc.warnings.some((w) => w.includes('UnknownStyle'))).toBe(true);
+    expect(doc.warnings).toEqual(['Word styles not recognised: UnknownStyle. Their text is read as normal paragraphs.']);
+  });
+});
+
+describe('parseBytes input', () => {
+  it('leaves the input buffer intact', async () => {
+    const bytes = await makeDocx();
+    const before = bytes.byteLength;
+    await parseBytes(bytes, 'chapter.docx');
+    expect(bytes.byteLength).toBe(before);
   });
 });
 

@@ -116,6 +116,12 @@ describe('U10 WebSpeechEngine', () => {
     await expect(p).rejects.toBeInstanceOf(SpeechStalledError);
   });
 
+  it('explains a blocked start in plain words', async () => {
+    const { p, u } = await speaking();
+    u.onerror?.({ error: 'not-allowed' } as SpeechSynthesisErrorEvent);
+    await expect(p).rejects.toThrow('the browser blocked speech until you click or press a key on the page');
+  });
+
   it('abort cancels and resolves', async () => {
     const { p, u, ac, synth } = await speaking();
     ac.abort();

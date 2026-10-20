@@ -218,7 +218,15 @@ export interface Flag {
 }
 
 // ===== Storage =====
-export interface PositionRecord { docId: string; sentenceId: string; updatedAt: string; }
+// ordinal = the sentence's 0-based reading-order index; lets the library show
+// progress without loading the document (ADR-19). Optional for old exports.
+export interface PositionRecord { docId: string; sentenceId: string; updatedAt: string; ordinal?: number; }
+
+// Small row per document for the library list, so it never loads blocks (ADR-19).
+export interface DocSummary {
+  id: string; title: string; format: DocFormat; sourceName: string;
+  addedAt: string; lastOpenedAt?: string; charCount: number; sentenceCount: number;
+}
 
 export interface AudioCacheRecord { key: string; blob: Blob; bytes: number; lastUsed: number; }
 
@@ -687,14 +695,18 @@ When the engine is `audio`, set `navigator.mediaSession.metadata`
 | Store | Key | Value | Indexes |
 |---|---|---|---|
 | `docs` | `id` | `DocRecord` (blocks included) | `bySourceHash` (unique) |
-| `sources` | `docId` | `{ docId, blob: Blob }` | |
+| `summaries` | `id` | `DocSummary` (written with every `docs` write) | |
+| `sources` | `docId` | `{ docId, bytes: ArrayBuffer }` | |
 | `positions` | `docId` | `PositionRecord` | |
 | `flags` | `id` | `Flag` | `byDoc` (docId) |
 | `audio` | `key` | `AudioCacheRecord` | `byLastUsed` |
 | `settings` | `key` | `{ key: 'settings', value: Settings }` | |
 
+`addDocument` writes `docs`, `summaries` and `sources` in one transaction and
+aborts it if any write fails, so a document never exists without its source.
+
 Migrations live in `db.ts` `upgrade(db, oldVersion)`. Deleting a document
-deletes its source, position and flags (not its cached audio; the cache is
+deletes its summary, source, position and flags (not its cached audio; the cache is
 pruned by LRU).
 
 Call `navigator.storage.persist()` once at first launch.

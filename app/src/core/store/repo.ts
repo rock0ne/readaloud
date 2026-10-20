@@ -75,12 +75,27 @@ export class Repo {
     if (existing) throw new DuplicateDocumentError(existing.id);
     const doc: DocRecord = { ...parsed, id: newId(), sourceName, sourceHash, addedAt: nowIso() };
     const tx = this.db.transaction(['docs', 'summaries', 'sources'], 'readwrite');
-    await Promise.all([
-      tx.objectStore('docs').add(doc),
-      tx.objectStore('summaries').put(summaryOf(doc)),
-      tx.objectStore('sources').put({ docId: doc.id, bytes }),
-      tx.done,
-    ]);
+    // put() can throw synchronously (e.g. a detached buffer). Without an explicit abort the
+    // requests already queued would commit and leave a document with no source.
+    const ops: Array<Promise<unknown>> = [];
+    const track = (op: Promise<unknown>) => {
+      op.catch(() => undefined);
+      ops.push(op);
+    };
+    try {
+      track(tx.objectStore('docs').add(doc));
+      track(tx.objectStore('summaries').put(summaryOf(doc)));
+      track(tx.objectStore('sources').put({ docId: doc.id, bytes }));
+      await Promise.all([...ops, tx.done]);
+    } catch (e) {
+      try {
+        tx.abort();
+      } catch {
+        // already finished
+      }
+      await tx.done.catch(() => undefined);
+      throw e;
+    }
     return doc;
   }
 

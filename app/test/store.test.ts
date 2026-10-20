@@ -45,6 +45,16 @@ describe('U9 store', () => {
     expect((err as DuplicateDocumentError).existingId).toBe(first.id);
   });
 
+  it('adds nothing when the source bytes cannot be stored', async () => {
+    const r = await fresh();
+    const detached = bytes();
+    structuredClone(detached, { transfer: [detached] });
+    const err = await r.addDocument(makeDoc(sampleBlocks), detached, 'a.pdf', 'h-detached').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect(await r.listSummaries()).toEqual([]);
+    expect(await r.findByHash('h-detached')).toBeUndefined();
+  });
+
   it('returns default settings and pauseOnFlag follows the device type', async () => {
     const desk = await fresh(false);
     const s = await desk.getSettings();

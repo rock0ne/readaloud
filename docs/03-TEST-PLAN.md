@@ -70,7 +70,8 @@ ever committed; real chapters live in `app/test/fixtures/private/` (git-ignored)
   doc; audio put/get updates `lastUsed`.
 - **U10 webspeech + registry**: `waitForVoices` resolves on `voiceschanged`;
   quality mapping (`Online (Natural)` + `localService=false` → neural); `speak`
-  resolves on `end`, resolves (not rejects) on `interrupted`; the watchdog
+  resolves on `end` and on our own abort; an `interrupted` or other error it
+  did not cause **rejects** (ADR-14), with a plain-English reason; the watchdog
   **rejects** with `SpeechStalledError` when no event fires (fake timers); an
   implausibly early `end` on a long chunk rejects too; abort calls `cancel()`.
   `pickEngine`: with Web Speech offering only Basic voices and another engine
