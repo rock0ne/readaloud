@@ -117,7 +117,13 @@ export interface Flag {
 }
 
 // ===== Storage =====
-export interface PositionRecord { docId: string; sentenceId: string; updatedAt: string; }
+export interface PositionRecord { docId: string; sentenceId: string; updatedAt: string; ordinal?: number; } // ordinal: 0-based sentence index in reading order
+
+/** Lightweight library row, so the library never loads full documents (ADR-19). */
+export interface DocSummary {
+  id: string; title: string; format: DocFormat; sourceName: string;
+  addedAt: string; lastOpenedAt?: string; charCount: number; sentenceCount: number;
+}
 
 export interface AudioCacheRecord { key: string; blob: Blob; bytes: number; lastUsed: number; }
 
