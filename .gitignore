@@ -1,0 +1,7 @@
+app/node_modules/
+app/dist/
+app/dev-dist/
+.env*
+app/test/fixtures/private/
+app/android/
+*.local
