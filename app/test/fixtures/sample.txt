@@ -1,0 +1,8 @@
+Part One
+
+The first paragraph is here. It has two sentences.
+
+This paragraph was hard-wrapped
+across two lines by an old editor.
+
+The last paragraph ends the file.
