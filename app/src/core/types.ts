@@ -133,6 +133,7 @@ export interface Settings {
   pauseAfterHeadingMs: number;                  // default 600
   pauseBetweenSentencesMs: number;              // default 150 (direct engines only)
   keepAwake: boolean;                           // default true
+  pauseOnFlag: boolean;                         // default false on desktop, true on touch devices
   fontSizePx: number;                           // default 18
   theme: 'auto' | 'light' | 'dark';             // default 'auto'
 }

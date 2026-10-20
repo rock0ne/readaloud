@@ -43,7 +43,9 @@ matter for the step you are on.
   preview` or a local static server; the Android build goes to the phone by adb.
 - When a step needs something only Rockson can supply (an Azure key, a sample
   chapter `.docx`, a voice preference), finish everything else in the step,
-  write the ask in `docs/PROGRESS.md` under "Needs Rockson", and stop.
+  write the ask in `docs/PROGRESS.md` under "Needs Rockson", and continue with
+  the next step that does not depend on it. Stop only when every remaining
+  step depends on Rockson. The Azure key is not needed before Step 17.
 
 ## Commands
 

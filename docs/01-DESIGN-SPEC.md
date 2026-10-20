@@ -234,6 +234,7 @@ export interface Settings {
   pauseAfterHeadingMs: number;                  // default 600
   pauseBetweenSentencesMs: number;              // default 150 (direct engines only)
   keepAwake: boolean;                           // default true
+  pauseOnFlag: boolean;                         // default false on desktop, true on touch devices
   fontSizePx: number;                           // default 18
   theme: 'auto' | 'light' | 'dark';             // default 'auto'
 }
@@ -380,9 +381,11 @@ blocks `RawBlock[]` directly (skip 5.1). Algorithm per document:
    Line record: `{ text, y, x0, x1, fontSize, page }`.
 3. **Running headers/footers**: normalise each line's text by replacing digits
    with `#`. Count across pages the normalised texts that appear in the top or
-   bottom 10% of the page height. Any such text appearing on ≥ 30% of pages
-   (minimum 3 pages) is dropped from every page. Also drop lines whose text is
-   only digits, Roman numerals, or `Page N [of M]`.
+   bottom 10% of the page height. Any such text appearing on at least
+   `max(min(3, pageCount), ceil(0.3 * pageCount))` pages is dropped from every
+   page (so a 2-page PDF needs both pages; detection is skipped for 1 page).
+   Also drop, inside those zones, lines whose text is only digits, Roman
+   numerals, `- N -` or `Page N [of M]`.
 4. **Paragraphs**: iterate lines in reading order across pages. Start a new
    paragraph when any holds:
    - vertical gap to previous line > `1.5 * medianLineGap` (same page), or a page break where the previous line ends with `. ! ? " ” ’ )`;
@@ -475,11 +478,21 @@ export function getEngines(settings): VoiceEngine[]          // all three, const
 export async function pickEngine(settings): Promise<{ engine: VoiceEngine; voice: Voice } | null>
 ```
 
-`pickEngine` walks `settings.enginePreference`; the first engine whose
-`isAvailable()` is `ok` and has at least one voice wins. Voice = the saved
-`voiceByEngine[engine.id]` if still present, else the first `neural` voice whose
-`lang` starts with the settings locale's language, else the first voice. If no
-engine is available, return `null` and the UI shows hint H1 (section 14).
+`pickEngine` must never choose a robotic voice while a natural one is
+available (review correction, ADR-13). It runs two passes over
+`settings.enginePreference`, skipping engines whose `isAvailable()` is not `ok`:
+
+1. **Neural pass**: the first engine that has a `neural` voice. Voice = the
+   saved `voiceByEngine[engine.id]` if it is still listed and is `neural`, else
+   the first `neural` voice whose `lang` starts with the locale's language,
+   else the first `neural` voice.
+2. **Fallback pass** (only if pass 1 found nothing): the first engine with any
+   voice; same voice rule without the `neural` restriction. The UI then shows
+   the "Basic voice" status and hint H1.
+
+A voice the user explicitly picked in the voice picker is honoured even if it
+is `standard`; automatic selection never picks one. If no engine has any voice,
+return `null` and the UI shows hint H1 (section 14).
 
 Quality labels in the UI: `neural` → "Natural", `standard` → "Basic".
 
@@ -498,7 +511,13 @@ Quality labels in the UI: `neural` → "Natural", `standard` → "Basic".
   2. Resolve on `end`. Reject on `error` with `event.error` unless the error is
      `interrupted` or `canceled` (those are our own stop → resolve).
   3. Watchdog: `expectedMs = text.length / (14 * rate) * 1000`; timer at
-     `expectedMs * 2 + 3000`; on fire, resolve (log a console warning).
+     `expectedMs * 2 + 3000`. On fire: `speechSynthesis.cancel()` and **reject
+     with `SpeechStalledError`**. Never resolve on a timeout: for proofreading,
+     unheard text must not be treated as heard (review correction, ADR-14).
+     Likewise, an `end` that arrives implausibly early (chunk longer than 40
+     chars and elapsed < `max(300, 0.15 * expectedMs)` ms) rejects with
+     `SpeechStalledError`, because an online voice that loses its connection can
+     end without speaking. The player handles the rejection (8.2).
   4. `signal` abort → `speechSynthesis.cancel()` and resolve.
   5. If `speechSynthesis.paused`, call `resume()` before `speak(u)`.
   6. Keep a module-level reference to the current utterance so GC cannot drop
@@ -528,8 +547,10 @@ Quality labels in the UI: `neural` → "Natural", `standard` → "Basic".
     ```
     (`rate` is always 1.0; do not add `<prosody>`.) Escape `& < > " '`.
   - Response → `Blob` of type `audio/mpeg`. 401 → error "Azure key rejected";
-    429 → wait 2 s and retry once, then error "Azure rate limit"; 403 with quota
+    429 → handled by the limiter in 8.3 (back off, then retry; not an error
+    unless it persists for 2 minutes, then "Azure rate limit"); 403 with quota
     text → error "Azure free quota used up for this month".
+  - `text` is a segment of up to 600 characters (8.3), not a single sentence.
   - CORS check in build step 17. Fallback: official JS Speech SDK over WebSocket.
 
 ### 7.4 `KokoroEngine` (kind `audio`, maxEngineRate 1.0) — Phase 4
@@ -598,6 +619,12 @@ while status === 'playing':
   advance(): next sentence in document order; if none → status 'ended', emit 'ended'
 ```
 
+**Failure handling (ADR-14).** If `speak`/`synthesize`/`playBlob` rejects
+(other than by our own abort), retry the same chunk once after 500 ms. If the
+retry fails too, stop the loop with `status = 'error'`, keep `current` on that
+sentence, and emit `error` with "Speech stopped at this sentence. Press Play to
+try again." The loop never advances past a chunk that was not confirmed spoken.
+
 A new `AbortController` per `play()`; `pause/stop/seek/next/prev/setVoice`
 abort it. `pause` keeps `current`; `resume` restarts the current sentence from
 its first chunk (simple and predictable). `prev` goes to the previous sentence,
@@ -609,9 +636,27 @@ Rate: user rate 0.8–3.0 in steps of 0.1. Direct engines receive
 
 ### 8.3 Prefetch (audio engines)
 
-Keep the next 3 sentences' chunks synthesised ahead, concurrency 2, in document
-order. Each request is cache-first (8.4). Abort outstanding requests on seek.
-Show `buffering` only when the current chunk is not ready.
+Azure's free tier (F0) allows **20 synthesis transactions per 60 seconds**
+([Microsoft quotas](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/speech-services-quotas-and-limits)).
+Concurrency limits alone do not enforce that, so (review correction, ADR-15):
+
+- **Pacing**: all Azure requests go through one token-bucket limiter, default
+  18 requests per rolling 60 s (setting, so a paid tier can raise it). 429
+  responses back off for the `Retry-After` header value, or 10 s if absent,
+  and do not count as a failure of the chunk.
+- **Grouping**: each request carries a *segment* of consecutive sentences from
+  the same block, up to 600 characters (a single sentence longer than that is
+  sent alone, already split by `chunk`). At 18 requests/min that is roughly
+  10,000 characters a minute of capacity, well above the ~2,700 needed at 3×.
+- **Highlight within a segment**: with the Speech SDK path (ADR-12), insert an
+  SSML `<bookmark>` before each sentence and switch the highlight on bookmark
+  events. With the REST path, estimate each sentence's start as its character
+  share of the clip duration.
+- **Buffer before play**: start playback when at least 30 s of audio (or the
+  rest of the chapter, if shorter) is ready; show "Preparing audio n%". Keep
+  preparing ahead in document order, cache-first (8.4). Abort outstanding
+  requests on seek.
+- Show `buffering` only when the current segment is not ready.
 
 ### 8.4 Audio cache
 
@@ -661,11 +706,30 @@ open.
 ### 9.2 JSON export/import
 
 Export produces `ExportBundleV1` (section 4) as `readaloud-export-YYYYMMDD.json`
-via a download link (or the File System Access API when available). Import
-matches documents by `id`, else by `sourceHash`, else by `(title, charCount)`;
-for each match it imports flags (skipping ids already present) and takes the
-newer position. Unmatched documents are reported as "not in this library; add
-the file first".
+via a download link (or the File System Access API when available).
+
+Import is two-phase so nothing is merged by guesswork (review correction, ADR-16):
+
+1. `planImport(bundle)` matches each bundle document to a local one:
+   **exact** by `id`, else **exact** by `sourceHash`; else a **possible**
+   match by `(title, charCount)`, which is never applied without the user
+   ticking it, because two revisions of a book can share both. The rest are
+   **unmatched** ("not in this library; add the file first").
+2. `applyImport(plan, confirmedPossibleIds)` for each exact or confirmed match:
+   - **Remap**: every imported flag and position gets the *local* `docId`.
+   - **Validate references**: a flag whose `sentenceId` exists in the local
+     document and whose sentence text equals `quote` is kept as is. Otherwise
+     re-anchor it to the first local sentence whose text equals `quote`
+     (updating `sentenceId`, `blockId`, chapter fields). If none matches, the
+     flag is not imported and is listed in the summary as "could not be placed",
+     with its quote and note, so no edit is lost silently.
+   - **Merge flags by id**: a new id is added; an existing id is replaced only
+     if the imported `updatedAt` is newer (so a note edited on the phone
+     updates the PC copy). Equal timestamps keep the local copy.
+   - **Position**: the newer `updatedAt` wins, after its `sentenceId` is
+     validated the same way (dropped if it cannot be placed).
+3. The summary reports counts: added, updated, unchanged, could not be placed,
+   possible matches skipped, unmatched documents.
 
 ---
 

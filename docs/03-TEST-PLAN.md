@@ -68,27 +68,39 @@ ever committed; real chapters live in `app/test/fixtures/private/` (git-ignored)
 - **U9 store**: add/get/list/delete document with cascade; duplicate hash
   rejected via unique index; settings defaults returned when empty; flags by
   doc; audio put/get updates `lastUsed`.
-- **U10 webspeech**: `waitForVoices` resolves on `voiceschanged`; quality
-  mapping (`Online (Natural)` + `localService=false` → neural); `speak` resolves
-  on `end`, resolves (not rejects) on `interrupted`, watchdog resolves when no
-  event fires (fake timers), abort calls `cancel()`.
+- **U10 webspeech + registry**: `waitForVoices` resolves on `voiceschanged`;
+  quality mapping (`Online (Natural)` + `localService=false` → neural); `speak`
+  resolves on `end`, resolves (not rejects) on `interrupted`; the watchdog
+  **rejects** with `SpeechStalledError` when no event fires (fake timers); an
+  implausibly early `end` on a long chunk rejects too; abort calls `cancel()`.
+  `pickEngine`: with Web Speech offering only Basic voices and another engine
+  offering a neural voice, the neural engine wins; with only Basic voices
+  anywhere, the fallback pass picks one.
 - **U11 player**: given a doc with heading, paragraph (2 sentences), code,
   paragraph: emits sentences in order; skips code when `skipCodeBlocks`;
   heading pause awaited (fake timers); `pause` aborts and `resume` restarts the
   same sentence; `next/prev` move; `ended` emitted; position saved after
-  debounce; rate passed to a direct engine is capped at 2.0.
+  debounce; rate passed to a direct engine is capped at 2.0; an engine that
+  rejects once is retried and playback continues; an engine that rejects twice
+  puts the player in `error` on the **same** sentence and never advances.
 - **U12 corrections**: exact Markdown output for two flags in two chapters
   (snapshot test), dismissed omitted unless included, order by position.
-- **U13 export/import**: bundle has no Azure key; import matches by id, then
-  hash, then title+charCount; newer position wins; duplicate flag ids skipped;
-  unmatched doc reported.
+- **U13 export/import**: bundle has no Azure key; exact match by id, then
+  hash; title+charCount is only a *possible* match and is not applied unless
+  confirmed; imported flags and positions are remapped to the local `docId`; a
+  flag with the same id and a newer `updatedAt` replaces the local one, an
+  older one does not; a flag whose sentence moved is re-anchored by quote; a
+  flag that cannot be placed is reported, not dropped silently; newer position
+  wins; unmatched doc reported.
 - **U14 azure** (Phase 2): SSML escaping of `& < > " '`; headers present; HD
   voices excluded; 401 → "key rejected"; 429 retried once; abort propagates.
 - **U15 audio-cache**: prune removes least-recently-used until ≤ 250 MB when
   over 300 MB (use small fake budgets via injected constants).
-- **U16 prefetch**: with a fake audio engine that resolves on demand: at most 2
-  in flight; next 3 sentences requested in order; seek aborts outstanding
-  requests and restarts from the new position.
+- **U16 prefetch + pacing**: with a fake clock and a fake audio engine: no more
+  than 18 requests in any rolling 60 s; segments group consecutive sentences
+  of one block up to 600 chars; a 429 backs off without failing the segment;
+  playback starts only once 30 s of audio (or the chapter rest) is ready; seek
+  aborts outstanding requests and restarts from the new position.
 
 ## Manual checks (record results in `PROGRESS.md`)
 

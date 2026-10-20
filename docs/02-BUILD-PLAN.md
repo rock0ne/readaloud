@@ -97,8 +97,17 @@ Read: spec 7.1, 7.2, 7.5; handoff gotchas "Web Speech API".
 Create: `src/core/engines/webspeech.ts`, `src/core/engines/registry.ts`
 (`getEngines`, `pickEngine`). Also a minimal Settings screen with a voice list
 and a "Test" button that speaks "The quick brown fox jumps over the lazy dog."
-Accept: U10 passes (mocked `speechSynthesis`). M3 in Edge: the list shows
-"Natural" voices first; Test speaks with Sonia; Test in Chrome shows only Basic.
+Accept: U10 passes (mocked `speechSynthesis`). Then the **voice reality gate**
+(review correction, ADR-17), before any UI work beyond Settings:
+
+- M3 in Rockson's installed Edge: the list shows "Natural" voices first, and
+  the **Read 3 sentences** test in Settings speaks three consecutive sentences
+  with Sonia or Ryan, each `end` event firing after a plausible duration. A
+  voice that is listed but does not speak fails the gate.
+- In Chrome the list shows only Basic voices and the H1 hint.
+- If the gate fails (no natural voices, or they do not speak reliably), stop
+  Phase 1 UI work, record the finding in `04-DECISIONS.md`, and bring Phase 2
+  (Azure) forward as the primary engine before continuing.
 
 ### Step 11 — Player
 

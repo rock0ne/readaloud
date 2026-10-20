@@ -86,8 +86,9 @@ Web Speech API (Phase 1):
 - Chromium **cuts off utterances longer than about 15 seconds**. Never speak more
   than one sentence per utterance, and split long sentences into chunks of at
   most 280 characters (spec 6.3). This is why `Sentence.chunks` exists.
-- `onend` sometimes never fires. Run a **watchdog** per utterance (spec 7.2) and
-  move on when it expires.
+- `onend` sometimes never fires. Run a **watchdog** per utterance (spec 7.2).
+  When it expires, treat the chunk as **not spoken**: retry once, then pause
+  with an error on that sentence. Never skip unheard text (ADR-14).
 - `speechSynthesis.cancel()` suppresses `onend` for the cancelled utterance.
   Treat your own cancel as a normal stop, not an error.
 - Speech will not start without a **user gesture** first. The Play button is the
@@ -119,7 +120,9 @@ Azure (Phase 2):
   by CORS. Verify in Step 17 with a single fetch. If blocked, the fallback is the
   official JS Speech SDK (`microsoft-cognitiveservices-speech-sdk`), which works
   in browsers over WebSocket. Record the outcome in `04-DECISIONS.md`.
-- Free tier has request-rate limits. Prefetch with concurrency 2, never more.
+- Free tier allows 20 synthesis requests per 60 s. Pace every request through
+  the limiter, group sentences into segments, and buffer before playing
+  (spec 8.3, ADR-15). Concurrency limits alone are not enough.
 - Never log the key. Never put it in a URL.
 
 Phone (Phase 3):
