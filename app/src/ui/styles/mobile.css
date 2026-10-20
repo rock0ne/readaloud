@@ -1,0 +1,93 @@
+/* Phone layout (spec 11.4). */
+@media (max-width: 720px) {
+  .bar {
+    padding: 8px 12px;
+  }
+
+  .text-pane {
+    padding: 16px 16px 120px;
+  }
+
+  .side-panel {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-height: 65vh;
+    border-left: none;
+    border-top: 1px solid var(--border);
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -8px 32px rgb(0 0 0 / 0.25);
+    z-index: 30;
+    padding-bottom: 120px;
+  }
+
+  .controls {
+    position: relative;
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    grid-template-areas:
+      'transport transport flag'
+      'speed voice voice'
+      'status status note';
+    gap: 8px;
+    padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+    z-index: 35;
+  }
+
+  .transport {
+    grid-area: transport;
+  }
+
+  .transport button {
+    min-width: 48px;
+    min-height: 48px;
+  }
+
+  .speed {
+    grid-area: speed;
+  }
+
+  .speed button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .voice-picker {
+    grid-area: voice;
+    max-width: none;
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .controls .status {
+    grid-area: status;
+  }
+
+  .controls .note {
+    grid-area: note;
+    min-height: 44px;
+  }
+
+  .flag-btn {
+    grid-area: flag;
+    justify-self: end;
+    width: 96px;
+    height: 56px;
+    font-size: 1.05rem;
+  }
+
+  .doc {
+    flex-direction: column;
+  }
+
+  .doc-actions {
+    justify-content: flex-end;
+    border-top: 1px solid var(--border);
+  }
+
+  .reader .bar button {
+    padding: 6px 8px;
+  }
+}

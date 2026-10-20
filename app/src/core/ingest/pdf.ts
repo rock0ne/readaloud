@@ -174,7 +174,8 @@ export const loadPdf: Loader = async (bytes, opts) => {
   const { default: workerUrl } = await import('pdfjs-dist/build/pdf.worker.min.mjs?url');
   pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
-  const task = pdfjs.getDocument({ data: new Uint8Array(bytes) });
+  // Text extraction needs no image decoders; useWasm:false keeps pdf.js inside the CSP (no wasm-unsafe-eval).
+  const task = pdfjs.getDocument({ data: new Uint8Array(bytes), useWasm: false });
   let pdf: Awaited<typeof task.promise>;
   try {
     pdf = await task.promise;

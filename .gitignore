@@ -5,3 +5,4 @@ app/dev-dist/
 app/test/fixtures/private/
 app/android/
 *.local
+.claude/

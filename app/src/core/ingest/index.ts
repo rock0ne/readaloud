@@ -2,7 +2,7 @@
 import type { DocFormat, ParsedDocument } from '../types';
 import { buildDocument } from '../text/build';
 import { IngestError, type Loader } from './raw';
-import { stripExtension } from './txt';
+import { loadTxt, stripExtension } from './txt';
 
 export { IngestError } from './raw';
 export type { IngestErrorCode } from './raw';
@@ -42,7 +42,7 @@ async function sniff(bytes: ArrayBuffer): Promise<DocFormat | null> {
 async function loaderFor(format: DocFormat): Promise<Loader> {
   switch (format) {
     case 'txt':
-      return (await import('./txt')).loadTxt;
+      return loadTxt;
     case 'md':
       return (await import('./md')).loadMd;
     case 'docx':
