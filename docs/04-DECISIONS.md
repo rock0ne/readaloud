@@ -395,3 +395,44 @@ Re-read identical. Unit tests: a 51 MB EPUB reads and is stored at under
 100 kB with the same text; the limits per format. On the S21+ in Firefox the
 EPUB was added and opened in about 9 s (PROGRESS).
 
+
+## ADR-27 · 2026-10-21 · An Android app that makes sentences ahead with the phone's Kokoro engine
+
+Context: in Firefox on the S21+ the installed Kokoro engine read a whole
+chapter, but 35% of the time was silence, about 3 s before each sentence
+(ADR-24, PROGRESS). Firefox hands the engine one sentence at a time, and it
+makes each one only after the last has played. The engine itself makes speech
+at 1.26x real time, so it can keep ahead if it is asked early. Rockson chose,
+in chat on 2026-10-21: "build the ReadAloud Android app that makes the next
+sentences ahead with the installed Kokoro engine, keeping exact highlight and
+flags."
+
+Decision:
+- Step 23 (Capacitor wrapper) is brought forward, before the Phase 1 to 3
+  gates, as ADR-22 brought Kokoro forward. Only three packages from spec 13:
+  `@capacitor/core`, `@capacitor/cli`, `@capacitor/android`, version 8.5.0
+  (8.5.3 came out the day before; 8.5.0 already builds with the WSL
+  toolchain). Not added: the file picker (the app's file input opens
+  Android's own picker), keep-awake (one call in ReadAloud's own plugin),
+  filesystem (clips are read with `fetch` from `convertFileSrc`).
+- The voice: ReadAloud's own small plugin uses Android's `TextToSpeech`,
+  bound to the installed engine (`com.k2fsa.sherpa.onnx.tts.engine`), and
+  `synthesizeToFile` writes each piece of text as a WAV file. The web side
+  reads it and plays it like a Kokoro clip on the PC: same `KokoroEngine`
+  (id `kokoro`) with a phone backend, so the player keeps the next 3 clips
+  being made (spec 8.3) while one plays, and the highlight and flags work as
+  on the PC. Design: `docs/05-ANDROID-KOKORO.md`.
+- Not chosen: sherpa-onnx built into ReadAloud (Step 25's plan). It would
+  let the app pick the voice per sentence, but needs sherpa-onnx's native
+  libraries and the 330 MB model inside the app. The installed engine
+  already has both.
+- One voice: the engine has one speaker for all apps, chosen in its own app
+  (21 = Emma, 26 = George). ReadAloud lists it as one voice. Clips already
+  made stay in the cache (spec 8.4) in the old voice after the speaker is
+  changed there.
+- The app's web files are built with `vite build --mode android` into
+  `dist-android`, without the service worker: they come from the APK, so
+  there is nothing to update in place (ADR-25 does not apply).
+- The screen stays on while reading. Reading with the screen off is not
+  attempted yet.
+- App id `uk.rocksonarthur.readaloud`. `app/android/` is committed (Step 23).

@@ -1,8 +1,8 @@
 app/node_modules/
 app/dist/
+app/dist-android/
 app/dev-dist/
 .env*
 app/test/fixtures/private/
-app/android/
 *.local
 .claude/

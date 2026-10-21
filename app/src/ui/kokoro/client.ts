@@ -19,6 +19,16 @@ export interface KokoroStatus {
   error?: string;
   /** seconds of speech made per second, from recent sentences */
   speed?: number;
+  /** set when the voice comes from the phone's Kokoro engine app, not a download (ADR-27) */
+  source?: 'phone-engine';
+}
+
+/** What the app uses of the Kokoro voice: the download in a browser, the phone's engine in the app. */
+export interface KokoroService extends KokoroBackend {
+  readonly status: KokoroStatus;
+  subscribe(fn: (s: KokoroStatus) => void): () => void;
+  load(): Promise<void>;
+  remove(): Promise<void>;
 }
 
 interface Job {
@@ -36,7 +46,7 @@ async function modelCached(): Promise<boolean> {
   }
 }
 
-export class KokoroClient implements KokoroBackend {
+export class KokoroClient implements KokoroService {
   private worker: Worker | null = null;
   private _status: KokoroStatus = { phase: 'absent', installed: false };
   private readonly listeners = new Set<(s: KokoroStatus) => void>();

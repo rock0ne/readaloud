@@ -13,7 +13,26 @@ const STAGE_TEXT: Record<KokoroStage, string> = {
   'warm-up': 'making a first test sentence',
 };
 
+/** The phone's Kokoro engine app makes the voice: nothing to download or load (ADR-27). */
+function describePhone(s: KokoroStatus): string {
+  switch (s.phase) {
+    case 'absent':
+      return 'The natural voice needs the Kokoro voice engine app on this phone. Until it is installed, there is no voice.';
+    case 'downloading':
+    case 'installed':
+    case 'loading':
+      return 'The natural voice is made by the Kokoro engine app on this phone. Its voice is chosen in that app.';
+    case 'ready': {
+      const speed = s.speed ? `, making speech about ${s.speed.toFixed(1)}× faster than it plays` : '';
+      return `The natural voice is ready, made by the Kokoro engine app on this phone${speed}. Its voice is chosen in that app.`;
+    }
+    case 'error':
+      return `The Kokoro engine app could not start: ${(s.error ?? 'unknown error').replace(/\.$/, '')}.`;
+  }
+}
+
 function describe(s: KokoroStatus, online: boolean): string {
+  if (s.source === 'phone-engine') return describePhone(s);
   const pct = s.total ? Math.floor(((s.loaded ?? 0) / s.total) * 100) : 0;
   switch (s.phase) {
     case 'absent':
@@ -62,7 +81,7 @@ export function KokoroDownload({ removable = false }: { removable?: boolean }) {
     <div class="kokoro-download" aria-live="polite">
       <span>{describe(s, online)}</span>
       {s.phase === 'downloading' && <progress max={100} value={pct} aria-label="Download progress" />}
-      {s.phase === 'absent' && online && (
+      {s.phase === 'absent' && online && s.source !== 'phone-engine' && (
         <button class="primary" onClick={start}>
           Download natural voice
         </button>
@@ -72,7 +91,7 @@ export function KokoroDownload({ removable = false }: { removable?: boolean }) {
           Try again
         </button>
       )}
-      {removable && s.installed && s.phase !== 'downloading' && s.phase !== 'loading' && (
+      {removable && s.installed && s.source !== 'phone-engine' && s.phase !== 'downloading' && s.phase !== 'loading' && (
         <button onClick={remove}>Remove from this device</button>
       )}
     </div>

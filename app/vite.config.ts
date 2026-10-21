@@ -74,12 +74,16 @@ function cspMeta(): Plugin {
   };
 }
 
-export default defineConfig({
+// `vite build --mode android` makes the web files for the Android app (ADR-27): they come from the
+// APK, so there is no service worker to install or update.
+export default defineConfig(({ mode }) => ({
   plugins: [
     preact(),
     cspMeta(),
-    ortWasm(),
+    // The app does not use the browser Kokoro, so it does not need onnxruntime's 22 MB runtime.
+    mode !== 'android' && ortWasm(),
     VitePWA({
+      disable: mode === 'android',
       registerType: 'autoUpdate',
       injectRegister: 'auto',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
@@ -120,6 +124,7 @@ export default defineConfig({
     }),
   ],
   build: {
+    outDir: mode === 'android' ? 'dist-android' : 'dist',
     target: 'es2022',
     chunkSizeWarningLimit: 1500,
   },
@@ -133,4 +138,4 @@ export default defineConfig({
   worker: {
     format: 'es',
   },
-});
+}));

@@ -6,10 +6,13 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:android": "tsc -b && vite build --mode android",
     "preview": "vite preview",
     "test": "vitest run"
   },
   "dependencies": {
+    "@capacitor/android": "8.5.0",
+    "@capacitor/core": "8.5.0",
     "idb": "^8.0.4",
     "jszip": "^3.10.2",
     "kokoro-js": "1.2.1",
@@ -19,6 +22,7 @@
     "preact": "^10.29.8"
   },
   "devDependencies": {
+    "@capacitor/cli": "8.5.0",
     "@preact/preset-vite": "^2.10.6",
     "@types/node": "^24.19.2",
     "fake-indexeddb": "^6.2.6",

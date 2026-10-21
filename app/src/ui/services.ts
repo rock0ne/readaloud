@@ -7,14 +7,16 @@ import { WebSpeechEngine } from '../core/engines/webspeech';
 import { Player } from '../core/player/player';
 import { Repo } from '../core/store/repo';
 import type { EngineId, Settings } from '../core/types';
+import { PhoneKokoro } from './android/phone-kokoro';
+import { IN_ANDROID_APP, readAloudTts, readAppFile } from './android/plugin';
 import { HtmlAudioOutput } from './audio';
-import { KokoroClient, type KokoroStatus } from './kokoro/client';
+import { KokoroClient, type KokoroService, type KokoroStatus } from './kokoro/client';
 
 export interface Services {
   repo: Repo;
   registry: EngineRegistry;
   player: Player;
-  kokoro: KokoroClient;
+  kokoro: KokoroService;
   audio: HtmlAudioOutput;
   getSettings(): Settings;
   updateSettings(patch: Partial<Settings>): Promise<Settings>;
@@ -27,7 +29,8 @@ export async function createServices(): Promise<Services> {
   const repo = await Repo.open(undefined, isTouch);
   let settings = await repo.getSettings();
   const listeners = new Set<(s: Settings) => void>();
-  const kokoro = new KokoroClient();
+  // In the Android app the phone's Kokoro engine makes the voice; in a browser it is downloaded (ADR-27).
+  const kokoro: KokoroService = IN_ANDROID_APP ? new PhoneKokoro(readAloudTts, readAppFile) : new KokoroClient();
   const audio = new HtmlAudioOutput();
   // Kokoro is the main voice (ADR-22); browser voices stay as the fallback until it is downloaded.
   const registry = new EngineRegistry([new KokoroEngine(kokoro), new WebSpeechEngine()]);
@@ -53,6 +56,7 @@ export async function createServices(): Promise<Services> {
 
   const player = new Player({ positions: repo, registry, settings: () => settings, saveVoiceChoice, audio, audioCache: repo });
   player.setRate(settings.rate);
+  if (IN_ANDROID_APP) keepScreenOnWhileReading(player);
 
   try {
     await navigator.storage?.persist?.();
@@ -74,6 +78,18 @@ export async function createServices(): Promise<Services> {
       return () => listeners.delete(fn);
     },
   };
+}
+
+/** The phone's screen stays on while it reads; it may turn off when paused or stopped (ADR-27). */
+function keepScreenOnWhileReading(player: Player): void {
+  let on = false;
+  player.subscribe((e) => {
+    if (e.type !== 'state') return;
+    const reading = e.state.status === 'playing' || e.state.status === 'buffering';
+    if (reading === on) return;
+    on = reading;
+    void readAloudTts.keepScreenOn({ on }).catch(() => undefined);
+  });
 }
 
 export const ServicesContext = createContext<Services | null>(null);
