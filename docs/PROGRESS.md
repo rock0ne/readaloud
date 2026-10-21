@@ -31,11 +31,11 @@ One line per step. Keep it short. Newest at the bottom of each section.
 
 ## Phase 1 gate
 
-- [x] Unit tests green: 112 tests in 16 files on 2026-10-21 (113 in 17
+- [x] Unit tests green: 114 tests in 16 files on 2026-10-21 (115 in 17
       with the git-ignored book check), covering the Kokoro work (ADR-22),
       the second-review fixes (ADR-23), reloading on update (ADR-25),
       large EPUBs (ADR-26), the Android app's voice (ADR-27) and the wider
-      lead (ADR-28). `pnpm build`
+      lead and the clip order (ADR-28). `pnpm build`
       clean, bundle budget met.
 - [ ] M1–M8 done in Edge. Done or partly done: M2 (sample PDF), M3, M4, M5,
       M6. Waiting on Rockson: M1 and M2 with his chapter, M8 install, and
@@ -154,6 +154,9 @@ every "by ear" item is still Rockson's.
 
 ## Open issues
 
+- Release v0.1.0 (the Windows zip and the APK) was built before the clip-order
+  fix (ADR-28); the GitHub Pages site has it. The next release carries it, and
+  its APK needs Rockson to sign it with `app/android/sign-apk.sh`.
 - The toolchain lives in a temporary scratchpad folder. If it is cleaned up,
   the builder needs Node again before `pnpm` works (handoff section 7).
 - Edge's Microsoft voices stay as the fallback ("Browser voices") until the

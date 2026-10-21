@@ -123,6 +123,8 @@ export class Player {
   private clips = new Map<string, Clip>();
   private clipOwner = '';
   private cachePuts = 0;
+  /** Settles once the newest clip, and every clip started before it, has asked its engine or needed not to. */
+  private lastAsk: Promise<void> = Promise.resolve();
   private _state: PlayerState;
   basicFallback = false;
   private readonly deps: PlayerDeps;
@@ -541,22 +543,37 @@ export class Player {
     this.clips.clear();
   }
 
-  /** Cache first (spec 8.4), then the engine. */
+  /**
+   * Cache first (spec 8.4), then the engine. Hashing and cache lookups finish in any order, so
+   * each clip waits until the clip started before it has asked the engine: an engine that makes
+   * one clip at a time (the phone, ADR-27) then makes them in reading order (ADR-28).
+   */
   private async fetchClip(engine: VoiceEngine, voice: Voice, text: string, signal: AbortSignal): Promise<Blob> {
     if (!engine.synthesize) throw new Error(`${engine.label} cannot make audio.`);
-    const cache = this.deps.audioCache;
-    const key = `${engine.id}|${voice.id}|1.0|${await sha256Hex(new TextEncoder().encode(text))}`;
-    const hit = cache ? await cache.getAudio(key).catch(() => undefined) : undefined;
-    if (hit) return hit;
-    signal.throwIfAborted();
-    const blob = await engine.synthesize(text, { voice, rate: 1.0 }, signal);
-    if (cache) {
-      void cache
-        .putAudio(key, blob)
-        .then(() => (++this.cachePuts % PRUNE_EVERY_PUTS === 0 ? cache.pruneAudio() : 0))
-        .catch(() => undefined);
+    const earlier = this.lastAsk;
+    let asked = (): void => undefined;
+    this.lastAsk = new Promise<void>((resolve) => (asked = resolve));
+    try {
+      const cache = this.deps.audioCache;
+      const key = `${engine.id}|${voice.id}|1.0|${await sha256Hex(new TextEncoder().encode(text))}`;
+      const hit = cache ? await cache.getAudio(key).catch(() => undefined) : undefined;
+      if (hit) return hit;
+      await earlier;
+      signal.throwIfAborted();
+      const making = engine.synthesize(text, { voice, rate: 1.0 }, signal);
+      asked();
+      const blob = await making;
+      if (cache) {
+        void cache
+          .putAudio(key, blob)
+          .then(() => (++this.cachePuts % PRUNE_EVERY_PUTS === 0 ? cache.pruneAudio() : 0))
+          .catch(() => undefined);
+      }
+      return blob;
+    } finally {
+      // A cached, failed or cancelled clip passes its turn on only after the earlier ones.
+      void earlier.then(asked);
     }
-    return blob;
   }
 
   private positionRecord(): PositionRecord | null {

@@ -4,6 +4,7 @@ import { KOKORO_MAX_CHARS, KokoroEngine, splitForKokoro, type KokoroBackend } fr
 import { EngineRegistry } from '../src/core/engines/registry';
 import { Player, STOPPED_MESSAGE, type AudioCache, type AudioOutput } from '../src/core/player/player';
 import { defaultSettings } from '../src/core/store/settings';
+import { sha256Hex } from '../src/core/util/hash';
 import type { Settings, SpeakOptions, Voice, VoiceEngine } from '../src/core/types';
 import { makeDoc, sampleBlocks } from './helpers/docs';
 
@@ -169,10 +170,19 @@ class MemoryCache implements AudioCache {
   }
 }
 
-function setupAudio(over: Partial<Settings> = {}) {
+/** Cache lookups that finish in reverse order: the first one started finishes last. */
+class ReorderingCache extends MemoryCache {
+  private lookups = 0;
+  override async getAudio(key: string) {
+    const delay = Math.max(0, 40 - 10 * this.lookups++);
+    await new Promise((resolve) => setTimeout(resolve, delay));
+    return super.getAudio(key);
+  }
+}
+
+function setupAudio(over: Partial<Settings> = {}, cache: MemoryCache = new MemoryCache()) {
   const engine = new FakeAudioEngine();
   const audio = new FakeOutput();
-  const cache = new MemoryCache();
   const settings: Settings = { ...defaultSettings(), pauseAfterHeadingMs: 0, pauseBetweenSentencesMs: 0, ...over };
   const player = new Player({
     positions: { savePosition: async () => undefined },
@@ -203,6 +213,31 @@ describe('player with an audio engine (spec 8.3, 8.4)', () => {
     await player.play();
     await vi.waitFor(() => expect(audio.played).toEqual(['Chapter One']));
     expect(engine.made).toEqual(['Chapter One', 'First sentence here.', 'Second sentence here.', 'Final paragraph.']);
+    player.stop();
+  });
+
+  it('asks the engine in reading order even when cache lookups finish out of order', async () => {
+    // The phone makes one clip at a time in the order it is asked, so a later sentence asked
+    // first would delay the one about to play (found in CI, 2026-10-21).
+    const { engine, audio, player } = setupAudio({}, new ReorderingCache());
+    audio.hold = true;
+    await player.load(makeDoc(sampleBlocks));
+    await player.play();
+    await vi.waitFor(() => expect(engine.made).toHaveLength(4));
+    expect(engine.made).toEqual(['Chapter One', 'First sentence here.', 'Second sentence here.', 'Final paragraph.']);
+    player.stop();
+  });
+
+  it('keeps that order when a clip in between is already cached', async () => {
+    const cache = new ReorderingCache();
+    const cached = 'First sentence here.';
+    cache.map.set(`kokoro|bf_emma|1.0|${await sha256Hex(new TextEncoder().encode(cached))}`, new Blob([cached]));
+    const { engine, audio, player } = setupAudio({}, cache);
+    audio.hold = true;
+    await player.load(makeDoc(sampleBlocks));
+    await player.play();
+    await vi.waitFor(() => expect(engine.made).toHaveLength(3));
+    expect(engine.made).toEqual(['Chapter One', 'Second sentence here.', 'Final paragraph.']);
     player.stop();
   });
 

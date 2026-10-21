@@ -485,6 +485,15 @@ measured the same (below 1x for most of it). Thread counts 2, 4, 6 and 8 gave
 no clear gain (results moved by 40% between two runs of the same count), so
 it stays at 4.
 
+Found in CI the same day: each clip hashes its text and looks in the cache
+before asking the engine, and those steps finish in any order, so the engine
+could be asked for later sentences before the one about to play. The phone
+makes one clip at a time in the order it is asked, so that delays the next
+sound by whole clips. Each clip now waits until every clip started before it
+has asked the engine (or found its audio in the cache) before asking itself.
+It waits only for the asking, not for the clip to be made. Two tests with a
+cache that answers in reverse order cover it.
+
 ## ADR-29 · 2026-10-21 · Published on GitHub for anyone to use
 
 Context: Rockson wants both apps to work on other people's PCs and phones,
