@@ -186,9 +186,10 @@ every "by ear" item is still Rockson's.
   threads; a faster (int8) model or preparing a chapter before listening
   would be the next steps, both Rockson's call.
 
-- The Pages site, the Windows zip and the Android app still have v0.1.1. The
-  AI assistant, notes and the new reading flow are only in this PC's build
-  (`app/dist`) until a new release.
+- Version 0.2.0 (ADR-30, ADR-31): the Pages site has it. The Windows zip and
+  the unsigned APK are in `app/release` (APK built from a fresh clone in WSL,
+  versionCode 3); the APK waits for Rockson's signature, and GitHub Releases
+  still end at v0.1.1.
 
 ## Versions installed
 
