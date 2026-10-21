@@ -26,7 +26,7 @@ One line per step. Keep it short. Newest at the bottom of each section.
 | 22 PWA on the S21+ | partly | phone | 2026-10-21 | runs in Firefox; upload works; voice too slow (ADR-24); not yet on the home screen |
 | 24 Kokoro web engine | done (PC) | U-kokoro + Edge M11 | 2026-10-21 | main voice, bf_emma (ADR-22) |
 | 23 Capacitor wrapper | partly | phone | 2026-10-21 | brought forward; Kokoro made inside the app, every word spoken (ADR-27); clips about 40 s ahead (ADR-28); not yet heard by Rockson |
-| 29 Public release | done | fresh clone in WSL + headless Edge on the live site | 2026-10-21 | github.com/rock0ne/readaloud, Pages site, releases v0.1.0 and v0.1.1 (clip-order fix, ADR-28) with the Windows zip and the APK signed with Rockson's key (CN=rock0ne, cert SHA-256 c5f96167…5dbc0f), ADR-29 |
+| 29 Public release | done | fresh clone in WSL + headless Edge on the live site | 2026-10-21 | github.com/rock0ne/readaloud, Pages site, releases v0.1.0, v0.1.1 (clip-order fix, ADR-28) and v0.2.0 (AI assistant, notes, flowing full stops: ADR-30, ADR-31) with the Windows zip and the APK signed with Rockson's key (CN=rock0ne, cert SHA-256 c5f96167…5dbc0f), ADR-29 |
 | 30 AI assistant, notes, pen | done, not yet with a real key | AI1–AI8, N1–N3 + Edge with a fake Claude service | 2026-10-21 | ADR-30 and its review changes; a live key is Rockson's to try |
 | 31 Flow at full stops | done | U11b + Edge, online Ryan voice | 2026-10-21 | ADR-31; Kokoro's trimmed clips not yet heard |
 | Phase 1 gate | waiting on Rockson | | | see below |
@@ -186,10 +186,6 @@ every "by ear" item is still Rockson's.
   threads; a faster (int8) model or preparing a chapter before listening
   would be the next steps, both Rockson's call.
 
-- Version 0.2.0 (ADR-30, ADR-31): the Pages site has it. The Windows zip and
-  the unsigned APK are in `app/release` (APK built from a fresh clone in WSL,
-  versionCode 3); the APK waits for Rockson's signature, and GitHub Releases
-  still end at v0.1.1.
 
 ## Versions installed
 
