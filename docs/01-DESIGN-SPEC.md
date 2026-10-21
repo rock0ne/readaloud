@@ -574,9 +574,11 @@ Quality labels in the UI: `neural` → "Natural", `standard` → "Basic".
   ONNX runtime is served from `/ort/`. First use downloads about 326 MB with
   a progress bar; all listed voices are stored then, so every voice works
   offline; Settings can remove it. `generate(text, { voice })` → WAV blob.
-  UK voices: `bf_emma` (default), `bm_george`, `bf_isabella`, `bm_fable`,
-  `bm_lewis`; US: `af_heart`, `af_bella`, `af_nicole`, `am_michael`,
-  `am_fenrir`, `am_puck`. `quality: 'neural'`, `offline: true`.
+  UK voices: women `bf_emma` (default), `bf_isabella`; men `bm_george`,
+  `bm_fable`, `bm_lewis`. US: women `af_heart`, `af_bella`, `af_nicole`; men
+  `am_michael`, `am_fenrir`, `am_puck`. Names say woman or man and the
+  country, e.g. "Emma (woman, United Kingdom)", women first in each country.
+  `quality: 'neural'`, `offline: true`.
 - A sentence of one or two words is made in one clip with its neighbour in the
   same block (up to 300 characters); the highlight follows by character share
   (ADR-22).

@@ -27,7 +27,10 @@ describe('Kokoro engine (ADR-22)', () => {
     backend.ok = true;
     expect((await engine.isAvailable()).ok).toBe(true);
     const voices = await engine.listVoices();
-    expect(voices[0]).toMatchObject({ id: 'bf_emma', name: 'Emma (United Kingdom)', lang: 'en-GB', quality: 'neural', offline: true });
+    expect(voices[0]).toMatchObject({ id: 'bf_emma', name: 'Emma (woman, United Kingdom)', lang: 'en-GB', quality: 'neural', offline: true });
+    // Each name says woman or man, so Rockson can choose either.
+    expect(voices.filter((v) => v.name.includes('(woman,')).map((v) => v.id)).toEqual(['bf_emma', 'bf_isabella', 'af_heart', 'af_bella', 'af_nicole']);
+    expect(voices.filter((v) => v.name.includes('(man,')).map((v) => v.id)).toEqual(['bm_george', 'bm_fable', 'bm_lewis', 'am_michael', 'am_fenrir', 'am_puck']);
     expect(voices.map((v) => v.id)).not.toContain('am_adam');
   });
 

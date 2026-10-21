@@ -15,18 +15,19 @@ export interface KokoroBackend {
  * am_adam (graded F+) is replaced by better-graded US voices. Emma is first, so she is the
  * automatic en-GB choice.
  */
-export const KOKORO_VOICES: ReadonlyArray<{ id: string; name: string; lang: 'en-GB' | 'en-US' }> = [
-  { id: 'bf_emma', name: 'Emma', lang: 'en-GB' },
-  { id: 'bm_george', name: 'George', lang: 'en-GB' },
-  { id: 'bf_isabella', name: 'Isabella', lang: 'en-GB' },
-  { id: 'bm_fable', name: 'Fable', lang: 'en-GB' },
-  { id: 'bm_lewis', name: 'Lewis', lang: 'en-GB' },
-  { id: 'af_heart', name: 'Heart', lang: 'en-US' },
-  { id: 'af_bella', name: 'Bella', lang: 'en-US' },
-  { id: 'af_nicole', name: 'Nicole', lang: 'en-US' },
-  { id: 'am_michael', name: 'Michael', lang: 'en-US' },
-  { id: 'am_fenrir', name: 'Fenrir', lang: 'en-US' },
-  { id: 'am_puck', name: 'Puck', lang: 'en-US' },
+// Women first, then men, within each country, so the picker reads in that order.
+export const KOKORO_VOICES: ReadonlyArray<{ id: string; name: string; lang: 'en-GB' | 'en-US'; sex: 'woman' | 'man' }> = [
+  { id: 'bf_emma', name: 'Emma', lang: 'en-GB', sex: 'woman' },
+  { id: 'bf_isabella', name: 'Isabella', lang: 'en-GB', sex: 'woman' },
+  { id: 'bm_george', name: 'George', lang: 'en-GB', sex: 'man' },
+  { id: 'bm_fable', name: 'Fable', lang: 'en-GB', sex: 'man' },
+  { id: 'bm_lewis', name: 'Lewis', lang: 'en-GB', sex: 'man' },
+  { id: 'af_heart', name: 'Heart', lang: 'en-US', sex: 'woman' },
+  { id: 'af_bella', name: 'Bella', lang: 'en-US', sex: 'woman' },
+  { id: 'af_nicole', name: 'Nicole', lang: 'en-US', sex: 'woman' },
+  { id: 'am_michael', name: 'Michael', lang: 'en-US', sex: 'man' },
+  { id: 'am_fenrir', name: 'Fenrir', lang: 'en-US', sex: 'man' },
+  { id: 'am_puck', name: 'Puck', lang: 'en-US', sex: 'man' },
 ];
 
 /**
@@ -69,7 +70,7 @@ export class KokoroEngine implements VoiceEngine {
     return KOKORO_VOICES.map((v) => ({
       id: v.id,
       engineId: 'kokoro',
-      name: `${v.name} (${v.lang === 'en-GB' ? 'United Kingdom' : 'United States'})`,
+      name: `${v.name} (${v.sex}, ${v.lang === 'en-GB' ? 'United Kingdom' : 'United States'})`,
       lang: v.lang,
       quality: 'neural',
       offline: true,

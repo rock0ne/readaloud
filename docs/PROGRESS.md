@@ -91,9 +91,12 @@ every "by ear" item is still Rockson's.
 1. **Listen on the PC.** Double-click `app/start-readaloud.cmd`. In Settings,
    press "Download natural voice" (330 MB, once), then open a document and
    press Play. Say whether Emma is right or pick another voice.
-2. **Phone route (ADR-24).** In Firefox the voice is too slow for continuous
-   reading (0.2x to 0.3x real time in the app). Decide whether to install the sherpa-onnx
-   Kokoro Android voice engine on the test phone to measure native speed.
+2. **Phone engine (ADR-24).** The sherpa-onnx Kokoro voice engine is
+   installed on the test phone (2026-10-21, with your approval) and makes
+   speech faster than it plays (1.26x). Set it as the preferred engine:
+   Settings, General management, Text-to-speech, Preferred engine, "TTS
+   Engine: Next-gen Kaldi". Its voice is the speaker number in its own app:
+   21 is Emma (woman, UK), 26 is George (man, UK).
 3. **Custom voices (ADR-24).** SAPI 5 voices cannot appear in this app.
    Choose: more Kokoro voices inside ReadAloud, a separate SAPI 5 adapter so
    Kokoro works in other Windows programs, or both.
@@ -151,6 +154,7 @@ below 1 means reading has to keep pausing). Two sentences, voice bf_emma.
 | PC, Ryzen 9 5950X | wasm q8, 4 threads | 0.64x |
 | S21+, Firefox 158 | wasm fp32, 1 thread (what the app gets on the phone) | 0.2x to 0.3x |
 | S21+, Firefox 158 | wasm fp32, 4 threads (COEP require-corp, test page only; in the app the voice stalled while loading, cause unknown, ADR-22) | 0.68x |
+| S21+, native | sherpa-onnx 1.13.8 Kokoro voice engine, v1.0 model, speaker 21 (bf_emma), 4 threads, its own test screen: 16.7 s of speech in 13.2 s | 1.26x |
 
 Voice listening test, 2026-10-21. One 77-word passage, PC = Ryzen 9 5950X,
 RTX 3060 12 GB. "Word check" = Whisper large-v3-turbo transcript against the

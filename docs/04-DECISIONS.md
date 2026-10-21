@@ -328,9 +328,16 @@ What this changes:
   1. The sherpa-onnx Kokoro **Android voice engine** (Apache-2.0 code, from
      the k2-fsa project): native code, installed as an Android text-to-speech
      engine, so Kokoro becomes available to Firefox (and so to ReadAloud's
-     "Browser voices") and to other Android reading apps. Needs Rockson's
-     approval to download and install it on the test phone, and Rockson sets
-     it as the preferred engine in Android settings himself.
+     "Browser voices") and to other Android reading apps. Rockson approved
+     it on 2026-10-21: `sherpa-onnx-1.13.8-arm64-v8a-eng-tts-engine-kokoro-multi-lang-v1_0.apk`
+     from huggingface.co/csukuangfj2/sherpa-onnx-apk (linked by the k2-fsa
+     docs), 366,940,057 bytes, SHA-256 `402c3628…2142ec` as published,
+     signed by CN=k2-fsa, package `com.k2fsa.sherpa.onnx.tts.engine`, no
+     internet permission. Installed on the test phone by adb. Its own test
+     screen, speaker 21 (bf_emma), 4 threads: 16.7 s of speech in 13.2 s
+     (1.26x real time), so it keeps up. The voice is one speaker number for
+     the whole engine, set in its app, not ReadAloud's voice picker. Rockson
+     sets it as the preferred engine in Android settings himself.
   2. Step 23 + 25: ReadAloud as an Android app (Capacitor) with sherpa-onnx
      inside. More work; the result is a single app.
   3. Chrome on the phone with WebGPU. Chrome is disabled on the test phone;
