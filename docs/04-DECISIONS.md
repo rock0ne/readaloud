@@ -392,5 +392,6 @@ Checked on the PC (Node) with the book itself, which stays in the git-ignored
 `app/test/fixtures/private/`: read in 2.6 s; 41 chapters, 520 contents
 entries, 22,043 sentences, 227,184 words, no warnings; stored copy 0.68 MB;
 Re-read identical. Unit tests: a 51 MB EPUB reads and is stored at under
-100 kB with the same text; the limits per format.
+100 kB with the same text; the limits per format. On the S21+ in Firefox the
+EPUB was added and opened in about 9 s (PROGRESS).
 

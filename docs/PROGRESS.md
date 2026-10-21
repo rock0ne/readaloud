@@ -29,9 +29,10 @@ One line per step. Keep it short. Newest at the bottom of each section.
 
 ## Phase 1 gate
 
-- [x] Unit tests green: 97 tests in 14 files on 2026-10-21, covering the
-      Kokoro work (ADR-22), the second-review fixes (ADR-23) and reloading
-      on update (ADR-25). `pnpm build`
+- [x] Unit tests green: 100 tests in 14 files on 2026-10-21 (101 in 15
+      with the git-ignored book check), covering the Kokoro work (ADR-22),
+      the second-review fixes (ADR-23), reloading on update (ADR-25) and
+      large EPUBs (ADR-26). `pnpm build`
       clean, bundle budget met.
 - [ ] M1–M8 done in Edge. Done or partly done: M2 (sample PDF), M3, M4, M5,
       M6. Waiting on Rockson: M1 and M2 with his chapter, M8 install, and
@@ -88,6 +89,14 @@ every "by ear" item is still Rockson's.
   percentile, 6.4 s at most. Rockson, listening: "a bit slow, reading word
   by word instead of flowing". Cause: Firefox hands over one sentence at a
   time, and the engine makes each one only after the last has played.
+- **Rockson's book on the phone (ADR-26)**: both copies picked from the
+  phone's Documents folder in Firefox, on the build that had just reloaded
+  itself (ADR-25). EPUB (222 MB): added and opened in about 9 s. PDF
+  (47.6 MB): added and opened in about 19 s. Compared on the PC, counts
+  only: the PDF's words match the EPUB's (0.13% not found in it), but its
+  paragraphs, sentences and chapters split differently (75 chapters and
+  1,281 contents entries against the EPUB's 41 and 520; 61% of the EPUB's
+  sentences appear word for word in the PDF). Proofread from the EPUB.
 - **Phone voice**: downloaded in about 10 s. Settings, "Read 3 sentences",
   on the final build: ready "on this device's processor" after 13 s; the
   three sentences finished 26.0 s, 20.2 s and 21.6 s after each started;
