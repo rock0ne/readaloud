@@ -155,7 +155,7 @@ every "by ear" item is still Rockson's.
    Both tools ask for the password; only you type it. The commands are in
    the chat of 2026-10-21. Your phone's debug build cannot be updated to the
    signed one without uninstalling it first, which deletes its library and
-   flags: export JSON first if you switch.
+   flags; keeping the debug build is fine.
 
 ## Open issues
 
