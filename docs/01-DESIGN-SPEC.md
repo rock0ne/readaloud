@@ -298,8 +298,11 @@ export interface AudioCacheRecord { key: string; blob: Blob; bytes: number; last
 /** The reading font (ADR-33): system fonts only, nothing is downloaded. */
 export type ReaderFont = 'serif' | 'sans' | 'wide' | 'mono';
 
+/** How the reader shows the text (ADR-35): one long scroll, or a page at a time. */
+export type ReaderLayout = 'scroll' | 'pages';
+
 export interface Settings {
-  schemaVersion: 4;                             // 2: Kokoro first (ADR-22); 3: ai (ADR-30), paragraph pause (ADR-31); 4: reading font (ADR-33)
+  schemaVersion: 4;                             // 2: Kokoro first (ADR-22); 3: ai (ADR-30), paragraph pause (ADR-31); 4: reading font (ADR-33), page by page (ADR-35)
   enginePreference: EngineId[];                 // default ['kokoro', 'webspeech']
   voiceByEngine: Partial<Record<EngineId, string>>;
   rate: number;                                 // default 1.0
@@ -315,6 +318,9 @@ export interface Settings {
   fontSizePx: number;                           // default 18
   readerFont: ReaderFont;                       // default 'serif' (ADR-33)
   lineSpacing: number;                          // default 1.7 (ADR-33)
+  layout: ReaderLayout;                         // default 'scroll' (ADR-35)
+  twoPages: boolean;                            // default true: two pages side by side on a wide screen (ADR-35)
+  stopAtPageEnd: boolean;                       // default true: page by page stops at the end of each page (ADR-35)
   theme: 'auto' | 'light' | 'dark';             // default 'auto'
   ai: AiSettings;                               // default { provider: null, models: {} }
 }
@@ -917,8 +923,10 @@ block's position); replace; write `{name}.corrected.md` and a unified diff.
 Layout (desktop): header (back, title, chapter name, engine/voice badge);
 left: text pane; right: collapsible panel with tabs **Contents**, **Flags**,
 **Notes**, **AI** (ADR-30) and **Aa** (font, text size and line spacing,
-ADR-33); the chapter name shows the page (17.1); bottom: controls bar, with
-the find bar above it when open (ADR-34).
+ADR-33; one long scroll or page by page, ADR-35); the chapter name shows the
+page (17.1); bottom: controls bar, with the find bar above it when open
+(ADR-34). Page by page shows one page, or two side by side on a wide screen,
+with ‹ Previous and Next › under the text (ADR-35).
 
 Text pane: renders **only the current chapter's blocks**. Each sentence is a
 `<span data-sid>`; the current sentence has class `current` and is scrolled
@@ -944,6 +952,7 @@ Keyboard (desktop):
 | G | open Contents |
 | M | write a note on the current sentence (ADR-30) |
 | / | go to a page or find text (ADR-34) |
+| Page Up / Page Down | previous or next page, page by page (ADR-35) |
 
 Keys are ignored while a text field has focus (except Esc).
 
@@ -969,7 +978,7 @@ speaking a fixed sentence), speed, the extra pause at a full stop and the pause
 between paragraphs (ADR-31), locale, Azure region + key (password field,
 "Verify" button that calls the voices list), Kokoro model download/remove
 (Phase 4), skip code blocks, announce headings, pause lengths, keep awake, font,
-text size and line spacing (ADR-33), theme, "Clear audio cache" with size shown, Export/Import JSON, and the
+text size and line spacing (ADR-33), layout (ADR-35), theme, "Clear audio cache" with size shown, Export/Import JSON, and the
 AI assistant (17.3).
 
 ### 11.7 Accessibility
@@ -1085,8 +1094,9 @@ without a decision entry.
   would take it past 1,800 characters; a page always holds at least one block,
   never crosses a chapter, and pages are numbered 1, 2, 3... through the
   document.
-- `Page { key, label, chapterIndex, blockIds, firstSentenceId, chars }`;
-  `key` is `c{chapterIndex}p{label}`, unique in the document.
+- `Page { key, label, chapterIndex, blockIds, firstSentenceId, lastSentenceId, chars }`;
+  `key` is `c{chapterIndex}p{label}`, unique in the document. Page by page
+  (ADR-35) shows these pages and can stop after each `lastSentenceId`.
 
 ### 17.2 Providers (`core/ai/`)
 

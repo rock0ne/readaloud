@@ -8,6 +8,7 @@ import { PageIndex } from '../../core/text/pages';
 import type { AiResult, AiSuggestion, DocRecord, EngineId, Flag, Note, Voice } from '../../core/types';
 import type { Pick } from '../../core/engines/registry';
 import { TextPane } from '../components/TextPane';
+import type { Sheet } from '../components/TextPane';
 import { FlagPanel } from '../components/FlagPanel';
 import { TocPanel } from '../components/TocPanel';
 import { NoteSheet } from '../components/NoteSheet';
@@ -26,6 +27,9 @@ import { useMediaSession, useOnline, useWakeLock } from '../hooks/useDevice';
 import { toast, useKokoro, useServices, useSettings } from '../services';
 
 type Panel = 'toc' | 'flags' | 'notes' | 'ai' | 'text' | null;
+
+/** Two pages go side by side when the text pane is at least this many ems wide (ADR-35). */
+const SPREAD_MIN_EM = 50;
 type Editing = { sentenceId: string; note?: Note };
 
 /** Says which kind of voice is reading, so "natural" is never ambiguous (ADR-30). */
@@ -57,6 +61,7 @@ export function Reader({ docId }: { docId: string }) {
   const [aiResults, setAiResults] = useState<AiResult[]>([]);
   const [returnTo, setReturnTo] = useState<string | null>(null);
   const [finding, setFinding] = useState(false);
+  const [paneWidth, setPaneWidth] = useState(0);
   const [voices, setVoices] = useState<Voice[]>([]);
   const [auto, setAuto] = useState<Pick | null | undefined>(undefined);
   const view = usePlayer(player);
@@ -151,6 +156,35 @@ export function Reader({ docId }: { docId: string }) {
   const chapterIndex = current?.block.chapterIndex ?? 0;
   const blocks = useMemo(() => (index ? index.chapterBlocks(chapterIndex) : []), [index, chapterIndex]);
   const flagged = useMemo(() => new Set(flags.filter((f) => f.status !== 'dismissed').map((f) => f.sentenceId)), [flags]);
+
+  // Page by page (ADR-35): the page being read, and the page facing it when two fit side by side.
+  const paged = settings.layout === 'pages';
+  const twoUp = paged && settings.twoPages && paneWidth >= settings.fontSizePx * SPREAD_MIN_EM;
+  const hereKey = (view.currentId && pages?.ofSentence(view.currentId)?.key) || '';
+  const sheets = useMemo((): Sheet[] | null => {
+    if (!paged || !pages) return null;
+    const inChapter = pages.inChapter(chapterIndex);
+    const here = pages.get(hereKey) ?? inChapter[0];
+    if (!here) return null;
+    const i = inChapter.indexOf(here);
+    const shown = twoUp && i >= 0 ? inChapter.slice(i - (i % 2), i - (i % 2) + 2) : [here];
+    return shown.map((p) => ({ key: p.key, label: p.label, blocks: pages.blocksOf(p, blocks) }));
+  }, [paged, twoUp, pages, chapterIndex, hereKey, blocks]);
+  // ...and it can stop at the end of each page, to study it.
+  const stopAtPages = paged && settings.stopAtPageEnd;
+  useEffect(() => {
+    player.setPageEnds(stopAtPages && pages ? new Set(pages.pages.map((p) => p.lastSentenceId).filter(Boolean)) : null);
+    return () => player.setPageEnds(null);
+  }, [player, pages, stopAtPages]);
+  const turn = (dir: 1 | -1) => {
+    if (!pages || !sheets?.length) return;
+    const edge = dir === 1 ? sheets.at(-1) : sheets[0];
+    const all = pages.pages;
+    let at = all.findIndex((p) => p.key === edge?.key) + dir;
+    while (all[at] && !all[at]!.firstSentenceId) at += dir;
+    const target = all[at];
+    if (target) player.seek(target.firstSentenceId);
+  };
   const audioEngine = (player.currentVoice ?? auto?.voice)?.engineId === 'kokoro';
   const isPlaying = view.status === 'playing' || view.status === 'buffering';
   useMediaSession(audioEngine, doc?.title ?? 'ReadAloud', index?.chapter(chapterIndex)?.title ?? '', isPlaying, player);
@@ -280,6 +314,7 @@ export function Reader({ docId }: { docId: string }) {
     m: () => writeNote(),
     g: () => setPanel('toc'),
     '/': () => setFinding(true),
+    ...(paged ? { PageDown: () => turn(1), PageUp: () => turn(-1) } : {}),
     Escape: () => (editing ? setEditing(null) : noteFor ? setNoteFor(null) : finding ? setFinding(false) : setPanel(null)),
   });
 
@@ -316,7 +351,7 @@ export function Reader({ docId }: { docId: string }) {
   const placeOf = (chapter: number, title: string, paragraph: number) => `${title || `Chapter ${chapter + 1}`} · Paragraph ${paragraph}`;
 
   return (
-    <main class={`reader${panel ? ' with-panel' : ''}`}>
+    <main class={`reader${panel ? ' with-panel' : ''}${paged ? ' paged' : ''}`}>
       <header class="bar">
         <a class="button" href="#/" aria-label="Back to library">
           ←
@@ -339,7 +374,7 @@ export function Reader({ docId }: { docId: string }) {
           <button class={panel === 'ai' ? 'active' : ''} onClick={() => toggle('ai')} title="AI study assistant, with your own key">
             AI{ai.job ? ' …' : ''}
           </button>
-          <button class={panel === 'text' ? 'active' : ''} onClick={() => toggle('text')} title="Font, text size and line spacing" aria-label="Font, text size and line spacing">
+          <button class={panel === 'text' ? 'active' : ''} onClick={() => toggle('text')} title="Font, spacing and layout" aria-label="Font, spacing and layout">
             Aa
           </button>
         </div>
@@ -352,7 +387,29 @@ export function Reader({ docId }: { docId: string }) {
       )}
 
       <div class="reader-body">
-        <TextPane blocks={blocks} flagged={flagged} currentId={view.currentId} skipCode={settings.skipCodeBlocks} onSeek={(id) => player.seek(id)} />
+        <TextPane
+          blocks={blocks}
+          sheets={sheets}
+          flagged={flagged}
+          currentId={view.currentId}
+          skipCode={settings.skipCodeBlocks}
+          onSeek={(id) => player.seek(id)}
+          onWidth={setPaneWidth}
+        >
+          {sheets && (
+            <nav class="pager" aria-label="Pages">
+              <button onClick={() => turn(-1)} disabled={sheets[0]?.key === pages.pages[0]?.key} title="Previous page (Page Up)">
+                ‹ Previous
+              </button>
+              <span class="hint">
+                {sheets.length > 1 ? `Pages ${sheets[0]?.label}–${sheets[1]?.label}` : `Page ${sheets[0]?.label}`} of {pages.pages.at(-1)?.label}
+              </span>
+              <button onClick={() => turn(1)} disabled={sheets.at(-1)?.key === pages.pages.at(-1)?.key} title="Next page (Page Down)">
+                Next ›
+              </button>
+            </nav>
+          )}
+        </TextPane>
         {panel && (
           <aside class="side-panel">
             {panel === 'toc' ? (
@@ -373,8 +430,8 @@ export function Reader({ docId }: { docId: string }) {
                 onDelete={(n) => void deleteNote(n)}
               />
             ) : panel === 'text' ? (
-              <section class="text-panel" aria-label="Font and spacing">
-                <h2>Font and spacing</h2>
+              <section class="text-panel" aria-label="Text and layout">
+                <h2>Text and layout</h2>
                 <TextControls />
               </section>
             ) : (

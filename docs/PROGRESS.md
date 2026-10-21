@@ -32,17 +32,20 @@ One line per step. Keep it short. Newest at the bottom of each section.
 | 32 Copy for Claude | done | AI9 + browser pane (clipboard and new tab stood in) | 2026-10-21 | ADR-32; not yet tried with a real Claude account or in the Android app |
 | 33 Reading font, line spacing | done | settings migration test + browser pane | 2026-10-21 | ADR-33 |
 | 34 Go to page, find | done | S1 + browser pane at desktop and phone width | 2026-10-21 | ADR-34 |
+| 35 Page by page, two pages side by side | done | U11c + S2 + browser pane at 1400 px and phone width | 2026-10-21 | ADR-35; the stop at a page end not yet heard with Kokoro on the phone |
+| 36 Add-ons | decided, none built | | 2026-10-21 | ADR-36: curated, off by default; Rockson picks the first |
 | Phase 1 gate | waiting on Rockson | | | see below |
 
 ## Phase 1 gate
 
-- [x] Unit tests green: 162 tests in 20 files on 2026-10-21, with the
+- [x] Unit tests green: 166 tests in 20 files on 2026-10-21, with the
       git-ignored book check, covering the Kokoro work (ADR-22),
       the second-review fixes (ADR-23), reloading on update (ADR-25),
       large EPUBs (ADR-26), the Android app's voice (ADR-27), the wider
       lead and the clip order (ADR-28), the AI assistant and notes (ADR-30),
       the reading flow (ADR-31), Copy for Claude (ADR-32), reading fonts
-      (ADR-33) and find (ADR-34). `pnpm build` clean, bundle budget met.
+      (ADR-33), find (ADR-34) and page by page (ADR-35). `pnpm build` clean,
+      bundle budget met.
 - [ ] M1–M8 done in Edge. Done or partly done: M2 (sample PDF), M3, M4, M5,
       M6. Waiting on Rockson: M1 and M2 with his chapter, M8 install, and
       everything by ear. Not yet run in a browser: M7. Still unchecked in
@@ -170,6 +173,10 @@ every "by ear" item is still Rockson's.
    needs Microsoft sign-in (Microsoft Graph, an app registration, MSAL as a
    new dependency). Recommended: a later phase with its own decision.
    Second best: keep saving the Word file and adding it.
+11. **Pick the first add-on (ADR-36).** Recommended: more reading fonts
+   (Atkinson Hyperlegible, OpenDyslexic, Lexend), served from the app's own
+   site. Second best: a dictionary, which sends one word at a time to a
+   named free service. Reading scanned PDFs (several MB) can come later.
 
 ## Open issues
 
@@ -214,7 +221,7 @@ runtime:         Node 22.23.3 (portable), pnpm 11.19 via corepack
 
 | Measure | Result | Budget |
 |---|---|---|
-| Main JS bundle, gzipped | 57 kB with the AI assistant, notes, Copy for Claude, fonts and find (27.5 kB before Kokoro; the voice loads in its own worker) | < 250 kB |
+| Main JS bundle, gzipped | 58 kB with the AI assistant, notes, Copy for Claude, fonts, find and page by page (27.5 kB before Kokoro; the voice loads in its own worker) | < 250 kB |
 | Parse a 500k-char `.docx` (Node + jsdom) | 0.97 s | < 5 s |
 | Parse a 1 MB EPUB (Node + jsdom) | 0.86 s | < 6 s |
 | Kokoro download, PC / phone | 13–20 s / about 10 s for 326 MB | — |

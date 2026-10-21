@@ -195,8 +195,11 @@ export interface AudioCacheRecord { key: string; blob: Blob; bytes: number; last
 /** The reading font (ADR-33): system fonts only, nothing is downloaded. */
 export type ReaderFont = 'serif' | 'sans' | 'wide' | 'mono';
 
+/** How the reader shows the text (ADR-35): one long scroll, or a page at a time. */
+export type ReaderLayout = 'scroll' | 'pages';
+
 export interface Settings {
-  schemaVersion: 4;                             // 2: Kokoro first (ADR-22); 3: ai (ADR-30), paragraph pause (ADR-31); 4: reading font (ADR-33)
+  schemaVersion: 4;                             // 2: Kokoro first (ADR-22); 3: ai (ADR-30), paragraph pause (ADR-31); 4: reading font (ADR-33), page by page (ADR-35)
   enginePreference: EngineId[];                 // default ['kokoro', 'webspeech']
   voiceByEngine: Partial<Record<EngineId, string>>;
   rate: number;                                 // default 1.0
@@ -212,6 +215,9 @@ export interface Settings {
   fontSizePx: number;                           // default 18
   readerFont: ReaderFont;                       // default 'serif' (ADR-33)
   lineSpacing: number;                          // default 1.7 (ADR-33)
+  layout: ReaderLayout;                         // default 'scroll' (ADR-35)
+  twoPages: boolean;                            // default true: two pages side by side on a wide screen (ADR-35)
+  stopAtPageEnd: boolean;                       // default true: page by page stops at the end of each page (ADR-35)
   theme: 'auto' | 'light' | 'dark';             // default 'auto'
   ai: AiSettings;                               // default { provider: null, models: {} }
 }

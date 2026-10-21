@@ -1,14 +1,28 @@
-// Renders one chapter; the current sentence is highlighted imperatively for speed (spec 11.3, 16).
-import type { JSX } from 'preact';
+// Renders one chapter, or the pages on screen when reading page by page (ADR-35); the current
+// sentence is highlighted imperatively for speed (spec 11.3, 16).
+import type { ComponentChildren, JSX } from 'preact';
 import { useEffect, useMemo, useRef } from 'preact/hooks';
 import type { Block } from '../../core/types';
 
+/** One page on screen (ADR-35). */
+export interface Sheet {
+  key: string;
+  label: string;
+  blocks: Block[];
+}
+
 interface Props {
   blocks: Block[];
+  /** Page by page: the one or two pages on screen; null for one long scroll. */
+  sheets: Sheet[] | null;
   flagged: ReadonlySet<string>;
   currentId: string | undefined;
   skipCode: boolean;
   onSeek: (sentenceId: string) => void;
+  /** Told the pane's width, so the reader knows whether two pages fit side by side. */
+  onWidth?: (px: number) => void;
+  /** Shown under the text: the page buttons. */
+  children?: ComponentChildren;
 }
 
 function sentencesOf(block: Block, flagged: ReadonlySet<string>): Array<JSX.Element | string> {
@@ -52,9 +66,38 @@ function renderBlock(block: Block, flagged: ReadonlySet<string>, skipCode: boole
   }
 }
 
-export function TextPane({ blocks, flagged, currentId, skipCode, onSeek }: Props) {
+export function TextPane({ blocks, sheets, flagged, currentId, skipCode, onSeek, onWidth, children }: Props) {
   const ref = useRef<HTMLDivElement>(null);
-  const content = useMemo(() => blocks.map((b) => renderBlock(b, flagged, skipCode)), [blocks, flagged, skipCode]);
+  const content = useMemo(
+    () =>
+      sheets ? (
+        <div class={sheets.length > 1 ? 'sheets two' : 'sheets'}>
+          {sheets.map((s) => (
+            <article key={s.key} class="sheet" aria-label={`Page ${s.label}`}>
+              {s.blocks.map((b) => renderBlock(b, flagged, skipCode))}
+              <footer class="folio">{s.label}</footer>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <article>{blocks.map((b) => renderBlock(b, flagged, skipCode))}</article>
+      ),
+    [blocks, sheets, flagged, skipCode],
+  );
+
+  // A new page starts at the top.
+  const sheetKey = sheets?.map((s) => s.key).join(' ') ?? '';
+  useEffect(() => {
+    if (sheetKey && ref.current) ref.current.scrollTop = 0;
+  }, [sheetKey]);
+
+  useEffect(() => {
+    const root = ref.current;
+    if (!root || !onWidth || typeof ResizeObserver === 'undefined') return;
+    const watch = new ResizeObserver(([entry]) => entry && onWidth(entry.contentRect.width));
+    watch.observe(root);
+    return () => watch.disconnect();
+  }, [onWidth]);
 
   useEffect(() => {
     const root = ref.current;
@@ -72,14 +115,15 @@ export function TextPane({ blocks, flagged, currentId, skipCode, onSeek }: Props
   return (
     <div
       ref={ref}
-      class="text-pane"
+      class={sheets ? 'text-pane paged' : 'text-pane'}
       onClick={(e) => {
         const target = (e.target as HTMLElement).closest<HTMLElement>('[data-sid]');
         const id = target?.dataset.sid;
         if (id) onSeek(id);
       }}
     >
-      <article>{content}</article>
+      {content}
+      {children}
     </div>
   );
 }

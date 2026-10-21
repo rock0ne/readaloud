@@ -1,4 +1,4 @@
-// How the text being read looks (ADR-33): font, size and line spacing, in Settings and in the
+// How the text being read looks (ADR-33) and is laid out (ADR-35), in Settings and in the
 // reader's Aa panel. System fonts only, so nothing is downloaded.
 import type { ReaderFont, Settings } from '../../core/types';
 import { useServices, useSettings } from '../services';
@@ -16,6 +16,29 @@ export function TextControls() {
   const update = (p: Partial<Settings>) => void services.updateSettings(p);
   return (
     <>
+      <div class="field" role="radiogroup" aria-label="Layout">
+        Layout
+        <label class="check">
+          <input type="radio" name="reader-layout" checked={s.layout === 'scroll'} onChange={() => update({ layout: 'scroll' })} />
+          One long scroll: the reading flows on, for listening
+        </label>
+        <label class="check">
+          <input type="radio" name="reader-layout" checked={s.layout === 'pages'} onChange={() => update({ layout: 'pages' })} />
+          Page by page, for study
+        </label>
+        {s.layout === 'pages' && (
+          <>
+            <label class="check">
+              <input type="checkbox" checked={s.twoPages} onChange={(e) => update({ twoPages: e.currentTarget.checked })} />
+              Two pages side by side when the screen is wide enough
+            </label>
+            <label class="check">
+              <input type="checkbox" checked={s.stopAtPageEnd} onChange={(e) => update({ stopAtPageEnd: e.currentTarget.checked })} />
+              Stop reading at the end of each page
+            </label>
+          </>
+        )}
+      </div>
       <label class="field">
         Font
         <select value={s.readerFont} onChange={(e) => update({ readerFont: e.currentTarget.value as ReaderFont })}>

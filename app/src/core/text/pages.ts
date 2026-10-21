@@ -10,6 +10,7 @@ export interface Page {
   chapterIndex: number;
   blockIds: string[];
   firstSentenceId: string;
+  lastSentenceId: string; // where page by page can stop (ADR-35)
   chars: number;
 }
 
@@ -24,13 +25,15 @@ export function makePages(doc: ParsedDocument): Page[] {
     const fresh = !cur || cur.chapterIndex !== b.chapterIndex || (real ? thisPage !== pdfPage : cur.chars + b.text.length > PAGE_CHARS);
     if (fresh || !cur) {
       const label = real ? String(thisPage) : String(++count);
-      cur = { key: `c${b.chapterIndex}p${label}`, label, chapterIndex: b.chapterIndex, blockIds: [], firstSentenceId: '', chars: 0 };
+      cur = { key: `c${b.chapterIndex}p${label}`, label, chapterIndex: b.chapterIndex, blockIds: [], firstSentenceId: '', lastSentenceId: '', chars: 0 };
       pages.push(cur);
       pdfPage = thisPage;
     }
     cur.blockIds.push(b.id);
     cur.chars += b.text.length;
     if (!cur.firstSentenceId && b.sentences[0]) cur.firstSentenceId = b.sentences[0].id;
+    const last = b.sentences.at(-1);
+    if (last) cur.lastSentenceId = last.id;
   }
   return pages;
 }

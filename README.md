@@ -104,13 +104,16 @@ can pause for a few seconds between some sentences.
    | M | Write a note on the sentence (no flag) |
    | [ / ] | Slower or faster |
    | / | Go to a page or find text |
+   | Page Up / Page Down | Previous or next page, page by page |
    | Esc | Close the panel or leave the note |
 
    On a phone, tap the flag button instead. Click or tap a sentence to read
    from there. In Settings you can set an extra pause at a full stop and the
    pause between paragraphs; both get shorter as you speed up. The **Aa**
-   button changes the font, text size and line spacing, and 🔍 goes to a
-   page or finds text.
+   button changes the font, text size and line spacing, and switches between
+   one long scroll (the reading flows on, say in the car) and page by page
+   (for study: one page, or two side by side on a wide screen, stopping at
+   the end of each page). 🔍 goes to a page or finds text.
 4. Download the corrections file from the **Flags** panel (or from the
    document in the library) and fix the mistakes in your manuscript.
 

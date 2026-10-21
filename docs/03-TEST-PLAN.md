@@ -124,8 +124,12 @@ ever committed; real chapters live in `app/test/fixtures/private/` (git-ignored)
 - **S1** (`search.test.ts`, ADR-34): find in reading order, ignoring case,
   curly quotes and extra spaces, nothing under 2 characters, a cap on matches;
   a page typed as "2", "p. 2" or "page 2", and none for a page that is not
-  there. Settings from 0.2.0 get the reading font and spacing (`store.test.ts`,
-  ADR-33).
+  there. Settings from 0.2.0 get the reading font, spacing and one long scroll
+  (`store.test.ts`, ADR-33, ADR-35).
+- **U11c** (`player.test.ts`, ADR-35): page by page stops after the last
+  sentence of a page, also inside a paragraph read in one go; Play goes on
+  with the next page; a jump forgets the stop; with no page ends it reads
+  straight on. **S2** (`search.test.ts`): each page knows its last sentence.
 
 ## Manual checks (record results in `PROGRESS.md`)
 
@@ -165,8 +169,10 @@ ever committed; real chapters live in `app/test/fixtures/private/` (git-ignored)
 - **M15 Copy for Claude (ADR-32)**: with a real Claude account, copy a chapter
   summary, paste it in claude.ai, paste the reply back as a note; its page
   links go to the right sentences. On the phone: does claude.ai open?
-- **M16 fonts and find (ADR-33, ADR-34)**: each font on Windows and on the
-  phone; find and go to a page in a long book.
+- **M16 fonts, find and pages (ADR-33, ADR-34, ADR-35)**: each font on
+  Windows and on the phone; find and go to a page in a long book; page by page
+  on the phone and on a wide PC screen (two pages), stopping at each page end
+  with the natural voice, and one long scroll in the car over Bluetooth.
 - **M14 flow (ADR-31)**: at 1× and 1.5× a full stop is a short breath and a
   new paragraph a longer one, with Kokoro and with an online Edge voice; the
   two pause settings change them.

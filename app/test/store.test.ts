@@ -93,11 +93,20 @@ describe('U9 store', () => {
     expect(s.rate).toBe(1.7);
   });
 
-  it('gives settings from 0.2.0 the book font and line spacing, keeping the rest (ADR-33)', async () => {
+  it('gives settings from 0.2.0 the book font, line spacing and one long scroll, keeping the rest (ADR-33, ADR-35)', async () => {
     const r = await fresh();
-    const { readerFont: _f, lineSpacing: _l, ...v3 } = await r.getSettings();
+    const { readerFont: _f, lineSpacing: _l, layout: _y, twoPages: _t, stopAtPageEnd: _p, ...v3 } = await r.getSettings();
     await r.saveSettings({ ...v3, schemaVersion: 3, fontSizePx: 22, rate: 1.4 } as unknown as Settings);
-    expect(await r.getSettings()).toMatchObject({ schemaVersion: 4, readerFont: 'serif', lineSpacing: 1.7, fontSizePx: 22, rate: 1.4 });
+    expect(await r.getSettings()).toMatchObject({
+      schemaVersion: 4,
+      readerFont: 'serif',
+      lineSpacing: 1.7,
+      layout: 'scroll',
+      twoPages: true,
+      stopAtPageEnd: true,
+      fontSizePx: 22,
+      rate: 1.4,
+    });
   });
 
   it('drops the old fixed full-stop pause and adds a paragraph pause (ADR-31)', async () => {

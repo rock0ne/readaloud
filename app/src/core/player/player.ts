@@ -130,6 +130,10 @@ export class Player {
   private cachePuts = 0;
   /** Settles once the newest clip, and every clip started before it, has asked its engine or needed not to. */
   private lastAsk: Promise<void> = Promise.resolve();
+  /** Page by page (ADR-35): the last sentence of each page, where reading stops. */
+  private pageEnds: ReadonlySet<string> | null = null;
+  /** Stopped at the end of a page: the next Play starts the next page. */
+  private atPageEnd = false;
   private _state: PlayerState;
   basicFallback = false;
   private readonly deps: PlayerDeps;
@@ -179,6 +183,7 @@ export class Player {
     this.dropClips();
     this.doc = doc;
     this.index = new DocIndex(doc);
+    this.atPageEnd = false;
     const at = startAt ? this.index.get(startAt) : undefined;
     this.pos = at ? at.ordinal : 0;
     this.setState({ status: 'idle', docId: doc.id, ...(this.currentSentenceId ? { sentenceId: this.currentSentenceId } : {}) });
@@ -198,6 +203,8 @@ export class Player {
   private async start(): Promise<void> {
     const gen = ++this.startGen;
     if (!this.index) return;
+    if (this.atPageEnd) this.pos = Math.min(this.pos + 1, this.index.order.length - 1);
+    this.atPageEnd = false;
     if (this._state.status === 'ended' || this.pos >= this.index.order.length) this.pos = 0;
     if (!this.engine || !this.voice) {
       const pick = await this.deps.registry.pick(this.deps.settings());
@@ -293,9 +300,15 @@ export class Player {
     this.voice = null;
   }
 
+  /** Page by page (ADR-35): reading stops after any of these sentences; null reads straight on. */
+  setPageEnds(ids: ReadonlySet<string> | null): void {
+    this.pageEnds = ids;
+  }
+
   private moveTo(target: number): void {
     if (!this.index) return;
     const clamped = Math.max(0, Math.min(this.index.order.length - 1, target));
+    this.atPageEnd = false;
     const wasPlaying = this._state.status === 'playing' || this._state.status === 'buffering';
     if (wasPlaying) this.controller?.abort();
     this.pos = clamped;
@@ -381,6 +394,13 @@ export class Player {
         const pause = isHeading && lastOfBlock ? settings.pauseAfterHeadingMs : lastOfBlock ? settings.pauseBetweenParagraphsMs : settings.pauseBetweenSentencesMs;
         await abortableSleep(pause / speed, signal);
         if (signal.aborted) return;
+      }
+      // Page by page (ADR-35): stop after the last sentence of a page; Play goes on with the next.
+      if (this.pageEnds?.has(index.order[this.pos]!.sentence.id) && this.pos < index.order.length - 1) {
+        this.atPageEnd = true;
+        this.setState({ status: 'paused' });
+        this.flushPosition();
+        return;
       }
       this.pos++;
     }

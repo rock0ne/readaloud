@@ -294,3 +294,44 @@ describe('U11b reading that flows at full stops (ADR-31)', () => {
     player.stop();
   });
 });
+
+describe('U11c page by page (ADR-35)', () => {
+  it('stops after the last sentence of a page, and Play goes on with the next page', async () => {
+    const { engine, player } = setup();
+    await player.load(makeDoc(sampleBlocks));
+    player.setPageEnds(new Set(['b1.s1']));
+    await player.play();
+    await player.settled;
+    expect(engine.spoken).toEqual(['Chapter One', 'First sentence here.', 'Second sentence here.']);
+    expect(player.state.status).toBe('paused');
+    expect(player.state.sentenceId).toBe('b1.s1');
+    await player.play();
+    await player.settled;
+    expect(engine.spoken.slice(3)).toEqual(['Final paragraph.']);
+    expect(player.state.status).toBe('ended');
+  });
+
+  it('stops at the page end when a whole paragraph is read at once', async () => {
+    const { engine, player } = setup({}, new FakeFlowing());
+    await player.load(makeDoc(sampleBlocks));
+    player.setPageEnds(new Set(['b1.s1']));
+    await player.play();
+    await player.settled;
+    expect(engine.spoken).toEqual(['Chapter One', 'First sentence here. Second sentence here.']);
+    expect(player.state).toMatchObject({ status: 'paused', sentenceId: 'b1.s1' });
+  });
+
+  it('a jump forgets the stop, and with no page ends it reads straight on', async () => {
+    const { engine, player } = setup();
+    await player.load(makeDoc(sampleBlocks));
+    player.setPageEnds(new Set(['b1.s1']));
+    await player.play();
+    await player.settled;
+    player.seek('b1.s0');
+    player.setPageEnds(null);
+    await player.play();
+    await player.settled;
+    expect(engine.spoken.slice(3)).toEqual(['First sentence here.', 'Second sentence here.', 'Final paragraph.']);
+    expect(player.state.status).toBe('ended');
+  });
+});

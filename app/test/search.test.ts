@@ -32,3 +32,18 @@ describe('S1 find and go to a page (ADR-34)', () => {
     expect(pageFor(pages.pages, '')).toBeUndefined();
   });
 });
+
+describe('S2 page by page (ADR-35)', () => {
+  it('knows the last sentence of each page, where reading can stop', () => {
+    const doc = makeDoc([
+      { type: 'heading', level: 1, text: 'One' },
+      { type: 'paragraph', text: 'First here. Second here.' },
+      { type: 'heading', level: 1, text: 'Two' },
+      { type: 'paragraph', text: 'Third here. Fourth here.' },
+    ]);
+    expect(new PageIndex(doc).pages.map((p) => [p.firstSentenceId, p.lastSentenceId])).toEqual([
+      ['b0.s0', 'b1.s1'],
+      ['b2.s0', 'b3.s1'],
+    ]);
+  });
+});

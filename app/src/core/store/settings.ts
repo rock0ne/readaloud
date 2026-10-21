@@ -19,6 +19,9 @@ export function defaultSettings(touch = false): Settings {
     fontSizePx: 18,
     readerFont: 'serif',
     lineSpacing: 1.7,
+    layout: 'scroll',
+    twoPages: true,
+    stopAtPageEnd: true,
     theme: 'auto',
     ai: { provider: null, models: {} },
   };
@@ -43,7 +46,8 @@ export function migrateSettings(saved: StoredSettings): Partial<Settings> {
     // ADR-31: a full stop no longer gets the old fixed 0.15 s; paragraphs get their own pause.
     if (out.pauseBetweenSentencesMs === 150) out.pauseBetweenSentencesMs = 0;
   }
-  // v4 (ADR-33): the reading font and line spacing are new and come from the defaults.
+  // v4 (ADR-33, ADR-35): the reading font, line spacing and page-by-page settings are new and
+  // come from the defaults.
   delete out.schemaVersion;
   return out as Partial<Settings>;
 }

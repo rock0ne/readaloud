@@ -777,3 +777,63 @@ tried in the Android app, where opening claude.ai goes through the web view.
 - Going somewhere uses the same jump as citations, so "Back to where I was"
   appears.
 - Search works per sentence: words that run across two sentences are not found.
+
+## ADR-35 · 2026-10-21 · One long scroll or page by page
+
+**Context.** Rockson asked for "split screen read aloud or one page read". Asked
+what he meant, he chose two pages side by side for split screen, and a choice
+between one long scroll and page by page: the reading should flow on when he
+listens in the car over Bluetooth, and go page by page when he studies.
+
+**Decision.**
+- Settings gain `layout` (`scroll`, the default, or `pages`), `twoPages`
+  (default on) and `stopAtPageEnd` (default on), in the reader's **Aa** panel
+  and in Settings, Display. Settings schema 4 is not yet released, so they join
+  it with the reading font (ADR-33) instead of making a version 5.
+- Page by page shows the reading pages of spec 17.1: a PDF's own pages,
+  otherwise about 1,800 characters. With `twoPages`, two facing pages (1–2,
+  3–4 in each chapter) when the text pane is at least 50 times the text size
+  wide (900 px at 18 px); otherwise one page. The page turns as the reading
+  moves on. ‹ Previous and Next › under the text, or Page Up and Page Down,
+  turn the page and move the reading position to its first sentence.
+- With `stopAtPageEnd` the reading stops after the last sentence of each page
+  (each page, the left one of a pair too). The highlight stays there; Play
+  goes on with the next page. One long scroll never stops, for listening.
+- The player is only told which sentences to stop after (`setPageEnds`).
+  Pages end at a paragraph end, so a paragraph read in one go (ADR-31) is
+  never cut.
+
+**Consequences.** A long page scrolls inside the page. No swipe to turn the
+page yet: the buttons are under the text.
+
+## ADR-36 · 2026-10-21 · Add-ons: curated, off by default
+
+**Context.** Rockson asked for plugins that could enhance the app, "up to the
+reader to make the decision as the plugins are external and may require
+internet". Asked how, he chose curated add-ons that are off by default.
+
+**Decision.**
+- An add-on is a feature written for ReadAloud and reviewed like the rest of
+  it. It ships with the app and stays off until the reader turns it on in
+  Settings, Add-ons. No code from anyone else is ever loaded: such a plugin
+  would run with the app's rights and could read the book, the notes and the
+  AI keys. The Content Security Policy keeps refusing scripts from elsewhere.
+- Before it is turned on, each add-on says what it downloads, from where and
+  how much; what it sends, to whom; and whether it then works offline.
+  Turning it off deletes what it downloaded.
+- Downloads come from the app's own site when the licence allows, so no one
+  else sees the reader. A service that has to be asked online is named, and
+  is sent only what it needs: one word for a dictionary, never the text
+  around it.
+- Each add-on gets its own decision entry with its source, licence, size and
+  hosts. The Content Security Policy gains a host only for an add-on that
+  needs it, and a new package still needs its own entry (spec 13).
+- First candidates, none built: **more reading fonts** (Atkinson
+  Hyperlegible, OpenDyslexic, Lexend; SIL Open Font Licence; a few hundred kB
+  from the app's own site); **a dictionary** (one word at a time to a named
+  free dictionary service); **reading scanned PDFs** (text recognition with
+  Tesseract; several MB once, then offline). Rockson picks which comes first.
+
+**Consequences.** Slower to grow than an open plugin store, but nothing
+reaches the book or the keys without review, and the app works the same
+with every add-on off.

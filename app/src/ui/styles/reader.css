@@ -661,3 +661,58 @@ pre.raw {
 .text-panel h2 {
   margin-top: 0;
 }
+
+/* Page by page (ADR-35). */
+.text-pane.paged {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 0;
+}
+
+.text-pane .sheets {
+  flex: 1 0 auto;
+}
+
+.text-pane .sheets.two {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 28px;
+  width: 100%;
+  max-width: 1500px;
+  margin: 0 auto;
+}
+
+.text-pane .sheets.two .sheet {
+  max-width: none;
+  margin: 0;
+}
+
+.text-pane .sheets.two .sheet + .sheet {
+  border-left: 1px solid var(--border);
+  padding-left: 28px;
+}
+
+.text-pane .folio {
+  margin: 24px 0 16px;
+  text-align: center;
+  font-family: var(--ui);
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.pager {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 8px -16px 0;
+  padding: 8px 16px;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+}
+
+.reader.paged .return-bar {
+  bottom: 72px;
+}
