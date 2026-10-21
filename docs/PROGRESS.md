@@ -30,6 +30,7 @@ One line per step. Keep it short. Newest at the bottom of each section.
 - [ ] M1–M8 done in Edge. Done or partly done: M2 (sample PDF), M3, M4, M5,
       M6. Waiting on Rockson: M1 and M2 with his chapter, M3 by ear, M8
       install. Not yet run in a browser: M7.
+- [ ] A voice Rockson accepts is in the app (ADR-21: not Microsoft).
 - [ ] Rockson has listened to one chapter of his book in the installed app,
       flagged mistakes with F, and exported `corrections.md`.
 
@@ -72,9 +73,9 @@ heard, so every "by ear" item is still Rockson's.
 1. **Open the app.** Double-click `app/start-readaloud.cmd`. It serves the app
    at `http://127.0.0.1:4173` and opens Edge. Always use that address: each
    address keeps its own library.
-2. **Voice gate by ear (M3).** In Settings, pick Sonia or Ryan (the choice is
-   saved), press **Read 3 sentences**, and say whether all three sounded
-   natural and complete.
+2. **Choose a voice by ear (ADR-21).** Microsoft voices are rejected. Listen
+   to the eight samples in `Fable/voice-samples-20261021/` and say which, if
+   any, sounds natural enough. That choice decides the next engine.
 3. **Install (M8).** In Edge use "Install ReadAloud" from the address bar or
    the menu. Close the launcher window and reopen the installed app: the
    library should still open.
@@ -92,9 +93,8 @@ heard, so every "by ear" item is still Rockson's.
 
 - The toolchain lives in a temporary scratchpad folder. If it is cleaned up,
   the builder needs Node again before `pnpm` works (handoff section 7).
-- Automatic voice choice is Libby, not Sonia, because spec 7.1 takes the
-  first natural voice for the locale. An explicit pick is saved, so this only
-  matters until Rockson chooses one.
+- The app still speaks with Edge's Microsoft voices, which Rockson rejected
+  on 2026-10-21 (ADR-21). They stay only until a replacement engine works.
 - Delete asks with the browser's own confirm box. It works in Edge and on
   Android, but the Claude browser pane dismisses it, so tests there must stub
   `window.confirm`.
@@ -119,5 +119,17 @@ runtime:         Node 22.23.3 (portable), pnpm 11.19 via corepack
 | Parse a 1 MB EPUB (Node + jsdom) | 0.86 s | < 6 s |
 | Edge natural voice, one ~80-char sentence | about 5.7 s, start after 0.1–0.5 s | — |
 
-- Azure characters used for one chapter: (Phase 2)
-- Kokoro synthesis speed on the PC / phone: (Phase 4)
+- Azure: dropped (ADR-21).
+
+Voice listening test, 2026-10-21. One 77-word passage, PC = Ryzen 9 5950X,
+RTX 3060 12 GB. "Word check" = Whisper large-v3-turbo transcript against the
+text, ignoring its spelling of numbers and US spellings.
+
+| Sample | Runs on | Speed vs real time | Word check |
+|---|---|---|---|
+| Kokoro bf_emma, bm_george, af_heart, af_bella | CPU, browser, phone | about 5× faster | all exact |
+| Qwen3 designed British woman, British man | RTX 3060 | about 3.7× slower | exact |
+| Qwen3 built-in Ryan | RTX 3060 | about 3.6× slower | changed "until" to "in the" |
+| Qwen3 built-in Aiden | RTX 3060 | about 3.8× slower | "mornings" for "morning" |
+
+- Kokoro speed on the phone: not measured yet.

@@ -171,6 +171,11 @@ installed app still opens the library (shell cached).
 
 ## Phase 2 — Azure engine and audio pipeline
 
+> **Dropped on 2026-10-21 (ADR-21).** Rockson rejected Microsoft voices, Azure
+> included. Do not build Steps 17–20 as written. The next engine is chosen by
+> his listening test; the audio-cache and playback parts of Step 19 will still
+> be needed by whichever engine wins.
+
 ### Step 17 — Azure CORS spike
 
 Read: spec 7.3; handoff gotchas "Azure".

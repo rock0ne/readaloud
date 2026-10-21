@@ -160,3 +160,30 @@ Found by driving the built app in a browser, not by the unit tests:
 - `app/start-readaloud.cmd` serves `app/dist` on `http://127.0.0.1:4173` and
   opens Edge, because Rockson's PC has no Node on the PATH. This is the "local
   static server" CLAUDE.md allows; nothing is deployed or published.
+
+## ADR-21 · 2026-10-21 · Rockson rejects Microsoft voices; the next engine is chosen by ear
+Rockson, 2026-10-21: the Microsoft voices do not sound natural, so building on
+them is pointless. This covers Edge's online natural voices and Azure Speech,
+which uses the same voice family.
+Consequences:
+- Phase 2 (Azure) is dropped. Do not build Steps 17–20 as written.
+- The Web Speech engine stays in the code only until a replacement engine
+  works, so the app keeps speaking. Removing it is Rockson's call.
+- The replacement is chosen by a listening test. Samples of one neutral
+  passage (no book text) are in `Fable/voice-samples-20261021/`, outside the
+  repo. Results are in PROGRESS "Measurements".
+- Candidates:
+  - **Kokoro-82M** (Apache 2.0): runs in the browser on the PC and the phone,
+    no internet, about 5× faster than real time on the PC's CPU, read the
+    passage word for word. It was already Phase 4 (Step 24).
+  - **Qwen3-TTS 1.7B** (Apache 2.0): more expressive, and can design a voice
+    from a written description. Needs the PC's RTX 3060; on Windows without
+    flash-attention it ran about 3.7× slower than real time, so it would have
+    to pre-render chapters on the PC rather than read live. Its built-in
+    "Ryan" voice changed words ("until morning" became "in the morning"),
+    which is dangerous for proofreading; the two designed British voices were
+    word-perfect in this test. Speed in WSL with flash-attention is untested.
+- Whatever is chosen, every rendered sentence should be checked against its
+  text (speech recognition, as in the test) before the app trusts it for
+  proofreading. A voice that silently changes words hides the very mistakes
+  Rockson is listening for.

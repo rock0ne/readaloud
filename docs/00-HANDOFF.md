@@ -14,6 +14,10 @@ model; this document carries everything that is not in the spec itself.
 
 ## 2. The one fact the whole design rests on
 
+> **Superseded on 2026-10-21 (ADR-21).** Rockson listened and rejected the
+> Microsoft voices as not natural, Azure included. The Edge engine below stays
+> only until a non-Microsoft engine works. Read ADR-21 before any voice work.
+
 The robotic sound is the **voice model**, not the app. Windows gives ordinary
 apps old SAPI voices. Speechify, Edge Read Aloud and Azure use neural voices.
 
