@@ -28,7 +28,8 @@ APP=$(cd "$(dirname "$0")/.." && pwd)
 cd "$APP"
 [ -d node_modules ] || $PNPM install --frozen-lockfile
 $PNPM build:android
-$PNPM exec cap copy android
+# sync, not copy: it also makes the git-ignored capacitor-cordova-android-plugins folder.
+$PNPM exec cap sync android
 
 # sherpa-onnx's native libraries, unchanged from the engine APK (git-ignored here).
 JNI=android/app/src/main/jniLibs/arm64-v8a

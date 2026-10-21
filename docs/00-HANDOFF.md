@@ -148,18 +148,23 @@ Phone (Phase 3):
 
 ## 7. Toolchain
 
-- **There is no Node on the Windows PATH.** Phase 1 was built with a portable
-  Node 22 copied into a Claude session scratchpad:
-  `<session scratchpad>/nodewin/`
-  (`env.sh` beside it puts it on PATH and `cd`s into `app/`). pnpm 11 comes
-  from `corepack`. That folder is temporary. If it is gone, ask Rockson to
-  install Node 22 LTS, or unpack the official portable zip into your own
-  scratchpad. Then update the two ReadAloud entries in the parent
-  `Fable/.claude/launch.json`.
+- **Node is needed to build, not to run.** There is no Node on Rockson's
+  Windows PATH; builds so far used a portable Node 22 unpacked into a session
+  scratchpad, which is temporary. If you have none, ask Rockson to install
+  Node 22 LTS, or unpack the official portable zip into your own scratchpad.
+  pnpm 11 comes from `corepack` (`packageManager` in `app/package.json`).
+  The preview tool's ReadAloud entries in the parent `Fable/.claude/launch.json`
+  point at that Node; update them if it moves. In Git Bash, give Vite a
+  `--base` with `MSYS_NO_PATHCONV=1`, or MSYS turns `/readaloud/` into a
+  Windows path.
 - Rockson starts the built app with `app/start-readaloud.cmd` (double-click).
-  It uses system Node if present, else the portable one above, serves
-  `app/dist` on `http://127.0.0.1:4173` and opens Edge. Rebuild before he
-  uses a change.
+  It runs `app/windows/serve.ps1` in Windows PowerShell (no Node, ADR-29),
+  serves `app/dist` on `http://127.0.0.1:4173` and opens Edge. Rebuild before
+  he uses a change.
+- Published copies (ADR-29): the GitHub Pages site is rebuilt by
+  `.github/workflows/pages.yml` on each push to `main`; the Windows zip comes
+  from `app/windows/package.ps1`; the APK from `app/android/build-apk.sh
+  release`, signed by Rockson with `app/android/sign-apk.sh` and his own key.
 - The preview tool reads `launch.json` from the **parent** `Fable/` folder,
   not from `ReadAloudApp/`. The `readaloud-preview` entry serves `app/dist` on
   `http://127.0.0.1:4173` (run `pnpm build` first). `localhost` does not reach
@@ -175,8 +180,9 @@ Phone (Phase 3):
 - Android builds (Phase 3b only) are done in WSL Ubuntu, not Windows: the
   Windows sandbox blocks the JVM loopback socket Gradle needs. JDK 21 and the
   Android SDK (platform 36) are already under `~/.local` in WSL from an earlier
-  Capacitor project. Flow: `pnpm build` → `npx cap sync android` →
-  `./gradlew assembleDebug` in `app/android` → `adb install` to the S21+.
+  Capacitor project, and Node 22 under `~/.local/node22`. Build from a clone
+  on the WSL disk with `app/android/build-apk.sh` (it needs the engine APK for
+  its two native libraries), then `adb install -r` to the S21+.
 - Rockson's phone pairs over adb.
 
 ## 8. Things only Rockson can supply

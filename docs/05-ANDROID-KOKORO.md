@@ -7,8 +7,8 @@ backend and the screen-on call are Android code.
 
 - sherpa-onnx 1.13.8 runs inside ReadAloud's own process. Its native libraries
   (`libsherpa-onnx-jni.so`, `libonnxruntime.so`) are copied at build time from
-  the approved Kokoro engine APK (`scratchpad/dl-sherpa/sherpa-kokoro-v1_0.apk`
-  during development) into `app/android/app/src/main/jniLibs/arm64-v8a/`,
+  the Kokoro engine APK (`SHERPA_ENGINE_APK` in `app/android/build-apk.sh`)
+  into `app/android/app/src/main/jniLibs/arm64-v8a/`,
   which is git-ignored.
 - The model files stay in the Kokoro engine app
   (`com.k2fsa.sherpa.onnx.tts.engine`), which must be installed. ReadAloud
@@ -80,8 +80,13 @@ makes the phonemes, as kokoro-js does on the PC:
 
 ## Build (WSL Ubuntu, handoff 7)
 
-On Windows: `pnpm build:android` (vite `--mode android` → `dist-android`) and
-`pnpm exec cap copy android`. In WSL: copy `app/android` and Capacitor's
-Android library to the Linux disk, put the two native libraries from the
-engine APK into `jniLibs/arm64-v8a`, `./gradlew assembleDebug`, then
-`adb install -r` the debug APK from Windows.
+`app/android/build-apk.sh [debug|release]`, run from a checkout on the Linux
+disk, does it all: `pnpm build:android` (vite `--mode android` →
+`dist-android`), `pnpm exec cap sync android`, the two native libraries from
+the engine APK into `jniLibs/arm64-v8a`, then Gradle. It needs `JAVA_HOME`
+(JDK 21), `ANDROID_HOME` (platform 36) and `SHERPA_ENGINE_APK`. A release
+build is unsigned; `app/android/sign-apk.sh <keystore> <in> <out>` signs it,
+and apksigner asks for the key's password (ADR-29). Install with
+`adb install -r`. An APK signed with another key (the debug key, or someone
+else's release key) cannot be installed over this one without uninstalling it
+first, which deletes the app's library and flags.
