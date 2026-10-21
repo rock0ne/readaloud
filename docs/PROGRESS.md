@@ -26,7 +26,7 @@ One line per step. Keep it short. Newest at the bottom of each section.
 | 22 PWA on the S21+ | partly | phone | 2026-10-21 | runs in Firefox; upload works; voice too slow (ADR-24); not yet on the home screen |
 | 24 Kokoro web engine | done (PC) | U-kokoro + Edge M11 | 2026-10-21 | main voice, bf_emma (ADR-22) |
 | 23 Capacitor wrapper | partly | phone | 2026-10-21 | brought forward; Kokoro made inside the app, every word spoken (ADR-27); clips about 40 s ahead (ADR-28); not yet heard by Rockson |
-| 29 Public release | partly | fresh clone in WSL + headless Edge | 2026-10-21 | github.com/rock0ne/readaloud, Pages site, Windows zip with a no-Node launcher (ADR-29); the APK waits on Rockson's own signing key |
+| 29 Public release | done | fresh clone in WSL + headless Edge on the live site | 2026-10-21 | github.com/rock0ne/readaloud, Pages site, release v0.1.0 with the Windows zip and the APK signed with Rockson's key (CN=rock0ne, cert SHA-256 c5f96167…5dbc0f), ADR-29 |
 | Phase 1 gate | waiting on Rockson | | | see below |
 
 ## Phase 1 gate
@@ -148,14 +148,9 @@ every "by ear" item is still Rockson's.
 6. **Optional:** install Node 22 LTS. Node is only needed to build now; the
    launcher runs without it (ADR-29). Builds use a portable Node in a
    temporary folder (see handoff section 7).
-7. **Release key for the public APK (ADR-29).** Create your own signing key
-   once, in a folder outside the repository, and back it up: without it no
-   update can be installed over the app. Then sign
-   `app/release/ReadAloud-0.1.0-unsigned.apk` with `app/android/sign-apk.sh`.
-   Both tools ask for the password; only you type it. The commands are in
-   the chat of 2026-10-21. Your phone's debug build cannot be updated to the
-   signed one without uninstalling it first, which deletes its library and
-   flags; keeping the debug build is fine.
+7. **Back up the release key** (`readaloud-release.jks`) and its password
+   somewhere safe, away from this PC. Without them no update can be installed
+   over the published app. Sign each new release with `app/android/sign-apk.sh`.
 
 ## Open issues
 

@@ -62,7 +62,9 @@ Android 7.0 or later.
 2. Install `ReadAloud-<version>.apk` from
    [Releases](https://github.com/rock0ne/readaloud/releases). Your phone asks
    you to allow installing apps from your browser or file manager the first
-   time.
+   time. Every release is signed with the same key (`CN=rock0ne`, certificate
+   SHA-256 `c5f96167fa4b6633523624bd275745a088d48ed875ff13e5104c6050475dbc0f`),
+   so new versions install over the old one and keep your library.
 
 Or install both from a computer with [adb](https://developer.android.com/tools/adb),
 with the phone connected by USB and USB debugging on:
