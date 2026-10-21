@@ -657,7 +657,8 @@ Rate: user rate 0.8–3.0 in steps of 0.1. Direct engines receive
 
 ### 8.3 Prefetch (audio engines)
 
-**Kokoro (ADR-22):** keep the next 3 chunks being made, cache-first (8.4);
+**Kokoro (ADR-22, ADR-28):** keep the chunks ahead being made, cache-first
+(8.4): at least 3 and at least 600 characters (about 40 s of speech), at most 12;
 keep the last 8 finished clips in memory; on seek, abort unfinished clips that
 are no longer ahead. Show `buffering` only when the current clip is not ready.
 The Azure rules below are kept for reference only (Azure dropped, ADR-21).
@@ -905,7 +906,8 @@ saying so (ADR-25).
 Runtime: `preact`, `idb`, `marked`, `mammoth`, `pdfjs-dist`, `jszip`.
 `kokoro-js` (ADR-22, brought forward from Phase 4). Phase 3b adds `@capacitor/core`, `@capacitor/cli`,
 `@capacitor/android`, `@capacitor/filesystem`, `@capawesome/capacitor-file-picker`,
-`@capacitor-community/keep-awake`.
+`@capacitor-community/keep-awake` (ADR-27 uses only the first three).
+`phonemizer` (ADR-27: the Android app's phonemes, as kokoro-js makes them).
 
 Dev: `vite`, `typescript`, `@preact/preset-vite`, `vitest`, `fake-indexeddb`,
 `jsdom`, `vite-plugin-pwa`.

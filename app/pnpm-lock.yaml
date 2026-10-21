@@ -32,6 +32,9 @@ importers:
       pdfjs-dist:
         specifier: ^6.4.299
         version: 6.4.299
+      phonemizer:
+        specifier: 1.2.1
+        version: 1.2.1
       preact:
         specifier: ^10.29.8
         version: 10.29.8

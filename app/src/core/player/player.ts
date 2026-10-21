@@ -42,8 +42,15 @@ export const RETRY_DELAY_MS = 500;
 export const POSITION_DEBOUNCE_MS = 1000;
 export const PREV_RESTART_MS = 3000;
 export const STOPPED_MESSAGE = 'Speech stopped at this sentence. Press Play to try again.';
-/** Audio engines: chunks prepared ahead of the one playing (spec 8.3). */
+/** Audio engines: chunks prepared ahead of the one playing, at least (spec 8.3). */
 export const PREFETCH_CHUNKS = 3;
+/**
+ * ...and at least this much text, about 40 s of speech: on the phone Kokoro makes speech only a
+ * little faster than it plays, so a long sentence after short ones must be started early (ADR-28).
+ */
+export const PREFETCH_CHARS = 600;
+/** Never more chunks ahead than this. */
+export const PREFETCH_MAX_CHUNKS = 12;
 /** Finished clips kept in memory for replay and previous. */
 export const KEEP_CLIPS = 8;
 const PRUNE_EVERY_PUTS = 50;
@@ -336,7 +343,7 @@ export class Player {
         const unit = engine.kind === 'audio' ? this.unitAt(this.pos) : null;
         const pieces = unit ? [unit.text] : sentence.chunks;
         for (const [c, chunk] of pieces.entries()) {
-          const ahead = engine.kind === 'audio' ? this.upcoming(this.pos, c, PREFETCH_CHUNKS) : [];
+          const ahead = engine.kind === 'audio' ? this.upcoming(this.pos, c) : [];
           const follow = unit ? (fraction: number) => this.follow(unit, fraction) : undefined;
           const ok = await this.speakWithRetry(engine, voice, chunk, ahead, signal, follow);
           if (signal.aborted) return;
@@ -467,17 +474,20 @@ export class Player {
     return unit ? unit.first + unit.count : pos + 1;
   }
 
-  /** The next `n` texts after piece `piece` at sentence `from`, in reading order (audio engines). */
-  private upcoming(from: number, piece: number, n: number): string[] {
+  /** The texts to prepare after piece `piece` at sentence `from`, in reading order (audio engines, spec 8.3). */
+  private upcoming(from: number, piece: number): string[] {
     const out: string[] = [];
+    let chars = 0;
+    const enough = () => out.length >= PREFETCH_MAX_CHUNKS || (out.length >= PREFETCH_CHUNKS && chars >= PREFETCH_CHARS);
     const index = this.index;
     if (!index) return out;
     const skipCode = this.deps.settings().skipCodeBlocks;
     let list = this.pieces(from).slice(piece + 1);
     for (let p = from; ; ) {
       for (const text of list) {
-        if (out.length >= n) return out;
+        if (enough()) return out;
         out.push(text);
+        chars += text.length;
       }
       p = this.after(p);
       const item = index.order[p];

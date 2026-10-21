@@ -1,43 +1,87 @@
-# Android app: Kokoro through the phone's voice engine (ADR-27)
+# Android app: Kokoro made inside ReadAloud (ADR-27)
 
 The app is the same web app inside a Capacitor 8 shell. Only the voice
 backend and the screen-on call are Android code.
+
+## Where the voice comes from
+
+- sherpa-onnx 1.13.8 runs inside ReadAloud's own process. Its native libraries
+  (`libsherpa-onnx-jni.so`, `libonnxruntime.so`) are copied at build time from
+  the approved Kokoro engine APK (`scratchpad/dl-sherpa/sherpa-kokoro-v1_0.apk`
+  during development) into `app/android/app/src/main/jniLibs/arm64-v8a/`,
+  which is git-ignored.
+- The model files stay in the Kokoro engine app
+  (`com.k2fsa.sherpa.onnx.tts.engine`), which must be installed. ReadAloud
+  reads them from that app's assets through `createPackageContext`:
+  `kokoro-multi-lang-v1_0/model.onnx`, `voices.bin`, `tokens.txt` and
+  `lexicon-gb-en.txt`. The manifest's `<queries>` entry lets ReadAloud see
+  that app.
+- eSpeak NG's data must be a folder on disk, so `espeak-ng-data` is copied
+  from the engine app's assets to ReadAloud's files folder once per engine
+  version (a version stamp beside it).
+- Why not Android's `TextToSpeech` through the engine app: the phone freezes
+  that app's process while it plays no sound itself, so each clip took 18 to
+  64 s.
 
 ## Plugin `ReadAloudTts` (`app/android/app/src/main/java/uk/rocksonarthur/readaloud/ReadAloudTtsPlugin.java`)
 
 | Method | Does | Returns |
 |---|---|---|
-| `engine()` | Looks for the Kokoro engine among the phone's voice engines. | `{ installed: boolean, label?: string }` |
-| `init()` | Binds Android `TextToSpeech` to that engine (once). | `{}`; rejects if the engine does not start |
-| `synthesize({ text })` | Writes the text as speech to one WAV file in the app's cache, after deleting the previous file. Speech rate 1.0 (speed is the player's, spec 8.2). | `{ path }`, an absolute file path |
-| `stop()` | Stops the clip being made. | `{}` |
+| `engine()` | Looks for the Kokoro engine app. | `{ installed: boolean, label?: string }` |
+| `init()` | Loads the model (once; about 4 s, the first time also copies eSpeak's data). | `{}`; rejects if it does not load |
+| `synthesize({ phonemes, sid })` | Makes one clip from the phonemes with speaker `sid`, at the voice's own pace (speed is the player's, spec 8.2), and writes it as a 16-bit WAV file in the app's cache after deleting the previous files. A clip with no sound is rejected. | `{ path }`, an absolute file path |
+| `stop()` | Nothing: a clip being made cannot be cut short. | `{}` |
 | `keepScreenOn({ on })` | Sets or clears `FLAG_KEEP_SCREEN_ON`. | `{}` |
 
-`synthesize` resolves when `UtteranceProgressListener.onDone` fires for its
-utterance and rejects on `onError` or `onStop`.
+All model work runs on one worker thread, one clip at a time. Nothing logs
+the text or the phonemes: `capacitor.config.json` sets `loggingBehavior` to
+`"none"`, because Capacitor otherwise logs each call's arguments, and the
+plugin passes no text to sherpa-onnx.
 
-## Model storage
+`com.k2fsa.sherpa.onnx.OfflineTts` (and `GeneratedAudio`) is a small Java copy
+of sherpa-onnx's Kotlin API: the library finds these classes, their fields and
+their native methods by name, so names and field types must match sherpa-onnx
+1.13.8 exactly. ReadAloud uses `newFromAsset`, `generateWithConfigImpl` (with
+`GenerationConfig.phonemeCodepoints`, the text left empty and no callback, as
+the engine app does in its phoneme mode), `getSampleRate`, `getNumSpeakers` and
+`delete`.
 
-None in ReadAloud. The model and voices live in the engine app, installed
-separately (ADR-24, route 1). The engine's speaker number, set in its own app,
-is the voice.
+## Phonemes, not text
+
+sherpa-onnx's text route looks each word up in its lexicon and skips, without
+a sound or an error, every word it lacks: digits and names. So the web side
+makes the phonemes, as kokoro-js does on the PC:
+
+- `app/src/ui/android/phonemes.ts` is kokoro-js 1.2.1's `phonemize`, ported
+  unchanged: normalise years, clock times, money, decimals and titles; split
+  off punctuation; eSpeak NG through `phonemizer` 1.2.1 (`en` for UK voices,
+  `en-us` for US ones); Kokoro's own replacements.
+- The module and eSpeak (1.3 MB) load the first time the phone voice speaks.
+- The phonemes go to sherpa-onnx as one array of Unicode code points. A
+  Kokoro chunk is at most 280 characters (`splitForKokoro`), well inside the
+  model's 510-token window.
 
 ## Web side (`app/src/ui/android/`)
 
 - `PhoneKokoro` implements `KokoroBackend` (spec 7.4) and the status the
-  Kokoro UI shows. It sends one request at a time, because the engine makes
-  one at a time anyway; requests already cancelled are dropped before they are
-  sent, and cancelling the one being made calls `stop()`. So a jump to
-  another sentence does not wait for clips that are no longer needed.
+  Kokoro UI shows. It works out each clip's phonemes as soon as the clip is
+  asked for, and sends one clip at a time, because the model makes one at a
+  time anyway. Clips already cancelled are dropped before they are sent; one
+  being made finishes and is discarded. So a jump to another sentence does not
+  wait for clips that are no longer needed.
 - Each clip: `synthesize` → `fetch(Capacitor.convertFileSrc(path))` →
   `decodeWav` (core, PCM 16-bit) → samples for `KokoroEngine`, which joins
-  long sentences as on the PC. The next request is sent only after the file is
+  long sentences as on the PC. The next clip is sent only after the file is
   read, so deleting the previous file is safe.
-- The voice list has one entry, "Kokoro (voice set in the Kokoro engine app)".
+- Voices: the eleven Kokoro voices of the picker, by their speaker numbers in
+  `kokoro-multi-lang-v1_0` (`SHERPA_SPEAKERS`; for example Emma 21, George 26,
+  Heart 3, Michael 16). UK voices get British phonemes, US voices American.
 - Reading turns `keepScreenOn` on; pause, stop and the end turn it off.
 
 ## Build (WSL Ubuntu, handoff 7)
 
 On Windows: `pnpm build:android` (vite `--mode android` → `dist-android`) and
-`pnpm exec cap sync android`. In WSL: copy `app/android` to the Linux disk,
-`./gradlew assembleDebug`, then `adb install -r` the debug APK from Windows.
+`pnpm exec cap copy android`. In WSL: copy `app/android` and Capacitor's
+Android library to the Linux disk, put the two native libraries from the
+engine APK into `jniLibs/arm64-v8a`, `./gradlew assembleDebug`, then
+`adb install -r` the debug APK from Windows.

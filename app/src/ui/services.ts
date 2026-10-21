@@ -29,7 +29,8 @@ export async function createServices(): Promise<Services> {
   const repo = await Repo.open(undefined, isTouch);
   let settings = await repo.getSettings();
   const listeners = new Set<(s: Settings) => void>();
-  // In the Android app the phone's Kokoro engine makes the voice; in a browser it is downloaded (ADR-27).
+  // In the Android app sherpa-onnx makes the voice from the Kokoro engine app's files; in a browser
+  // the model is downloaded (ADR-27).
   const kokoro: KokoroService = IN_ANDROID_APP ? new PhoneKokoro(readAloudTts, readAppFile) : new KokoroClient();
   const audio = new HtmlAudioOutput();
   // Kokoro is the main voice (ADR-22); browser voices stay as the fallback until it is downloaded.

@@ -13,21 +13,22 @@ const STAGE_TEXT: Record<KokoroStage, string> = {
   'warm-up': 'making a first test sentence',
 };
 
-/** The phone's Kokoro engine app makes the voice: nothing to download or load (ADR-27). */
+/** In the Android app the voice files come from the Kokoro engine app: nothing to download (ADR-27). */
 function describePhone(s: KokoroStatus): string {
   switch (s.phase) {
     case 'absent':
-      return 'The natural voice needs the Kokoro voice engine app on this phone. Until it is installed, there is no voice.';
+      return 'The natural voice uses the files of the Kokoro engine app, which is not on this phone.';
     case 'downloading':
     case 'installed':
+      return 'The natural voice is on this phone. It loads when you press Play.';
     case 'loading':
-      return 'The natural voice is made by the Kokoro engine app on this phone. Its voice is chosen in that app.';
+      return 'Loading the natural voice…';
     case 'ready': {
       const speed = s.speed ? `, making speech about ${s.speed.toFixed(1)}× faster than it plays` : '';
-      return `The natural voice is ready, made by the Kokoro engine app on this phone${speed}. Its voice is chosen in that app.`;
+      return `The natural voice is ready on this phone${speed}.`;
     }
     case 'error':
-      return `The Kokoro engine app could not start: ${(s.error ?? 'unknown error').replace(/\.$/, '')}.`;
+      return `The natural voice could not start: ${(s.error ?? 'unknown error').replace(/\.$/, '')}.`;
   }
 }
 

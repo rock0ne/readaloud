@@ -25,14 +25,16 @@ One line per step. Keep it short. Newest at the bottom of each section.
 | 17–20 Azure | dropped | | 2026-10-21 | ADR-21 |
 | 22 PWA on the S21+ | partly | phone | 2026-10-21 | runs in Firefox; upload works; voice too slow (ADR-24); not yet on the home screen |
 | 24 Kokoro web engine | done (PC) | U-kokoro + Edge M11 | 2026-10-21 | main voice, bf_emma (ADR-22) |
+| 23 Capacitor wrapper | partly | phone | 2026-10-21 | brought forward; Kokoro made inside the app, every word spoken (ADR-27); clips about 40 s ahead (ADR-28); not yet heard by Rockson |
 | Phase 1 gate | waiting on Rockson | | | see below |
 
 ## Phase 1 gate
 
-- [x] Unit tests green: 100 tests in 14 files on 2026-10-21 (101 in 15
+- [x] Unit tests green: 112 tests in 16 files on 2026-10-21 (113 in 17
       with the git-ignored book check), covering the Kokoro work (ADR-22),
-      the second-review fixes (ADR-23), reloading on update (ADR-25) and
-      large EPUBs (ADR-26). `pnpm build`
+      the second-review fixes (ADR-23), reloading on update (ADR-25),
+      large EPUBs (ADR-26), the Android app's voice (ADR-27) and the wider
+      lead (ADR-28). `pnpm build`
       clean, bundle budget met.
 - [ ] M1–M8 done in Edge. Done or partly done: M2 (sample PDF), M3, M4, M5,
       M6. Waiting on Rockson: M1 and M2 with his chapter, M8 install, and
@@ -97,6 +99,24 @@ every "by ear" item is still Rockson's.
   paragraphs, sentences and chapters split differently (75 chapters and
   1,281 contents entries against the EPUB's 41 and 520; 61% of the EPUB's
   sentences appear word for word in the PDF). Proofread from the EPUB.
+- **Android app, Kokoro inside the app (ADR-27)**: debug build installed by
+  adb; the voice picker lists all 11 Kokoro voices, UK and US, women and men.
+  Model loads in about 4 s. Four test sentences (written for the test): no
+  word skipped (0 "OOV" lines in the log, against 7 skipped words before the
+  phoneme change); "In 1962 there were 43 boats…" lasts 5.3 s against 5.8 s
+  for the same sentence spelled out in words; speech made at 1.2x to 1.3x
+  real time with the phone cool. Nothing from the plugin in the phone's log
+  after `loggingBehavior: "none"`.
+- **Android app, test chapter (ADR-27, ADR-28)**: the same 1,362-word test
+  chapter pasted in and read to "Finished", twice, no errors. Emma: 77 clips,
+  341 s of speech in 439 s (22% silence, Firefox had 35%); gap before a
+  sentence 0.35 s median, 15 gaps over 1 s, longest 8.9 s; first sound about
+  12 s after Play. George, with the wider lead (ADR-28): 90 clips, 412 s in
+  532 s (23% silence), 0.31 s median, 21 gaps over 1 s, longest 9.2 s. The
+  long gaps come from the phone slowing down as it warms: straight after the
+  runs Kokoro made speech at 0.63x to 0.75x, with the fast cores capped at
+  1.35 GHz (charging over USB, battery 31.5 °C rising to 37.8 °C; battery
+  saver off). Not heard by Rockson yet.
 - **Phone voice**: downloaded in about 10 s. Settings, "Read 3 sentences",
   on the final build: ready "on this device's processor" after 13 s; the
   three sentences finished 26.0 s, 20.2 s and 21.6 s after each started;
@@ -110,12 +130,12 @@ every "by ear" item is still Rockson's.
 1. **Listen on the PC.** Double-click `app/start-readaloud.cmd`. In Settings,
    press "Download natural voice" (330 MB, once), then open a document and
    press Play. Say whether Emma is right or pick another voice.
-2. **Phone engine (ADR-24).** The sherpa-onnx Kokoro voice engine is
-   installed on the test phone (2026-10-21, with your approval) and makes
-   speech faster than it plays (1.26x). Set it as the preferred engine:
-   Settings, General management, Text-to-speech, Preferred engine, "TTS
-   Engine: Next-gen Kaldi". Its voice is the speaker number in its own app:
-   21 is Emma (woman, UK), 26 is George (man, UK).
+2. **Phone app (ADR-27).** ReadAloud is now an app on the test phone (icon
+   "ReadAloud"). Open it, add your book's EPUB with Add files, pick a voice
+   (all 11 are there, women and men), press Play, and say whether it flows.
+   Try it once unplugged: the phone slowed down while charging. Keep the
+   Kokoro engine app installed: ReadAloud uses its voice files. It no longer
+   needs to be the phone's preferred engine.
 3. **Custom voices (ADR-24).** SAPI 5 voices cannot appear in this app.
    Choose: more Kokoro voices inside ReadAloud, a separate SAPI 5 adapter so
    Kokoro works in other Windows programs, or both.
@@ -139,15 +159,23 @@ every "by ear" item is still Rockson's.
   browser pane dismisses it, so tests there must stub `window.confirm`.
 - The phone keeps locking after 5 minutes during tests; ask Rockson before
   changing any phone setting.
+- Android app: the first sound comes about 12 s after Play (about 4 s to
+  load the model, then the first clip is made at speaking speed), and once
+  the phone is warm Kokoro makes speech slower than it plays, so about one
+  sentence in five waits 2 to 9 s (ADR-28). Not solved by more lead or
+  threads; a faster (int8) model or preparing a chapter before listening
+  would be the next steps, both Rockson's call.
 
 ## Versions installed
 
 ```
-dependencies:    idb 8.0.4, jszip 3.10.2, kokoro-js 1.2.1, mammoth 1.13.0,
-                 marked 18.1.1, pdfjs-dist 6.4.299, preact 10.29.8
+dependencies:    @capacitor/android 8.5.0, @capacitor/core 8.5.0, idb 8.0.4,
+                 jszip 3.10.2, kokoro-js 1.2.1, mammoth 1.13.0,
+                 marked 18.1.1, pdfjs-dist 6.4.299, phonemizer 1.2.1 (ADR-27),
+                 preact 10.29.8
   via kokoro-js: @huggingface/transformers 3.8.1,
-                 onnxruntime-web 1.22.0-dev.20250409, phonemizer 1.2.1
-devDependencies: @preact/preset-vite 2.10.6, @types/node 24.19.2,
+                 onnxruntime-web 1.22.0-dev.20250409
+devDependencies: @capacitor/cli 8.5.0, @preact/preset-vite 2.10.6, @types/node 24.19.2,
                  fake-indexeddb 6.2.6, jsdom 30.1.3, typescript 7.0.2,
                  vite 8.3.4, vite-plugin-pwa 2.0.0, vitest 5.0.5
 runtime:         Node 22.23.3 (portable), pnpm 11.19 via corepack
@@ -174,6 +202,7 @@ below 1 means reading has to keep pausing). Two sentences, voice bf_emma.
 | S21+, Firefox 158 | wasm fp32, 1 thread (what the app gets on the phone) | 0.2x to 0.3x |
 | S21+, Firefox 158 | wasm fp32, 4 threads (COEP require-corp, test page only; in the app the voice stalled while loading, cause unknown, ADR-22) | 0.68x |
 | S21+, native | sherpa-onnx 1.13.8 Kokoro voice engine, v1.0 model, speaker 21 (bf_emma), 4 threads, its own test screen: 16.7 s of speech in 13.2 s | 1.26x |
+| S21+, ReadAloud app | sherpa-onnx 1.13.8 inside the app, phonemes from the web side, 4 threads (ADR-27): cool / after 15 min of reading while charging | 1.2x to 1.3x / 0.6x to 0.9x |
 
 Voice listening test, 2026-10-21. One 77-word passage, PC = Ryzen 9 5950X,
 RTX 3060 12 GB. "Word check" = Whisper large-v3-turbo transcript against the

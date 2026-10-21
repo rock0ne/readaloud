@@ -19,11 +19,11 @@ export interface KokoroStatus {
   error?: string;
   /** seconds of speech made per second, from recent sentences */
   speed?: number;
-  /** set when the voice comes from the phone's Kokoro engine app, not a download (ADR-27) */
+  /** set in the Android app, where the model comes from the Kokoro engine app, not a download (ADR-27) */
   source?: 'phone-engine';
 }
 
-/** What the app uses of the Kokoro voice: the download in a browser, the phone's engine in the app. */
+/** What the app uses of the Kokoro voice: the download in a browser, sherpa-onnx in the Android app. */
 export interface KokoroService extends KokoroBackend {
   readonly status: KokoroStatus;
   subscribe(fn: (s: KokoroStatus) => void): () => void;

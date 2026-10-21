@@ -8,8 +8,6 @@ export interface KokoroBackend {
   installed(): Promise<boolean>;
   /** Raw samples for one piece of text; loads the model first if needed. */
   generate(text: string, voiceId: string, signal: AbortSignal): Promise<{ samples: Float32Array; sampleRate: number }>;
-  /** The voices it offers, when not the spec's list: the phone's engine has one (ADR-27). */
-  readonly voices?: ReadonlyArray<Voice>;
 }
 
 /**
@@ -69,7 +67,6 @@ export class KokoroEngine implements VoiceEngine {
   }
 
   async listVoices(): Promise<Voice[]> {
-    if (this.backend.voices) return [...this.backend.voices];
     return KOKORO_VOICES.map((v) => ({
       id: v.id,
       engineId: 'kokoro',

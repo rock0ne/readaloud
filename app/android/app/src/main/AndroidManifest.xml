@@ -35,11 +35,9 @@
         </provider>
     </application>
 
-    <!-- Lets ReadAloud find the phone's Kokoro voice engine (ADR-27). -->
+    <!-- Lets ReadAloud find the Kokoro engine app, whose model files it reads (ADR-27). -->
     <queries>
-        <intent>
-            <action android:name="android.intent.action.TTS_SERVICE" />
-        </intent>
+        <package android:name="com.k2fsa.sherpa.onnx.tts.engine" />
     </queries>
 
     <!-- Permissions -->

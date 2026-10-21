@@ -396,16 +396,16 @@ Re-read identical. Unit tests: a 51 MB EPUB reads and is stored at under
 EPUB was added and opened in about 9 s (PROGRESS).
 
 
-## ADR-27 · 2026-10-21 · An Android app that makes sentences ahead with the phone's Kokoro engine
+## ADR-27 · 2026-10-21 · An Android app that makes Kokoro sentences ahead, inside the app
 
 Context: in Firefox on the S21+ the installed Kokoro engine read a whole
 chapter, but 35% of the time was silence, about 3 s before each sentence
 (ADR-24, PROGRESS). Firefox hands the engine one sentence at a time, and it
-makes each one only after the last has played. The engine itself makes speech
-at 1.26x real time, so it can keep ahead if it is asked early. Rockson chose,
-in chat on 2026-10-21: "build the ReadAloud Android app that makes the next
-sentences ahead with the installed Kokoro engine, keeping exact highlight and
-flags."
+makes each one only after the last has played. Kokoro itself makes speech
+faster than real time on the phone, so it can keep ahead if it is asked early.
+Rockson chose, in chat on 2026-10-21: "build the ReadAloud Android app that
+makes the next sentences ahead with the installed Kokoro engine, keeping exact
+highlight and flags."
 
 Decision:
 - Step 23 (Capacitor wrapper) is brought forward, before the Phase 1 to 3
@@ -415,24 +415,73 @@ Decision:
   toolchain). Not added: the file picker (the app's file input opens
   Android's own picker), keep-awake (one call in ReadAloud's own plugin),
   filesystem (clips are read with `fetch` from `convertFileSrc`).
-- The voice: ReadAloud's own small plugin uses Android's `TextToSpeech`,
-  bound to the installed engine (`com.k2fsa.sherpa.onnx.tts.engine`), and
-  `synthesizeToFile` writes each piece of text as a WAV file. The web side
-  reads it and plays it like a Kokoro clip on the PC: same `KokoroEngine`
-  (id `kokoro`) with a phone backend, so the player keeps the next 3 clips
-  being made (spec 8.3) while one plays, and the highlight and flags work as
-  on the PC. Design: `docs/05-ANDROID-KOKORO.md`.
-- Not chosen: sherpa-onnx built into ReadAloud (Step 25's plan). It would
-  let the app pick the voice per sentence, but needs sherpa-onnx's native
-  libraries and the 330 MB model inside the app. The installed engine
-  already has both.
-- One voice: the engine has one speaker for all apps, chosen in its own app
-  (21 = Emma, 26 = George). ReadAloud lists it as one voice. Clips already
-  made stay in the cache (spec 8.4) in the old voice after the speaker is
-  changed there.
+- The voice is made inside ReadAloud's own process by sherpa-onnx 1.13.8,
+  from the files of the installed Kokoro engine app
+  (`com.k2fsa.sherpa.onnx.tts.engine`): the model, voices and eSpeak data are
+  read from that app's assets (`createPackageContext`), so ReadAloud does not
+  carry the 330 MB model. sherpa-onnx's two native libraries
+  (`libsherpa-onnx-jni.so`, `libonnxruntime.so`, Apache-2.0 and MIT) are taken
+  at build time from the same engine APK Rockson approved for ADR-24, and are
+  git-ignored. A small Java copy of sherpa-onnx's Kotlin API classes lets the
+  library find its fields by name. Design: `docs/05-ANDROID-KOKORO.md`.
+- The web side turns each sentence into phonemes exactly as kokoro-js does on
+  the PC (its `phonemize`, ported with its normalisation of years, money and
+  titles), with the same `phonemizer` 1.2.1 package (eSpeak NG, Apache-2.0),
+  now a direct dependency. sherpa-onnx is given the phonemes, not the text.
+  So the PC and the phone say each word the same way. As in sherpa-onnx's
+  own engine app in this mode, the text itself is not passed to sherpa-onnx.
+- All eleven Kokoro voices of the picker, UK and US, female and male, map to
+  their speaker numbers in the model (`SHERPA_SPEAKERS`), so the voice is
+  chosen in ReadAloud per document as on the PC.
+- The player keeps the next 3 clips being made (spec 8.3) while one plays,
+  through the same `KokoroEngine` (id `kokoro`) with a phone backend, so the
+  highlight and flags work as on the PC.
+- A clip with no sound is an error, never a silent success: a proofreader
+  would miss the words.
+- Capacitor's logging is off (`loggingBehavior: "none"`): in a debug build it
+  writes every plugin call to the phone's log, and the phonemes are the book's
+  text in another spelling.
 - The app's web files are built with `vite build --mode android` into
   `dist-android`, without the service worker: they come from the APK, so
-  there is nothing to update in place (ADR-25 does not apply).
+  there is nothing to update in place (ADR-25 does not apply). eSpeak's
+  1.3 MB module loads the first time the phone voice speaks.
 - The screen stays on while reading. Reading with the screen off is not
   attempted yet.
 - App id `uk.rocksonarthur.readaloud`. `app/android/` is committed (Step 23).
+
+Changed the same day, after testing on the phone:
+- First design: Android's `TextToSpeech.synthesizeToFile` through the engine
+  app. Each clip took 18 to 64 s: the phone freezes the engine app's process
+  (cgroup `frozen`) while it plays no sound itself, and thaws it about once a
+  minute. Hence sherpa-onnx in ReadAloud's own process, which is in the
+  foreground while it reads.
+- sherpa-onnx's own text route (its lexicon) skips, silently, every word its
+  lexicon lacks: digits ("1962", "43") and names ("Porthwen", "Penrose").
+  The engine app's speech service uses the same route (its phoneme switch
+  is off in this build, seen in its code), so in Firefox too, numbers and
+  names were left out (ADR-24). Without a lexicon it makes no sound at all.
+  Hence the phonemes from the web side.
+
+## ADR-28 · 2026-10-21 · Audio clips prepared about 40 s ahead, not 3 clips
+
+Context: in the Android app (ADR-27) a 1,362-word test chapter read with
+gaps of about 0.3 s, but some sentences waited 2 to 9 s. Each long wait came
+before a long sentence after a run of short ones: three short clips ahead are
+only about 6 s of speech, and the phone needs about as long as the sentence
+lasts to make it.
+
+Decision: an audio engine's clips are prepared until at least 3 chunks and
+at least 600 characters (about 40 s of speech) lie ahead, at most 12 chunks
+(`PREFETCH_CHUNKS`, `PREFETCH_CHARS`, `PREFETCH_MAX_CHUNKS` in the player;
+spec 8.3). When the voice is made faster than it plays, the extra lead builds
+up in the quiet stretches and covers the long sentences. On the PC it costs
+nothing noticeable: the clips are made in the background and cached anyway.
+
+Limit, measured the same day: once the phone warms up (it was charging over
+USB, battery 31.5 °C to 37.8 °C), Android caps the fast cores at 1.35 GHz and
+Kokoro drops to 0.6x to 0.9x real time; then no lead is enough, and about one
+sentence in five still waits 2 to 9 s. A second run with the wider lead
+measured the same (below 1x for most of it). Thread counts 2, 4, 6 and 8 gave
+no clear gain (results moved by 40% between two runs of the same count), so
+it stays at 4.
+

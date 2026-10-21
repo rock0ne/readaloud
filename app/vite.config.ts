@@ -119,6 +119,8 @@ export default defineConfig(({ mode }) => ({
         // The onnxruntime .wasm (about 22 MB) is precached so Kokoro starts offline.
         globPatterns: ['**/*.{js,mjs,css,html,svg,png,wasm}'],
         maximumFileSizeToCacheInBytes: 32 * 1024 * 1024,
+        // eSpeak for the Android app's phonemes (ADR-27); browsers never load it.
+        globIgnores: ['**/phonemes-*.js'],
         navigateFallback: 'index.html',
       },
     }),

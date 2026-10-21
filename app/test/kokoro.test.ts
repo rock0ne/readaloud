@@ -206,6 +206,24 @@ describe('player with an audio engine (spec 8.3, 8.4)', () => {
     player.stop();
   });
 
+  it('prepares about 40 s of speech ahead when the sentences are short, but at least 3 chunks', async () => {
+    const short = Array.from({ length: 30 }, (_, i) => `Short sentence number ${i + 1} is here.`).join(' ');
+    const long = Array.from({ length: 6 }, (_, i) => `Long sentence ${i + 1} ${'goes on and on, '.repeat(16)}to the end.`).join(' ');
+    for (const [text, expected] of [
+      [short, 12],
+      [long, 3],
+    ] as const) {
+      const { engine, audio, player } = setupAudio();
+      audio.hold = true;
+      await player.load(makeDoc([{ type: 'paragraph', text }]));
+      await player.play();
+      await vi.waitFor(() => expect(audio.played).toHaveLength(1));
+      // the one playing, then the ones ahead of it
+      expect(engine.made).toHaveLength(expected + 1);
+      player.stop();
+    }
+  });
+
   it('uses stored audio the second time through', async () => {
     const { engine, audio, cache, player } = setupAudio();
     const doc = makeDoc(sampleBlocks);
