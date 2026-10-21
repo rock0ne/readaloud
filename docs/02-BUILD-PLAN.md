@@ -278,7 +278,8 @@ disconnect the network, play a chapter. Speed of synthesis vs playback noted in
 
 ### Step 25 — Kokoro on Android (only if Step 23 was done)
 
-ADR-24: the browser route measured 0.68x real time on the S21+. First try the
+ADR-24: the browser route measured 0.2x to 0.3x real time in the app on the S21+
+(0.68x at best, on a test page). First try the
 sherpa-onnx Kokoro Android voice engine (Rockson's approval needed), then
 decide between it and this step.
 

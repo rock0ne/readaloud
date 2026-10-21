@@ -945,8 +945,8 @@ without a decision entry.
   worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self';
   object-src 'none'; base-uri 'self'`.
 - Response headers (dev and preview servers): `Cross-Origin-Opener-Policy:
-  same-origin` and `Cross-Origin-Embedder-Policy: require-corp`, so Kokoro can
-  use several threads (ADR-22).
+  same-origin` and `Cross-Origin-Embedder-Policy: credentialless`, so Kokoro
+  can use several threads where the browser supports it (ADR-22).
 
 ---
 

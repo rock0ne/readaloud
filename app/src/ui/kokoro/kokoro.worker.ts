@@ -1,11 +1,13 @@
 // Runs the Kokoro model off the main thread (spec 7.4, ADR-22). One job at a time, in order.
 import { KokoroTTS, env } from 'kokoro-js';
-import { KOKORO_MODEL as MODEL, VOICE_CACHE, type FromWorker, type KokoroDevice, type ToWorker } from './protocol';
+import { KOKORO_MODEL as MODEL, VOICE_CACHE, type FromWorker, type KokoroDevice, type KokoroStage, type ToWorker } from './protocol';
 
 // The app's TypeScript config has DOM types only, so describe the worker scope it uses here.
 const scope = self as unknown as {
   postMessage(message: FromWorker, transfer: Transferable[]): void;
   onmessage: ((ev: MessageEvent<ToWorker>) => void) | null;
+  addEventListener(type: 'error', fn: (ev: ErrorEvent) => void): void;
+  addEventListener(type: 'unhandledrejection', fn: (ev: PromiseRejectionEvent) => void): void;
 };
 
 // kokoro-js fetches a voice the first time it is used; storing them all at download time means
@@ -21,6 +23,7 @@ const queue: Array<{ id: number; text: string; voice: string }> = [];
 let busy = false;
 
 const post = (m: FromWorker, transfer: Transferable[] = []) => scope.postMessage(m, transfer);
+const stage = (s: KokoroStage) => post({ type: 'stage', stage: s });
 
 async function hasWebGpu(): Promise<boolean> {
   const gpu = (navigator as Navigator & { gpu?: { requestAdapter(): Promise<unknown> } }).gpu;
@@ -63,7 +66,9 @@ async function load(wasmPaths: string, voices: string[]): Promise<void> {
     }
     post({ type: 'progress', loaded, total });
   };
+  stage('gpu-check');
   device = (await hasWebGpu()) ? 'webgpu' : 'wasm';
+  stage('model');
   try {
     // fp32 everywhere: it is what Rockson approved by ear, and WebGPU needs it.
     tts = await KokoroTTS.from_pretrained(MODEL, { dtype: 'fp32', device, progress_callback });
@@ -73,8 +78,10 @@ async function load(wasmPaths: string, voices: string[]): Promise<void> {
     device = 'wasm';
     tts = await KokoroTTS.from_pretrained(MODEL, { dtype: 'fp32', device, progress_callback });
   }
+  stage('voices');
   await cacheVoices(voices).catch((e: unknown) => console.warn('[kokoro] could not store the voices', e));
   // The first sentence on WebGPU compiles its shaders (several seconds); do it now, not on Play.
+  stage('warm-up');
   await tts.generate('Ready.', { voice: 'bf_emma' }).catch(() => undefined);
   post({ type: 'ready', device });
 }
@@ -99,6 +106,11 @@ async function drain(): Promise<void> {
   }
 }
 
+// Report failures that escape load() with their own message, rather than a bare "worker stopped".
+const why = (e: unknown) => (e instanceof Error ? e.message : String(e));
+scope.addEventListener('error', (ev) => post({ type: 'load-error', message: ev.message || why(ev.error) }));
+scope.addEventListener('unhandledrejection', (ev) => post({ type: 'load-error', message: why(ev.reason) }));
+
 scope.onmessage = (ev: MessageEvent<ToWorker>) => {
   const m = ev.data;
   if (m.type === 'load') {
@@ -111,3 +123,5 @@ scope.onmessage = (ev: MessageEvent<ToWorker>) => {
     if (at >= 0) queue.splice(at, 1);
   }
 };
+
+post({ type: 'started' });

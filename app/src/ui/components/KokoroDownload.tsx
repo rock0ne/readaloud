@@ -1,9 +1,17 @@
 // Download and status of the Kokoro voice (ADR-22), in the reader banner and in Settings.
 import { KOKORO_DOWNLOAD_MB, type KokoroStatus } from '../kokoro/client';
+import type { KokoroStage } from '../kokoro/protocol';
 import { useOnline } from '../hooks/useDevice';
 import { useKokoro, useServices } from '../services';
 
 const mb = (bytes: number) => Math.round(bytes / 1e6);
+
+const STAGE_TEXT: Record<KokoroStage, string> = {
+  'gpu-check': 'looking for a graphics chip',
+  model: 'reading the model',
+  voices: 'storing the voices',
+  'warm-up': 'making a first test sentence',
+};
 
 function describe(s: KokoroStatus, online: boolean): string {
   const pct = s.total ? Math.floor(((s.loaded ?? 0) / s.total) * 100) : 0;
@@ -18,8 +26,11 @@ function describe(s: KokoroStatus, online: boolean): string {
         : 'Starting the download of the natural voice…';
     case 'installed':
       return 'The natural voice is on this device. It loads when you press Play.';
-    case 'loading':
-      return 'Loading the natural voice…';
+    case 'loading': {
+      if (!s.stage) return 'Loading the natural voice…';
+      const read = s.stage === 'model' && s.total ? ` (${pct}%)` : '';
+      return `Loading the natural voice: ${STAGE_TEXT[s.stage]}${read}…`;
+    }
     case 'ready': {
       const where = s.device === 'webgpu' ? 'graphics chip' : 'processor';
       if (s.speed && s.speed < 1) {

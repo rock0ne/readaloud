@@ -78,8 +78,13 @@ every "by ear" item is still Rockson's.
   13–20 s.
 - **Media Session**: Edge: title and chapter set; state "playing", then
   "paused" after Pause.
-- **Phone voice**: downloaded in about 10 s; reported ready "on this
-  device's processor"; speed in the next section.
+- **Phone voice**: downloaded in about 10 s. Settings, "Read 3 sentences",
+  on the final build: ready "on this device's processor" after 13 s; the
+  three sentences finished 26.0 s, 20.2 s and 21.6 s after each started;
+  the status then says speech is made "about 3.1× slower than it plays, so
+  reading will keep pausing". Not heard. Before that, the voice stalled on
+  "Loading" three times (ADR-22); it cleared after a rebuild and two
+  Firefox restarts.
 
 ## Needs Rockson
 
@@ -87,7 +92,7 @@ every "by ear" item is still Rockson's.
    press "Download natural voice" (330 MB, once), then open a document and
    press Play. Say whether Emma is right or pick another voice.
 2. **Phone route (ADR-24).** In Firefox the voice is too slow for continuous
-   reading (0.68x real time). Decide whether to install the sherpa-onnx
+   reading (0.2x to 0.3x real time in the app). Decide whether to install the sherpa-onnx
    Kokoro Android voice engine on the test phone to measure native speed.
 3. **Custom voices (ADR-24).** SAPI 5 voices cannot appear in this app.
    Choose: more Kokoro voices inside ReadAloud, a separate SAPI 5 adapter so
@@ -144,8 +149,8 @@ below 1 means reading has to keep pausing). Two sentences, voice bf_emma.
 | PC, RTX 3060 | WebGPU, fp32 (what the app uses on the PC) | 4.1x |
 | PC, Ryzen 9 5950X | wasm fp32, 4 threads / 8 threads | 1.1x / 1.5x |
 | PC, Ryzen 9 5950X | wasm q8, 4 threads | 0.64x |
-| S21+, Firefox 158 | wasm fp32, 1 thread (not isolated) | 0.2x |
-| S21+, Firefox 158 | wasm fp32, 4 threads (COEP require-corp) | 0.68x |
+| S21+, Firefox 158 | wasm fp32, 1 thread (what the app gets on the phone) | 0.2x to 0.3x |
+| S21+, Firefox 158 | wasm fp32, 4 threads (COEP require-corp, test page only; in the app the voice stalled while loading, cause unknown, ADR-22) | 0.68x |
 
 Voice listening test, 2026-10-21. One 77-word passage, PC = Ryzen 9 5950X,
 RTX 3060 12 GB. "Word check" = Whisper large-v3-turbo transcript against the

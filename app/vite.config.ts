@@ -22,12 +22,13 @@ const CSP = [
 ].join('; ');
 
 // Cross-origin isolation lets onnxruntime use several threads for the Kokoro voice (ADR-22).
-// 'require-corp', because Firefox on Android ignores 'credentialless' and then runs Kokoro on one
-// thread (0.2x real time on the S21+ instead of 0.68x). The model download from Hugging Face still
-// works: it is fetched with CORS.
+// 'credentialless' still allows the model download from Hugging Face, which is fetched with CORS.
+// Firefox on Android ignores it and runs Kokoro on one thread, which is verified to read (S21+).
+// 'require-corp' would give it 4 threads, but in the app the voice then stalled while loading,
+// cause not yet known (ADR-22).
 const ISOLATION_HEADERS = {
   'Cross-Origin-Opener-Policy': 'same-origin',
-  'Cross-Origin-Embedder-Policy': 'require-corp',
+  'Cross-Origin-Embedder-Policy': 'credentialless',
 };
 
 // onnxruntime-web's WebAssembly runtime for Kokoro, served from this origin at /ort/ instead of

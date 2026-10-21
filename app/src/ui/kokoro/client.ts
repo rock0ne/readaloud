@@ -1,6 +1,6 @@
 // The app side of the Kokoro worker: download, load and generate (spec 7.4, ADR-22).
 import { KOKORO_VOICES, type KokoroBackend } from '../../core/engines/kokoro';
-import { KOKORO_MODEL, MODEL_CACHE, VOICE_CACHE, type FromWorker, type KokoroDevice, type ToWorker } from './protocol';
+import { KOKORO_MODEL, MODEL_CACHE, VOICE_CACHE, type FromWorker, type KokoroDevice, type KokoroStage, type ToWorker } from './protocol';
 
 const MODEL_URL = `https://huggingface.co/${KOKORO_MODEL}/resolve/main/onnx/model.onnx`;
 export const KOKORO_DOWNLOAD_MB = 330;
@@ -14,6 +14,8 @@ export interface KokoroStatus {
   loaded?: number;
   total?: number;
   device?: KokoroDevice;
+  /** the loading step the worker is on */
+  stage?: KokoroStage;
   error?: string;
   /** seconds of speech made per second, from recent sentences */
   speed?: number;
@@ -45,6 +47,8 @@ export class KokoroClient implements KokoroBackend {
   private checked: Promise<boolean> | null = null;
   /** A new version of the app took over this page; its old worker file may be gone. */
   private updated = false;
+  /** The worker script loaded and ran (it says so first). */
+  private started = false;
 
   constructor() {
     if (typeof navigator !== 'undefined' && navigator.serviceWorker) {
@@ -137,7 +141,11 @@ export class KokoroClient implements KokoroBackend {
       const w = new Worker(new URL('./kokoro.worker.ts', import.meta.url), { type: 'module', name: 'kokoro' });
       w.onmessage = (ev: MessageEvent<FromWorker>) => this.onMessage(ev.data);
       w.onerror = (ev) =>
-        this.fail(this.updated ? 'the app was updated while it was open. Reload the app' : ev.message || 'the voice worker stopped');
+        this.fail(
+          this.updated
+            ? 'the app was updated while it was open. Reload the app'
+            : ev.message || (this.started ? 'the voice worker stopped' : 'the voice worker could not be loaded'),
+        );
       this.worker = w;
     }
     this.worker.postMessage(m);
@@ -145,6 +153,12 @@ export class KokoroClient implements KokoroBackend {
 
   private onMessage(m: FromWorker): void {
     switch (m.type) {
+      case 'started':
+        this.started = true;
+        break;
+      case 'stage':
+        this.emit({ ...this._status, stage: m.stage });
+        break;
       case 'progress':
         this.emit({ ...this._status, loaded: m.loaded, total: m.total });
         break;
@@ -186,6 +200,7 @@ export class KokoroClient implements KokoroBackend {
   private stopWorker(err: Error): void {
     this.worker?.terminate();
     this.worker = null;
+    this.started = false;
     this.loading = null;
     this.loadWaiter?.reject(err);
     this.loadWaiter = null;

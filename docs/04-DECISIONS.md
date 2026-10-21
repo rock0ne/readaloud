@@ -208,11 +208,24 @@ Built (Step 24, brought forward from Phase 4):
   precached, not fetched from the jsDelivr CDN that transformers.js uses by
   default. The resolve condition `onnxruntime-web-use-extern-wasm` stops Vite
   from bundling a second copy.
-- Cross-origin isolation (COOP `same-origin`, COEP `require-corp`) lets the
-  runtime use 4 threads. `credentialless` was tried first: Firefox on Android
-  ignores it, and Kokoro then ran on one thread (0.2x real time instead of
-  0.68x). The model download still works: it is a CORS fetch. A static server
-  used instead of `pnpm preview` must send the same two headers.
+- Cross-origin isolation (COOP `same-origin`, COEP `credentialless`) lets the
+  runtime use several threads when it runs on the processor in Edge. Firefox
+  on Android ignores `credentialless`, so on the phone Kokoro runs on one
+  thread: 0.2x to 0.3x real time in the app (S21+, 2026-10-21).
+  `require-corp` was tried, because Firefox on Android honours it, and a test
+  page reached 0.68x with 4 threads. In the app the voice then stayed on
+  "Loading" for over 5 minutes. After switching back to `credentialless` the
+  same stall happened twice more, and cleared only after a rebuild and two
+  Firefox restarts. So the cause is not known: it may be a stale page left
+  over from the header switch, not the threads. The app stays on
+  `credentialless`, which is the setting verified to read on the phone. The
+  model download works under both: it is a CORS fetch. A static server used
+  instead of `pnpm preview` must send the same two headers.
+- The voice worker says when it has started, reports each loading step
+  (graphics-chip check, model, voices, a first test sentence) in the voice
+  status line, and reports errors that escape its load. A stall now shows
+  where it stopped, and a failure shows the real message or "the voice
+  worker could not be loaded", not a bare "the voice worker stopped".
 - CSP: `script-src` adds `'wasm-unsafe-eval'`; `connect-src` is now `'self'`
   plus Hugging Face only (the Microsoft host is gone with Azure).
 - Settings schema 2: `enginePreference` defaults to `['kokoro', 'webspeech']`.
@@ -307,9 +320,10 @@ What this changes:
      it writes to the system registry). It would not reach Edge's own Read
      Aloud or Android. Each target program needs its own test. Not started:
      needs Rockson's go-ahead.
-- **Phone.** In Firefox on the S21+ (Exynos 2100, no WebGPU), Kokoro makes
-  speech at 0.68x real time with 4 threads, so continuous reading would keep
-  pausing. Locked decision 3 allows Phase 3b when 3a fails its gate, and this
+- **Phone.** In Firefox on the S21+ (Exynos 2100, no WebGPU), Kokoro in the
+  app runs on one thread and makes speech at 0.2x to 0.3x real time, so
+  continuous reading keeps pausing. Four threads reached 0.68x on a test page but not
+  inside the app (ADR-22), and 0.68x would still pause. Locked decision 3 allows Phase 3b when 3a fails its gate, and this
   is such a failure. Routes, fastest to try first:
   1. The sherpa-onnx Kokoro **Android voice engine** (Apache-2.0 code, from
      the k2-fsa project): native code, installed as an Android text-to-speech

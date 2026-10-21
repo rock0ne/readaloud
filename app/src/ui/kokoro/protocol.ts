@@ -1,5 +1,7 @@
 // Messages between the app and the Kokoro worker, and the names they share.
 export type KokoroDevice = 'webgpu' | 'wasm';
+/** The step of loading the worker is on, shown while the voice loads. */
+export type KokoroStage = 'gpu-check' | 'model' | 'voices' | 'warm-up';
 
 export const KOKORO_MODEL = 'onnx-community/Kokoro-82M-v1.0-ONNX';
 /** transformers.js keeps each model file in this cache, keyed by its download URL. */
@@ -13,6 +15,8 @@ export type ToWorker =
   | { type: 'cancel'; id: number };
 
 export type FromWorker =
+  | { type: 'started' }
+  | { type: 'stage'; stage: KokoroStage }
   | { type: 'progress'; loaded: number; total: number }
   | { type: 'ready'; device: KokoroDevice }
   | { type: 'load-error'; message: string }
