@@ -1,6 +1,6 @@
 // Typed access to storage (spec 9.1). The only consumer of db.ts.
 import type { AudioCacheRecord, DocRecord, DocSummary, Flag, ParsedDocument, PositionRecord, Settings } from '../types';
-import { DocIndex, sentenceCount } from '../model';
+import { DocIndex, sentenceCount, type OrderedSentence } from '../model';
 import { newId, nowIso } from '../util/ids';
 import { openReadAloudDb, type ReadAloudDb } from './db';
 import { withDefaults } from './settings';
@@ -30,10 +30,15 @@ export function summaryOf(doc: DocRecord): DocSummary {
   };
 }
 
-/** Places a flag on a document: same sentence if its text still matches, else the first sentence with the quoted text. */
+/**
+ * Places a flag on a document (ADR-23). A quote found once is placed there. A quote found more
+ * than once is placed only where the flag's neighbouring sentences match, or failing that at its
+ * exact old place (same sentence id, chapter and paragraph). Anything else stays unplaced, so the
+ * user re-flags it rather than finding the correction on the wrong sentence.
+ */
 export function anchorFlag(flag: Flag, index: DocIndex, docId: string): Flag | null {
-  const same = index.get(flag.sentenceId);
-  const hit = same && same.sentence.text === flag.quote ? same : index.findByQuote(flag.quote);
+  const hits = index.findAllByQuote(flag.quote);
+  const hit = hits.length === 1 ? hits[0] : pickRepeated(hits, flag, index);
   if (!hit) return null;
   const chapter = index.chapter(hit.block.chapterIndex);
   return {
@@ -45,6 +50,27 @@ export function anchorFlag(flag: Flag, index: DocIndex, docId: string): Flag | n
     chapterTitle: chapter?.title ?? flag.chapterTitle,
     paragraphInChapter: index.paragraphInChapter(hit.block),
   };
+}
+
+function pickRepeated(hits: OrderedSentence[], flag: Flag, index: DocIndex): OrderedSentence | undefined {
+  let candidates = hits;
+  const ctx = flag.context;
+  if (ctx) {
+    const score = (o: OrderedSentence) => {
+      const n = index.neighbours(o);
+      return (n.before === ctx.before ? 1 : 0) + (n.after === ctx.after ? 1 : 0);
+    };
+    const best = Math.max(0, ...hits.map(score));
+    if (best > 0) candidates = hits.filter((o) => score(o) === best);
+    if (candidates.length === 1) return candidates[0];
+  }
+  const samePlace = candidates.filter(
+    (o) =>
+      o.sentence.id === flag.sentenceId &&
+      index.chapter(o.block.chapterIndex)?.title === flag.chapterTitle &&
+      index.paragraphInChapter(o.block) === flag.paragraphInChapter,
+  );
+  return samePlace.length === 1 ? samePlace[0] : undefined;
 }
 
 export class Repo {
@@ -99,24 +125,37 @@ export class Repo {
     return doc;
   }
 
-  /** Replaces the parsed content (re-parse) and re-anchors flags; returns flags that could not be placed. */
+  /**
+   * Replaces the parsed content (re-parse) and re-anchors flags; returns flags that could not be
+   * placed. Reads and writes share one transaction, so a failure leaves the old version intact.
+   */
   async replaceParsed(id: string, parsed: ParsedDocument): Promise<Flag[]> {
-    const old = await this.getDocument(id);
-    if (!old) throw new Error('Document not found');
-    const doc: DocRecord = { ...old, ...parsed, id, sourceName: old.sourceName, sourceHash: old.sourceHash, addedAt: old.addedAt };
-    const index = new DocIndex(doc);
-    const flags = await this.listFlags(id);
-    const lost: Flag[] = [];
     const tx = this.db.transaction(['docs', 'summaries', 'flags', 'positions'], 'readwrite');
-    const ops: Array<Promise<unknown>> = [tx.objectStore('docs').put(doc), tx.objectStore('summaries').put(summaryOf(doc))];
-    for (const f of flags) {
-      const placed = anchorFlag(f, index, id);
-      if (placed) ops.push(tx.objectStore('flags').put(placed));
-      else lost.push(f);
+    const lost: Flag[] = [];
+    try {
+      const old = await tx.objectStore('docs').get(id);
+      if (!old) throw new Error('Document not found');
+      const flags = await tx.objectStore('flags').index('byDoc').getAll(id);
+      const pos = await tx.objectStore('positions').get(id);
+      const doc: DocRecord = { ...old, ...parsed, id, sourceName: old.sourceName, sourceHash: old.sourceHash, addedAt: old.addedAt };
+      const index = new DocIndex(doc);
+      const ops: Array<Promise<unknown>> = [tx.objectStore('docs').put(doc), tx.objectStore('summaries').put(summaryOf(doc))];
+      for (const f of flags) {
+        const placed = anchorFlag(f, index, id);
+        if (placed) ops.push(tx.objectStore('flags').put(placed));
+        else lost.push(f);
+      }
+      if (pos && !index.get(pos.sentenceId)) ops.push(tx.objectStore('positions').delete(id));
+      await Promise.all([...ops, tx.done]);
+    } catch (e) {
+      try {
+        tx.abort();
+      } catch {
+        // already finished
+      }
+      await tx.done.catch(() => undefined);
+      throw e;
     }
-    const pos = await this.getPosition(id);
-    if (pos && !index.get(pos.sentenceId)) ops.push(tx.objectStore('positions').delete(id));
-    await Promise.all([...ops, tx.done]);
     return lost;
   }
 

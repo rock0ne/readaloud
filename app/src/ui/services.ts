@@ -1,16 +1,21 @@
 // Wires core services together once per app start.
 import { createContext } from 'preact';
 import { useContext, useEffect, useState } from 'preact/hooks';
+import { KokoroEngine } from '../core/engines/kokoro';
 import { EngineRegistry } from '../core/engines/registry';
 import { WebSpeechEngine } from '../core/engines/webspeech';
 import { Player } from '../core/player/player';
 import { Repo } from '../core/store/repo';
 import type { EngineId, Settings } from '../core/types';
+import { HtmlAudioOutput } from './audio';
+import { KokoroClient, type KokoroStatus } from './kokoro/client';
 
 export interface Services {
   repo: Repo;
   registry: EngineRegistry;
   player: Player;
+  kokoro: KokoroClient;
+  audio: HtmlAudioOutput;
   getSettings(): Settings;
   updateSettings(patch: Partial<Settings>): Promise<Settings>;
   subscribeSettings(fn: (s: Settings) => void): () => void;
@@ -22,7 +27,17 @@ export async function createServices(): Promise<Services> {
   const repo = await Repo.open(undefined, isTouch);
   let settings = await repo.getSettings();
   const listeners = new Set<(s: Settings) => void>();
-  const registry = new EngineRegistry([new WebSpeechEngine()]);
+  const kokoro = new KokoroClient();
+  const audio = new HtmlAudioOutput();
+  // Kokoro is the main voice (ADR-22); browser voices stay as the fallback until it is downloaded.
+  const registry = new EngineRegistry([new KokoroEngine(kokoro), new WebSpeechEngine()]);
+  let kokoroInstalled = false;
+  kokoro.subscribe((s) => {
+    // The registry remembers "not available", so look again once the model is stored.
+    if (s.installed !== kokoroInstalled) registry.invalidate();
+    kokoroInstalled = s.installed;
+  });
+  void kokoro.installed();
 
   const updateSettings = async (patch: Partial<Settings>) => {
     settings = { ...settings, ...patch };
@@ -36,7 +51,7 @@ export async function createServices(): Promise<Services> {
     await updateSettings({ voiceByEngine: { ...settings.voiceByEngine, [engineId]: voiceId }, enginePreference: pref });
   };
 
-  const player = new Player({ positions: repo, registry, settings: () => settings, saveVoiceChoice });
+  const player = new Player({ positions: repo, registry, settings: () => settings, saveVoiceChoice, audio, audioCache: repo });
   player.setRate(settings.rate);
 
   try {
@@ -49,6 +64,8 @@ export async function createServices(): Promise<Services> {
     repo,
     registry,
     player,
+    kokoro,
+    audio,
     isTouch,
     getSettings: () => settings,
     updateSettings,
@@ -71,6 +88,13 @@ export function useSettings(): Settings {
   const services = useServices();
   const [s, setS] = useState(services.getSettings());
   useEffect(() => services.subscribeSettings(setS), [services]);
+  return s;
+}
+
+export function useKokoro(): KokoroStatus {
+  const { kokoro } = useServices();
+  const [s, setS] = useState(kokoro.status);
+  useEffect(() => kokoro.subscribe(setS), [kokoro]);
   return s;
 }
 

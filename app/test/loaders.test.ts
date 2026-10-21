@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { parseBytes, IngestError } from '../src/core/ingest';
+import { parseBytes, pastedTitle, IngestError } from '../src/core/ingest';
 import { loadEpub } from '../src/core/ingest/epub';
 import { makeEpub } from './helpers/make-epub';
 import { makeDocx } from './helpers/make-docx';
@@ -110,5 +110,19 @@ describe('format errors', () => {
   it('sniffs an EPUB without an extension', async () => {
     const doc = await parseBytes(await makeEpub(), 'download');
     expect(doc.format).toBe('epub');
+  });
+});
+
+describe('pasted text (ADR-24)', () => {
+  it('titles pasted text by its first line, or the title typed, and reads it as plain text', async () => {
+    const text = 'Chapter Three\n\nThe rain had not stopped. She said "Four."\n';
+    expect(pastedTitle(text)).toBe('Chapter Three');
+    expect(pastedTitle(text, '  My notes ')).toBe('My notes');
+    expect(pastedTitle('   ')).toBe('Pasted text');
+    expect(pastedTitle('a/b' + String.fromCharCode(92) + 'c')).toBe('a-b-c');
+    expect(pastedTitle('x'.repeat(80))).toHaveLength(60);
+    const doc = await parseBytes(new TextEncoder().encode(text).buffer as ArrayBuffer, `${pastedTitle(text)}.txt`);
+    expect(doc.title).toBe('Chapter Three');
+    expect(doc.blocks.flatMap((b) => b.sentences.map((s) => s.text))).toContain('The rain had not stopped.');
   });
 });

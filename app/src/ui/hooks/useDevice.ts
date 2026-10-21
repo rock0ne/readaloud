@@ -41,3 +41,46 @@ export function useOnline(): boolean {
 }
 
 export const isEdge = () => typeof navigator !== 'undefined' && /\bEdg\//.test(navigator.userAgent);
+
+interface MediaControls {
+  play(): Promise<void>;
+  pause(): void;
+  prev(): void;
+  next(): void;
+}
+
+/** Lock-screen and headset controls while an audio engine reads (spec 8.6). */
+export function useMediaSession(active: boolean, title: string, chapter: string, playing: boolean, controls: MediaControls): void {
+  useEffect(() => {
+    const ms = typeof navigator !== 'undefined' ? navigator.mediaSession : undefined;
+    if (!active || !ms) return;
+    ms.metadata = new MediaMetadata({ title, artist: chapter, album: 'ReadAloud' });
+    const handlers: Array<[MediaSessionAction, () => void]> = [
+      ['play', () => void controls.play()],
+      ['pause', () => controls.pause()],
+      ['previoustrack', () => controls.prev()],
+      ['nexttrack', () => controls.next()],
+    ];
+    for (const [action, fn] of handlers) {
+      try {
+        ms.setActionHandler(action, fn);
+      } catch {
+        // an action this browser does not support
+      }
+    }
+    return () => {
+      for (const [action] of handlers) {
+        try {
+          ms.setActionHandler(action, null);
+        } catch {
+          // as above
+        }
+      }
+      ms.metadata = null;
+    };
+  }, [active, title, chapter, controls]);
+
+  useEffect(() => {
+    if (active && typeof navigator !== 'undefined' && navigator.mediaSession) navigator.mediaSession.playbackState = playing ? 'playing' : 'paused';
+  }, [active, playing]);
+}

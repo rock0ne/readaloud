@@ -265,6 +265,9 @@ Accept: same as Step 22 using the APK.
 
 ### Step 24 — Kokoro web engine
 
+Done 2026-10-21 as the main voice (ADR-22): M11 passed on the PC; the phone
+runs it but too slowly for continuous reading (ADR-24). Kept below as written.
+
 Read: spec 7.4.
 Create: `src/core/engines/kokoro.ts` + `src/core/engines/kokoro.worker.ts`;
 Settings: Download model (progress, size), Remove model; engine appears in the
@@ -274,6 +277,10 @@ disconnect the network, play a chapter. Speed of synthesis vs playback noted in
 `PROGRESS.md`.
 
 ### Step 25 — Kokoro on Android (only if Step 23 was done)
+
+ADR-24: the browser route measured 0.68x real time on the S21+. First try the
+sherpa-onnx Kokoro Android voice engine (Rockson's approval needed), then
+decide between it and this step.
 
 Read: spec 7.4 "Android native".
 Do: write `docs/05-ANDROID-KOKORO.md` first (plugin API, model storage, file

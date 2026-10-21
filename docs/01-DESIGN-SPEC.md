@@ -210,12 +210,16 @@ export interface Flag {
   chapterTitle: string;
   paragraphInChapter: number;  // 1-based ordinal of the block within its chapter
   quote: string;               // Sentence.text at the time of flagging
+  context?: FlagContext;       // neighbouring sentences when flagged; places repeated quotes (ADR-23)
   note: string;                // free text, may be ''
   fixedText: string;           // corrected sentence, may be ''
   status: FlagStatus;
   createdAt: string;
   updatedAt: string;
 }
+
+/** The sentences before and after a flagged one in reading order ('' at either end). */
+export interface FlagContext { before: string; after: string; }
 
 // ===== Storage =====
 // ordinal = the sentence's 0-based reading-order index; lets the library show
@@ -231,8 +235,8 @@ export interface DocSummary {
 export interface AudioCacheRecord { key: string; blob: Blob; bytes: number; lastUsed: number; }
 
 export interface Settings {
-  schemaVersion: 1;
-  enginePreference: EngineId[];                 // default ['webspeech', 'azure', 'kokoro']
+  schemaVersion: 2;                             // 2: Kokoro first (ADR-22)
+  enginePreference: EngineId[];                 // default ['kokoro', 'webspeech']
   voiceByEngine: Partial<Record<EngineId, string>>;
   rate: number;                                 // default 1.0
   locale: string;                               // default 'en-GB'
@@ -240,7 +244,7 @@ export interface Settings {
   skipCodeBlocks: boolean;                      // default true
   announceHeadings: boolean;                    // default true
   pauseAfterHeadingMs: number;                  // default 600
-  pauseBetweenSentencesMs: number;              // default 150 (direct engines only)
+  pauseBetweenSentencesMs: number;              // default 150 (all engines)
   keepAwake: boolean;                           // default true
   pauseOnFlag: boolean;                         // default false on desktop, true on touch devices
   fontSizePx: number;                           // default 18
@@ -490,10 +494,11 @@ export async function pickEngine(settings): Promise<{ engine: VoiceEngine; voice
 available (review correction, ADR-13). It runs two passes over
 `settings.enginePreference`, skipping engines whose `isAvailable()` is not `ok`:
 
-1. **Neural pass**: the first engine that has a `neural` voice. Voice = the
-   saved `voiceByEngine[engine.id]` if it is still listed and is `neural`, else
-   the first `neural` voice whose `lang` starts with the locale's language,
-   else the first `neural` voice.
+1. **Neural pass**: engines in preference order. For each: the saved
+   `voiceByEngine[engine.id]` if it is still listed (ADR-22: a saved voice no
+   longer has to be `neural`, and it no longer outranks an engine earlier in
+   the order), else the first `neural` voice whose `lang` starts with the
+   locale's language, else the first `neural` voice.
 2. **Fallback pass** (only if pass 1 found nothing): the first engine with any
    voice; same voice rule without the `neural` restriction. The UI then shows
    the "Basic voice" status and hint H1.
@@ -561,15 +566,20 @@ Quality labels in the UI: `neural` → "Natural", `standard` → "Basic".
   - `text` is a segment of up to 600 characters (8.3), not a single sentence.
   - CORS check in build step 17. Fallback: official JS Speech SDK over WebSocket.
 
-### 7.4 `KokoroEngine` (kind `audio`, maxEngineRate 1.0) — Phase 4
+### 7.4 `KokoroEngine` (kind `audio`, maxEngineRate 1.0) — the main voice (ADR-22)
 
-- Web: `kokoro-js` inside a dedicated Web Worker. Model
-  `onnx-community/Kokoro-82M-v1.0-ONNX`, `dtype: 'q8'`, `device: 'wasm'`
-  (use `'webgpu'` with `fp32` when `navigator.gpu` exists). First use downloads
-  about 90 MB; show progress; the browser caches it. `generate(text, { voice })`
-  → WAV blob. UK voices: `bf_emma`, `bf_isabella`, `bm_george`, `bm_lewis`;
-  US: `af_heart`, `af_bella`, `am_adam`, `am_michael`. `quality: 'neural'`,
-  `offline: true`.
+- Web: `kokoro-js` inside a dedicated module Web Worker. Model
+  `onnx-community/Kokoro-82M-v1.0-ONNX`, `dtype: 'fp32'`, `device: 'webgpu'`
+  when an adapter exists, else `'wasm'` (fp32 too: q8 is slower on wasm). The
+  ONNX runtime is served from `/ort/`. First use downloads about 326 MB with
+  a progress bar; all listed voices are stored then, so every voice works
+  offline; Settings can remove it. `generate(text, { voice })` → WAV blob.
+  UK voices: `bf_emma` (default), `bm_george`, `bf_isabella`, `bm_fable`,
+  `bm_lewis`; US: `af_heart`, `af_bella`, `af_nicole`, `am_michael`,
+  `am_fenrir`, `am_puck`. `quality: 'neural'`, `offline: true`.
+- A sentence of one or two words is made in one clip with its neighbour in the
+  same block (up to 300 characters); the highlight follows by character share
+  (ADR-22).
 - Android native (3b + 4 only): a Capacitor plugin wrapping sherpa-onnx's Kotlin
   API; same `Voice` ids; returns a file path, converted with
   `Capacitor.convertFileSrc`. Spec at outline level; design when reached.
@@ -623,7 +633,7 @@ while status === 'playing':
      else: blob = await getAudio(chunk); await playBlob(blob, playbackRate = rate, signal)
      if signal aborted → return
   if block.type === 'heading' && announceHeadings → await sleep(pauseAfterHeadingMs)
-  else if engine.kind === 'direct' → await sleep(pauseBetweenSentencesMs)
+  else → await sleep(pauseBetweenSentencesMs)
   advance(): next sentence in document order; if none → status 'ended', emit 'ended'
 ```
 
@@ -643,6 +653,11 @@ Rate: user rate 0.8–3.0 in steps of 0.1. Direct engines receive
 `preservesPitch = true`. Rate changes apply from the next chunk.
 
 ### 8.3 Prefetch (audio engines)
+
+**Kokoro (ADR-22):** keep the next 3 chunks being made, cache-first (8.4);
+keep the last 8 finished clips in memory; on seek, abort unfinished clips that
+are no longer ahead. Show `buffering` only when the current clip is not ready.
+The Azure rules below are kept for reference only (Azure dropped, ADR-21).
 
 Azure's free tier (F0) allows **20 synthesis transactions per 60 seconds**
 ([Microsoft quotas](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/speech-services-quotas-and-limits)).
@@ -685,6 +700,8 @@ When the engine is `audio`, set `navigator.mediaSession.metadata`
 (title = document title, artist = chapter title) and action handlers for
 `play`, `pause`, `previoustrack` (prev), `nexttrack` (next). Keep a silent
 `<audio>` element playing only while actual chunks play; do not loop silence.
+(Built in ADR-22. The clips themselves play in one reused `<audio>` element,
+so no silent element is needed.)
 
 ---
 
@@ -800,6 +817,9 @@ block's position); replace; write `{name}.corrected.md` and a unified diff.
 - "Add files" button (`<input type=file multiple accept=".txt,.md,.docx,.pdf,.epub">`)
   and a full-screen drop zone. Duplicate (`sourceHash` exists) → toast
   "Already in library", open it.
+- "Paste text" button (ADR-24): a box for the text and an optional title; Ctrl+V
+  anywhere in the library opens it with the clipboard text. The text is stored
+  as a `.txt` source titled by its first line, then handled like an added file.
 - Row menu: Delete (confirm), Export corrections, Re-parse.
 - Footer: Export JSON, Import JSON, Settings.
 - Import progress bar for large files (EPUB/PDF show "Chapter x of y").
@@ -878,7 +898,7 @@ SW (the IndexedDB cache does that). Show a toast "Update available, reload".
 ## 13. Dependencies (exact list)
 
 Runtime: `preact`, `idb`, `marked`, `mammoth`, `pdfjs-dist`, `jszip`.
-Phase 4 adds `kokoro-js`. Phase 3b adds `@capacitor/core`, `@capacitor/cli`,
+`kokoro-js` (ADR-22, brought forward from Phase 4). Phase 3b adds `@capacitor/core`, `@capacitor/cli`,
 `@capacitor/android`, `@capacitor/filesystem`, `@capawesome/capacitor-file-picker`,
 `@capacitor-community/keep-awake`.
 
@@ -912,18 +932,21 @@ without a decision entry.
 ## 15. Privacy and security
 
 - All documents, flags and positions stay on the device.
-- Text of each sentence is sent to Microsoft when using the Edge natural voices
-  (Web Speech online) or the Azure engine. Kokoro keeps text on-device. The
-  Settings screen states this in one sentence.
+- Kokoro keeps text on the device. Browser voices may send each sentence to
+  Microsoft or Google (Edge's online voices). The Settings screen says this.
+  Azure is dropped (ADR-21).
 - The Azure key is stored only in IndexedDB on that device and is excluded from
   JSON export. It is never logged or placed in a URL.
 - No analytics, no third-party scripts, no fonts from CDNs. The only remote
-  hosts are `*.tts.speech.microsoft.com` (Azure) and `huggingface.co` /
-  its CDN (Kokoro model download, Phase 4).
-- Content Security Policy in `index.html`: `default-src 'self'; connect-src
-  'self' https://*.tts.speech.microsoft.com https://huggingface.co
+  hosts are `huggingface.co` and its CDN (Kokoro model download).
+- Content Security Policy in `index.html`: `default-src 'self'; script-src
+  'self' 'wasm-unsafe-eval'; connect-src 'self' https://huggingface.co
   https://*.hf.co; img-src 'self' data: blob:; media-src 'self' blob:;
-  worker-src 'self' blob:; style-src 'self' 'unsafe-inline'`.
+  worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self';
+  object-src 'none'; base-uri 'self'`.
+- Response headers (dev and preview servers): `Cross-Origin-Opener-Policy:
+  same-origin` and `Cross-Origin-Embedder-Policy: require-corp`, so Kokoro can
+  use several threads (ADR-22).
 
 ---
 

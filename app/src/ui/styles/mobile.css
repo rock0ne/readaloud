@@ -1,5 +1,14 @@
 /* Phone layout (spec 11.4). */
 @media (max-width: 720px) {
+  /* Library: the title on its own row, the three buttons together under it. */
+  .library .bar h1 {
+    flex-basis: 100%;
+  }
+
+  .library .bar .spacer {
+    display: none;
+  }
+
   .bar {
     padding: 8px 12px;
   }

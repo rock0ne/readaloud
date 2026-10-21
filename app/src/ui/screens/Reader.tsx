@@ -9,18 +9,20 @@ import { TextPane } from '../components/TextPane';
 import { FlagPanel } from '../components/FlagPanel';
 import { TocPanel } from '../components/TocPanel';
 import { NoteSheet } from '../components/NoteSheet';
+import { KokoroDownload } from '../components/KokoroDownload';
 import { VoicePicker, shortVoiceName } from '../components/VoicePicker';
 import { usePlayer } from '../hooks/usePlayer';
 import { useKeys } from '../hooks/useKeys';
-import { isEdge, useOnline, useWakeLock } from '../hooks/useDevice';
-import { toast, useServices, useSettings } from '../services';
+import { useMediaSession, useOnline, useWakeLock } from '../hooks/useDevice';
+import { toast, useKokoro, useServices, useSettings } from '../services';
 
 type Panel = 'toc' | 'flags' | null;
 
 export function Reader({ docId }: { docId: string }) {
   const services = useServices();
-  const { repo, player, registry, isTouch } = services;
+  const { repo, player, registry, kokoro, isTouch } = services;
   const settings = useSettings();
+  const kokoroStatus = useKokoro();
   const [doc, setDoc] = useState<DocRecord | null | undefined>(undefined);
   const [flags, setFlags] = useState<Flag[]>([]);
   const [panel, setPanel] = useState<Panel>(isTouch || innerWidth < 900 ? null : 'toc');
@@ -64,12 +66,37 @@ export function Reader({ docId }: { docId: string }) {
     void loadVoices();
   }, [loadVoices]);
 
-  // Offline: natural voices are online-only, so drop to a basic voice and back (spec 14).
+  // Load the Kokoro model while the reader opens, so the first Play starts quickly.
+  useEffect(() => {
+    void kokoro.installed().then((ok) => (ok ? kokoro.load() : undefined)).catch(() => undefined);
+  }, [kokoro]);
+
+  // The natural voice has just been downloaded: switch to it (ADR-22).
+  const kokoroInstalled = kokoroStatus.installed;
+  const hadKokoro = useRef(kokoroInstalled);
+  useEffect(() => {
+    if (hadKokoro.current === kokoroInstalled) return;
+    hadKokoro.current = kokoroInstalled;
+    void loadVoices();
+    if (!kokoroInstalled) {
+      if (player.currentVoice?.engineId === 'kokoro') player.resetVoice();
+      return;
+    }
+    if (player.currentVoice?.engineId === 'kokoro') return;
+    const playing = player.state.status === 'playing' || player.state.status === 'buffering';
+    if (playing) player.pause();
+    player.resetVoice();
+    toast('The natural voice is ready.');
+    if (playing) void player.play();
+  }, [kokoroInstalled, player, loadVoices]);
+
+  // Offline: online-only browser voices drop to a basic voice and back (spec 14). Kokoro is offline.
   useEffect(() => {
     if (wasOnline.current === online) return;
     wasOnline.current = online;
     const playing = player.state.status === 'playing' || player.state.status === 'buffering';
-    const needsSwitch = online || (player.currentVoice !== null && !player.currentVoice.offline);
+    const current = player.currentVoice;
+    const needsSwitch = online ? current !== null && current.quality !== 'neural' : current !== null && !current.offline;
     registry.invalidate();
     void loadVoices();
     if (!needsSwitch) return;
@@ -89,6 +116,9 @@ export function Reader({ docId }: { docId: string }) {
   const chapterIndex = current?.block.chapterIndex ?? 0;
   const blocks = useMemo(() => (index ? index.chapterBlocks(chapterIndex) : []), [index, chapterIndex]);
   const flagged = useMemo(() => new Set(flags.filter((f) => f.status !== 'dismissed').map((f) => f.sentenceId)), [flags]);
+  const audioEngine = (player.currentVoice ?? auto?.voice)?.engineId === 'kokoro';
+  const isPlaying = view.status === 'playing' || view.status === 'buffering';
+  useMediaSession(audioEngine, doc?.title ?? 'ReadAloud', index?.chapter(chapterIndex)?.title ?? '', isPlaying, player);
 
   const saveFlag = async (f: Flag) => {
     await repo.putFlag(f);
@@ -161,10 +191,12 @@ export function Reader({ docId }: { docId: string }) {
 
   const playing = view.status === 'playing' || view.status === 'buffering';
   const activeVoice = player.currentVoice ?? auto?.voice ?? null;
-  const basic = auto === null || (auto?.basicFallback ?? false) || (player.currentVoice ? player.currentVoice.quality !== 'neural' : false);
+  const kokoroBanner = !kokoroStatus.installed || kokoroStatus.phase === 'error';
   const status =
     view.status === 'buffering'
-      ? 'Preparing audio…'
+      ? activeVoice?.engineId === 'kokoro' && kokoroStatus.phase === 'loading'
+        ? 'Loading the natural voice…'
+        : 'Preparing audio…'
       : view.status === 'error'
         ? 'Stopped'
         : view.status === 'ended'
@@ -192,13 +224,9 @@ export function Reader({ docId }: { docId: string }) {
         </button>
       </header>
 
-      {basic && auto !== undefined && (
+      {kokoroBanner && (
         <div class="banner" role="note">
-          {online
-            ? isEdge()
-              ? 'No natural voice was found. Check that Edge can reach the internet, then reload.'
-              : 'No natural voice available. Open this app in Microsoft Edge for free natural voices.'
-            : 'Offline: natural voices need an internet connection. A basic voice is used until you reconnect.'}
+          <KokoroDownload />
         </div>
       )}
 

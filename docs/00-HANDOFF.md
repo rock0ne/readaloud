@@ -11,6 +11,9 @@ model; this document carries everything that is not in the spec itself.
 - Reads **`.txt`, `.md`, `.pdf`, `.docx`, `.epub`**.
 - He reads lots of files, and his **book is finished**: he needs to listen through
   it quickly, mark mistakes as he hears them, and fix them afterwards.
+- 2026-10-21: **Kokoro is the voice** ("natural enough"), on the PC and the
+  phone. He also wants to **paste text** as well as upload files, and asked for
+  **custom voices** (he thought SAPI 5; see ADR-24 for what is possible).
 
 ## 2. The one fact the whole design rests on
 
@@ -37,7 +40,8 @@ Android WebView do not get them. That is why:
 
 See `04-DECISIONS.md` for the reasoning. Summary:
 
-1. Engine order: Web Speech (Edge natural) → Azure → Kokoro → system voices as fallback.
+1. Engine order: Kokoro (made on the device) → browser voices as fallback
+   (ADR-22). Azure is dropped and Microsoft voices are rejected (ADR-21).
 2. Windows packaging: PWA installed from Edge. No Electron/Tauri in Phases 1–4.
 3. Phone: first try the same PWA installed from Chrome on the phone (Phase 3a).
    Wrap with Capacitor (Phase 3b) only if 3a fails the gate (background playback
@@ -56,7 +60,10 @@ See `04-DECISIONS.md` for the reasoning. Summary:
 
 ## 4. What exists right now
 
-Phase 1 (Steps 1–16) is built, tested and committed. `docs/PROGRESS.md` has
+Phase 1 (Steps 1–16) is built, tested and committed. Kokoro is the main
+voice (Step 24, ADR-22), Paste text is in (ADR-24), and Sol's second review is
+fixed (ADR-23). The phone runs the app in Firefox but the voice is too slow
+there (ADR-24). `docs/PROGRESS.md` has
 the step-by-step status, the manual checks done, and what still needs Rockson.
 
 ```

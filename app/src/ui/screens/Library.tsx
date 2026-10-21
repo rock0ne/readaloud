@@ -5,6 +5,7 @@ import { DuplicateDocumentError } from '../../core/store/repo';
 import { sha256Hex } from '../../core/util/hash';
 import type { DocSummary, PositionRecord } from '../../core/types';
 import { DataTransfer } from '../components/DataTransfer';
+import { PasteText } from '../components/PasteText';
 import { downloadText, navigate, toast, useServices, useSettings } from '../services';
 import { readHref } from '../routes';
 
@@ -27,6 +28,8 @@ export function Library() {
   const [positions, setPositions] = useState<Map<string, PositionRecord>>(new Map());
   const [busy, setBusy] = useState<Busy | null>(null);
   const [dragging, setDragging] = useState(false);
+  /** text for the Paste dialog; null while it is closed */
+  const [pasting, setPasting] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
 
   const refresh = useCallback(async () => {
@@ -38,6 +41,20 @@ export function Library() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // Ctrl+V anywhere in the library opens the Paste dialog with that text.
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (pasting !== null || target?.closest('input, textarea, [contenteditable]')) return;
+      const text = e.clipboardData?.getData('text/plain') ?? '';
+      if (!text.trim()) return;
+      e.preventDefault();
+      setPasting(text);
+    };
+    document.addEventListener('paste', onPaste);
+    return () => document.removeEventListener('paste', onPaste);
+  }, [pasting]);
 
   const addFiles = async (files: File[]) => {
     let lastAdded: string | null = null;
@@ -125,6 +142,9 @@ export function Library() {
         <button class="primary" onClick={() => input.current?.click()} disabled={busy !== null}>
           Add files
         </button>
+        <button onClick={() => setPasting('')} disabled={busy !== null}>
+          Paste text
+        </button>
         <a class="button" href="#/settings">
           Settings
         </a>
@@ -142,6 +162,17 @@ export function Library() {
         }}
       />
 
+      {pasting !== null && (
+        <PasteText
+          initial={pasting}
+          onClose={() => setPasting(null)}
+          onAdd={(file) => {
+            setPasting(null);
+            void addFiles([file]);
+          }}
+        />
+      )}
+
       {busy && (
         <div class="busy" role="status">
           Reading {busy.name}
@@ -153,7 +184,7 @@ export function Library() {
       {docs === null ? null : docs.length === 0 ? (
         <section class="empty">
           <h2>Add a document to start listening</h2>
-          <p>Drop a .txt, .md, .docx, .pdf or .epub file here, or use Add files.</p>
+          <p>Drop a .txt, .md, .docx, .pdf or .epub file here, use Add files, or Paste text.</p>
           <p class="hint">For proofreading a book, the Word (.docx) or Markdown manuscript reads more accurately than a PDF.</p>
         </section>
       ) : (

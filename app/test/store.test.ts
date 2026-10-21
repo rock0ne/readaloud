@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { DuplicateDocumentError, Repo } from '../src/core/store/repo';
 import { sha256Hex } from '../src/core/util/hash';
+import type { Settings } from '../src/core/types';
+import type { RawBlock } from '../src/core/ingest/raw';
+import { createFlag } from '../src/core/flags/corrections';
+import { DocIndex } from '../src/core/model';
 import { makeDoc, makeFlag, sampleBlocks } from './helpers/docs';
 
 let n = 0;
@@ -58,13 +62,33 @@ describe('U9 store', () => {
   it('returns default settings and pauseOnFlag follows the device type', async () => {
     const desk = await fresh(false);
     const s = await desk.getSettings();
-    expect(s.enginePreference).toEqual(['webspeech', 'azure', 'kokoro']);
+    expect(s.enginePreference).toEqual(['kokoro', 'webspeech']);
+    expect(s.schemaVersion).toBe(2);
     expect(s.pauseOnFlag).toBe(false);
     desk.close();
     const phone = await fresh(true);
     expect((await phone.getSettings()).pauseOnFlag).toBe(true);
     await phone.saveSettings({ ...(await phone.getSettings()), rate: 1.5 });
     expect((await phone.getSettings()).rate).toBe(1.5);
+  });
+
+  it('moves version 1 settings to Kokoro first and drops Azure (ADR-22)', async () => {
+    const r = await fresh();
+    const v1 = {
+      ...(await r.getSettings()),
+      schemaVersion: 1,
+      enginePreference: ['webspeech', 'azure', 'kokoro'],
+      voiceByEngine: { webspeech: 'Microsoft Sonia Online (Natural)' },
+      azure: { region: 'uksouth', key: 'k' },
+      rate: 1.7,
+    } as unknown as Settings;
+    await r.saveSettings(v1);
+    const s = await r.getSettings();
+    expect(s.schemaVersion).toBe(2);
+    expect(s.enginePreference).toEqual(['kokoro', 'webspeech']);
+    expect(s.voiceByEngine).toEqual({ webspeech: 'Microsoft Sonia Online (Natural)' });
+    expect(s.azure).toBeNull();
+    expect(s.rate).toBe(1.7);
   });
 
   it('re-parse re-anchors flags by quote and reports flags it cannot place', async () => {
@@ -82,6 +106,38 @@ describe('U9 store', () => {
     const kept = await r.getFlag('keep');
     expect(kept?.sentenceId).toBe('b2.s1');
     expect(kept?.blockId).toBe('b2');
+  });
+
+  it('places a flag on a repeated quote by its neighbours, and leaves an old flag unplaced (ADR-23)', async () => {
+    const r = await fresh();
+    const dialogue: RawBlock[] = [
+      { type: 'heading', level: 1, text: 'Chapter One' },
+      { type: 'paragraph', text: 'Are you coming?' },
+      { type: 'paragraph', text: 'Yes.' },
+      { type: 'paragraph', text: 'Then hurry up.' },
+      { type: 'paragraph', text: 'Yes.' },
+      { type: 'paragraph', text: 'Good.' },
+    ];
+    const doc = await r.addDocument(makeDoc(dialogue), bytes(), 'a.md', 'h');
+    const created = createFlag(new DocIndex(doc), doc.id, 'b4.s0')!;
+    expect(created.context).toEqual({ before: 'Then hurry up.', after: 'Good.' });
+    await r.putFlag(makeFlag(doc, 'b4.s0', { id: 'second', paragraphInChapter: 4, context: created.context! }));
+    // A flag saved before flags kept their neighbours: no context, so only its exact old place counts.
+    await r.putFlag(makeFlag(doc, 'b4.s0', { id: 'legacy', paragraphInChapter: 4 }));
+    const revised = makeDoc([dialogue[0]!, { type: 'paragraph', text: 'A new opening paragraph.' }, ...dialogue.slice(1)]);
+    const lost = await r.replaceParsed(doc.id, revised);
+    expect((await r.getFlag('second'))?.sentenceId).toBe('b5.s0');
+    expect(lost.map((f) => f.id)).toEqual(['legacy']);
+  });
+
+  it('re-read completes in one transaction when the saved position disappears', async () => {
+    const r = await fresh();
+    const doc = await r.addDocument(makeDoc(sampleBlocks), bytes(), 'a.md', 'h');
+    await r.savePosition({ docId: doc.id, sentenceId: 'b3.s0', updatedAt: 'x', ordinal: 3 });
+    const revised = makeDoc([{ type: 'heading', level: 1, text: 'Chapter One' }, { type: 'paragraph', text: 'Only this now.' }]);
+    await expect(r.replaceParsed(doc.id, revised)).resolves.toEqual([]);
+    expect((await r.getDocument(doc.id))?.blocks).toHaveLength(2);
+    expect(await r.getPosition(doc.id)).toBeUndefined();
   });
 
   it('hashes bytes as sha-256 hex', async () => {

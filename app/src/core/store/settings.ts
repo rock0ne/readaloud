@@ -1,10 +1,10 @@
-// Settings defaults (spec 4). `touch` decides pauseOnFlag's default.
-import type { Settings } from '../types';
+// Settings defaults (spec 4) and migration (spec 9). `touch` decides pauseOnFlag's default.
+import type { EngineId, Settings } from '../types';
 
 export function defaultSettings(touch = false): Settings {
   return {
-    schemaVersion: 1,
-    enginePreference: ['webspeech', 'azure', 'kokoro'],
+    schemaVersion: 2,
+    enginePreference: ['kokoro', 'webspeech'],
     voiceByEngine: {},
     rate: 1.0,
     locale: 'en-GB',
@@ -20,10 +20,28 @@ export function defaultSettings(touch = false): Settings {
   };
 }
 
-export function withDefaults(saved: Partial<Settings> | undefined, touch = false): Settings {
+type StoredSettings = Omit<Partial<Settings>, 'schemaVersion'> & { schemaVersion?: number };
+
+/** Brings settings saved by an older version up to date. */
+export function migrateSettings(saved: StoredSettings): Partial<Settings> {
+  const out = { ...saved };
+  if ((out.schemaVersion ?? 1) < 2) {
+    // v2 (ADR-21, ADR-22): Kokoro becomes the main voice and Azure is dropped. A saved browser
+    // voice stays saved, but no longer outranks Kokoro unless chosen again.
+    const rest = (out.enginePreference ?? []).filter((e): e is EngineId => e !== 'kokoro' && e !== 'azure');
+    out.enginePreference = ['kokoro', ...rest.filter((e, i) => rest.indexOf(e) === i)];
+    if (!out.enginePreference.includes('webspeech')) out.enginePreference.push('webspeech');
+    out.azure = null;
+  }
+  delete out.schemaVersion;
+  return out as Partial<Settings>;
+}
+
+export function withDefaults(saved: StoredSettings | undefined, touch = false): Settings {
   const d = defaultSettings(touch);
   if (!saved) return d;
-  return { ...d, ...saved, voiceByEngine: { ...d.voiceByEngine, ...(saved.voiceByEngine ?? {}) } };
+  const m = migrateSettings(saved);
+  return { ...d, ...m, schemaVersion: d.schemaVersion, voiceByEngine: { ...d.voiceByEngine, ...(m.voiceByEngine ?? {}) } };
 }
 
 export const RATE_MIN = 0.8;

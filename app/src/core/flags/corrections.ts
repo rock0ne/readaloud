@@ -16,6 +16,7 @@ export function createFlag(index: DocIndex, docId: string, sentenceId: string, n
     chapterTitle: index.chapter(hit.block.chapterIndex)?.title ?? '',
     paragraphInChapter: index.paragraphInChapter(hit.block),
     quote: hit.sentence.text,
+    context: index.neighbours(hit),
     note,
     fixedText: '',
     status: 'open',

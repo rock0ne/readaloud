@@ -52,17 +52,16 @@ export class EngineRegistry {
     const byLocale = (v: Voice) => v.lang.toLowerCase().startsWith(lang);
     const exactLocale = (v: Voice) => v.lang.toLowerCase() === settings.locale.toLowerCase();
 
-    // 0. A voice the user chose explicitly (only explicit picks are saved).
+    // 1. Engines in preference order: the voice the user chose explicitly on that engine (only
+    //    explicit picks are saved, and they move their engine first), else its best natural voice.
+    //    A saved voice on a later engine does not outrank an earlier engine (ADR-22).
     for (const c of candidates) {
       const saved = settings.voiceByEngine[c.engine.id];
       const v = saved ? c.voices.find((x) => x.id === saved) : undefined;
       if (v) return { engine: c.engine, voice: v, basicFallback: v.quality !== 'neural' && !(await this.anyNeural(candidates)) };
-    }
-    // 1. Neural pass across all engines.
-    for (const c of candidates) {
       const neural = c.voices.filter((v) => v.quality === 'neural');
-      const v = neural.find(exactLocale) ?? neural.find(byLocale) ?? neural[0];
-      if (v) return { engine: c.engine, voice: v, basicFallback: false };
+      const best = neural.find(exactLocale) ?? neural.find(byLocale) ?? neural[0];
+      if (best) return { engine: c.engine, voice: best, basicFallback: false };
     }
     // 2. Fallback pass: Basic voices only when nothing natural exists.
     for (const c of candidates) {

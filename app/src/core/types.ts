@@ -109,12 +109,16 @@ export interface Flag {
   chapterTitle: string;
   paragraphInChapter: number;  // 1-based ordinal of the block within its chapter
   quote: string;               // Sentence.text at the time of flagging
+  context?: FlagContext;       // neighbouring sentences when flagged; places repeated quotes (ADR-23)
   note: string;                // free text, may be ''
   fixedText: string;           // corrected sentence, may be ''
   status: FlagStatus;
   createdAt: string;
   updatedAt: string;
 }
+
+/** The sentences before and after a flagged one in reading order ('' at either end). */
+export interface FlagContext { before: string; after: string; }
 
 // ===== Storage =====
 export interface PositionRecord { docId: string; sentenceId: string; updatedAt: string; ordinal?: number; } // ordinal: 0-based sentence index in reading order
@@ -128,8 +132,8 @@ export interface DocSummary {
 export interface AudioCacheRecord { key: string; blob: Blob; bytes: number; lastUsed: number; }
 
 export interface Settings {
-  schemaVersion: 1;
-  enginePreference: EngineId[];                 // default ['webspeech', 'azure', 'kokoro']
+  schemaVersion: 2;                             // 2: Kokoro first (ADR-22)
+  enginePreference: EngineId[];                 // default ['kokoro', 'webspeech']
   voiceByEngine: Partial<Record<EngineId, string>>;
   rate: number;                                 // default 1.0
   locale: string;                               // default 'en-GB'
@@ -137,7 +141,7 @@ export interface Settings {
   skipCodeBlocks: boolean;                      // default true
   announceHeadings: boolean;                    // default true
   pauseAfterHeadingMs: number;                  // default 600
-  pauseBetweenSentencesMs: number;              // default 150 (direct engines only)
+  pauseBetweenSentencesMs: number;              // default 150
   keepAwake: boolean;                           // default true
   pauseOnFlag: boolean;                         // default false on desktop, true on touch devices
   fontSizePx: number;                           // default 18

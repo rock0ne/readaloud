@@ -187,3 +187,137 @@ Consequences:
   text (speech recognition, as in the test) before the app trusts it for
   proofreading. A voice that silently changes words hides the very mistakes
   Rockson is listening for.
+
+## ADR-22 · 2026-10-21 · Kokoro is the main voice, on the PC and the phone
+Rockson, 2026-10-21: "Kokoro sounds natural enough. Build it into the app as
+the main voice, on the PC and the phone." He left the voice name blank, so the
+default is **bf_emma** (Emma, UK). Picking another voice is remembered.
+
+Built (Step 24, brought forward from Phase 4):
+- `KokoroEngine` in core (kind `audio`) over a `KokoroBackend` port. The UI's
+  `KokoroClient` runs kokoro-js 1.2.1 in a module worker, one job at a time.
+- Model `onnx-community/Kokoro-82M-v1.0-ONNX`, **fp32** on WebGPU and on wasm.
+  Spec 7.4 said q8 on wasm. fp32 is what Rockson heard and approved, and q8 is
+  slower on wasm anyway (PC: 0.64x real time against fp32's 1.08x).
+- Download about 326 MB once, with a progress bar. All 11 voices are stored at
+  download time, so every voice works offline. Settings can remove it all.
+- Voices: bf_emma, bm_george, bf_isabella, bm_fable, bm_lewis, af_heart,
+  af_bella, af_nicole, am_michael, am_fenrir, am_puck. bm_fable replaces
+  am_adam, which the model's own voice notes grade lowest.
+- The ONNX runtime (22 MB wasm) is served from the app at `/ort/` and
+  precached, not fetched from the jsDelivr CDN that transformers.js uses by
+  default. The resolve condition `onnxruntime-web-use-extern-wasm` stops Vite
+  from bundling a second copy.
+- Cross-origin isolation (COOP `same-origin`, COEP `require-corp`) lets the
+  runtime use 4 threads. `credentialless` was tried first: Firefox on Android
+  ignores it, and Kokoro then ran on one thread (0.2x real time instead of
+  0.68x). The model download still works: it is a CORS fetch. A static server
+  used instead of `pnpm preview` must send the same two headers.
+- CSP: `script-src` adds `'wasm-unsafe-eval'`; `connect-src` is now `'self'`
+  plus Hugging Face only (the Microsoft host is gone with Azure).
+- Settings schema 2: `enginePreference` defaults to `['kokoro', 'webspeech']`.
+  Version 1 settings move Kokoro first and drop Azure and its key.
+- Registry rule (spec 7.1): engines in preference order; for each, the saved
+  voice if still listed, else its best natural voice. A saved browser voice no
+  longer outranks Kokoro. The Basic fallback pass is unchanged.
+- Player, audio engines: 3 chunks made ahead; finished clips kept in memory (8)
+  and in the IndexedDB audio cache; seek drops unfinished clips that are no
+  longer ahead; Pause stops waiting but lets a clip finish being made. The
+  pause between sentences now applies to every engine.
+- Short sentences: Kokoro misreads a one- or two-word sentence on its own
+  ("Four." came out as "Thor" or "Thought" in the Whisper check, on the GPU
+  and the CPU). Such a sentence is made in one clip with its neighbour in the
+  same paragraph (up to 300 characters), and the highlight moves on by
+  character share during the clip. With that, the Whisper check was
+  word-exact.
+- Warm-up: when a document opens and the voice is stored, the worker loads the
+  model and makes "Ready." silently, so the first sentence starts about 0.7 s
+  after Play on the PC.
+- Media Session (spec 8.6): lock-screen and headset play, pause, previous and
+  next; title = document, artist = chapter. No silent audio element is needed:
+  the real clips play in one reused `<audio>` element.
+- After an app update, an open page's old worker file can be gone. The error
+  then says to reload the app.
+
+Dependencies: kokoro-js 1.2.1, exact pin (brings @huggingface/transformers
+3.8.1, onnxruntime-web 1.22.0-dev and phonemizer 1.2.1). pnpm 11 asks about
+install scripts: `app/pnpm-workspace.yaml` sets `allowBuilds` to false for
+onnxruntime-node, protobufjs and sharp, which are Node-only.
+
+Still open:
+- ADR-21 asks that every sentence be checked by speech recognition before the
+  app is trusted for proofreading. The app does not do that itself: it would
+  need a second large model on the device. The check was run outside the app
+  (Whisper) on the test passage. Rockson's listening stays the judge.
+- The phone result is in ADR-24.
+
+## ADR-23 · 2026-10-21 · Fixes from Sol's second review
+Sol (read-only review of `28265e0` plus the unfinished Kokoro edits) found three
+defects. Each has a test that fails on the old code and passes now.
+1. **A flag could move to the wrong sentence.** When the text changed, a flag
+   went to the first sentence with the same words, so a flag on the second
+   "Yes." landed on the first. Flags now store their neighbouring sentences
+   (`Flag.context`, optional, so older flags and exports still load). A quote
+   found once is placed there. A repeated quote is placed only where its
+   neighbours match, or failing that at its exact old place (same sentence
+   id, chapter and paragraph). Otherwise the flag is reported as unplaced and
+   Rockson re-flags it, rather than finding a correction on the wrong
+   sentence. No database version change: no store or index changed.
+2. **Re-read could fail half-way.** It read the saved position after the
+   write transaction had already finished. All reads and writes now share one
+   transaction, which is aborted on any error, so a re-read either completes
+   or changes nothing.
+3. **Pressing Play twice while the voice was being chosen read the text twice
+   at once.** There is now one pending start; a second Play joins it. Pause,
+   Stop and opening another document cancel a start that is still choosing.
+
+Sol's status corrections are applied in PROGRESS: the Azure key request is
+removed, the test count covers the Kokoro work, and the unchecked reader
+controls are listed.
+
+## ADR-24 · 2026-10-21 · Scope reconciled with Rockson's full request
+Rockson's request, as Sol restated it on 2026-10-21:
+1. A Windows reader with voices he finds natural, not Microsoft's.
+2. An installable Samsung phone version.
+3. EPUB, PDF, DOCX and Markdown import, **plus copy-and-paste text**.
+4. The proofreading features: flag, note, export corrections, resume.
+5. An option for custom voices, which he understood to mean SAPI 5.
+
+What this changes:
+- **Paste text (new).** Library: "Paste text" opens a box; Ctrl+V anywhere in
+  the library opens it with the clipboard text. Pasted text becomes a
+  plain-text document titled by its first line (or a typed title), stored like
+  an added `.txt` file, so flags, resume and corrections work the same.
+- **Upload** was already there ("Add files", drag and drop, Edge file
+  handlers). On the S21+ the Android picker offered `.docx`, `.md` and `.txt`
+  and added three at once (2026-10-21).
+- **SAPI 5 voices cannot be added to this app.** Checked on Rockson's PC on
+  2026-10-21: Windows has SAPI 5 voices (Hazel Desktop, Zira Desktop) and
+  OneCore voices (George, Hazel, Susan). Edge 155 offers the three OneCore
+  voices and 321 Microsoft online voices, and none of the SAPI 5 ones. A
+  browser app only sees what the browser offers, so a SAPI 5 voice installed
+  in Windows would not appear in it.
+- **Two different "custom voice" deliverables**, so Rockson can choose:
+  a. *Inside ReadAloud*: more voices to choose from, made by Kokoro in the
+     app. Today 11 Kokoro voices; more Kokoro voices or blends of two voices
+     are possible without SAPI.
+  b. *Kokoro inside other Windows programs*: a SAPI 5 adapter that runs Kokoro
+     and registers it with Windows, for SAPI programs such as Narrator. That
+     is a separate Windows program with its own installer (run by Rockson, as
+     it writes to the system registry). It would not reach Edge's own Read
+     Aloud or Android. Each target program needs its own test. Not started:
+     needs Rockson's go-ahead.
+- **Phone.** In Firefox on the S21+ (Exynos 2100, no WebGPU), Kokoro makes
+  speech at 0.68x real time with 4 threads, so continuous reading would keep
+  pausing. Locked decision 3 allows Phase 3b when 3a fails its gate, and this
+  is such a failure. Routes, fastest to try first:
+  1. The sherpa-onnx Kokoro **Android voice engine** (Apache-2.0 code, from
+     the k2-fsa project): native code, installed as an Android text-to-speech
+     engine, so Kokoro becomes available to Firefox (and so to ReadAloud's
+     "Browser voices") and to other Android reading apps. Needs Rockson's
+     approval to download and install it on the test phone, and Rockson sets
+     it as the preferred engine in Android settings himself.
+  2. Step 23 + 25: ReadAloud as an Android app (Capacitor) with sherpa-onnx
+     inside. More work; the result is a single app.
+  3. Chrome on the phone with WebGPU. Chrome is disabled on the test phone;
+     turning it on needs Rockson to accept Chrome's terms.

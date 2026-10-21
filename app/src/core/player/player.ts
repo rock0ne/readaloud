@@ -1,17 +1,30 @@
 // Player state machine and reading loop (spec 8.1, 8.2, 8.5; ADR-14).
-import type { EngineId, PlayerEvent, PlayerState, PositionRecord, Settings, Voice, VoiceEngine } from '../types';
+import type { EngineId, PlayerEvent, PlayerState, PositionRecord, Sentence, Settings, Voice, VoiceEngine } from '../types';
 import type { EngineRegistry } from '../engines/registry';
 import { DocIndex } from '../model';
 import type { DocRecord } from '../types';
 import { clampRate } from '../store/settings';
+import { sha256Hex } from '../util/hash';
 
 export interface PositionStore {
   savePosition(pos: PositionRecord): Promise<void>;
 }
 
 export interface AudioOutput {
-  /** Plays an encoded clip at `rate`; resolves when it ends or `signal` aborts. */
-  play(blob: Blob, rate: number, signal: AbortSignal): Promise<void>;
+  /**
+   * Plays an encoded clip at `rate`; resolves when it ends or `signal` aborts. `onProgress`, if
+   * given, receives the share of the clip played so far (0..1) while it plays.
+   */
+  play(blob: Blob, rate: number, signal: AbortSignal, onProgress?: (fraction: number) => void): Promise<void>;
+  /** Changes the speed of the clip that is playing now. */
+  setRate?(rate: number): void;
+}
+
+/** Stored clips for audio engines (spec 8.4). The Repo implements it. */
+export interface AudioCache {
+  getAudio(key: string): Promise<Blob | undefined>;
+  putAudio(key: string, blob: Blob): Promise<void>;
+  pruneAudio(): Promise<number>;
 }
 
 export interface PlayerDeps {
@@ -21,6 +34,7 @@ export interface PlayerDeps {
   /** Persist a changed engine/voice choice (explicit user pick). */
   saveVoiceChoice?: (engineId: EngineId, voiceId: string) => Promise<void>;
   audio?: AudioOutput;
+  audioCache?: AudioCache;
   now?: () => number;
 }
 
@@ -28,6 +42,29 @@ export const RETRY_DELAY_MS = 500;
 export const POSITION_DEBOUNCE_MS = 1000;
 export const PREV_RESTART_MS = 3000;
 export const STOPPED_MESSAGE = 'Speech stopped at this sentence. Press Play to try again.';
+/** Audio engines: chunks prepared ahead of the one playing (spec 8.3). */
+export const PREFETCH_CHUNKS = 3;
+/** Finished clips kept in memory for replay and previous. */
+export const KEEP_CLIPS = 8;
+const PRUNE_EVERY_PUTS = 50;
+/** Audio engines: sentences of this many words or fewer are made together with a neighbour. */
+export const SHORT_SENTENCE_WORDS = 2;
+/** Longest joined text; stays under Kokoro's split limit (KOKORO_MAX_CHARS). */
+export const UNIT_MAX_CHARS = 300;
+
+/** Consecutive sentences of one block made as one clip; `starts` are character offsets in `text`. */
+interface Unit {
+  first: number;
+  count: number;
+  text: string;
+  starts: number[];
+}
+
+interface Clip {
+  promise: Promise<Blob>;
+  controller: AbortController;
+  ready: boolean;
+}
 
 function abortableSleep(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
@@ -42,6 +79,25 @@ function abortableSleep(ms: number, signal: AbortSignal): Promise<void> {
   });
 }
 
+/** Waits for `p`, or resolves with undefined as soon as `signal` aborts (leaving `p` running). */
+function untilAborted<T>(p: Promise<T>, signal: AbortSignal): Promise<T | undefined> {
+  if (signal.aborted) return Promise.resolve(undefined);
+  return new Promise((resolve, reject) => {
+    const onAbort = () => resolve(undefined);
+    signal.addEventListener('abort', onAbort, { once: true });
+    p.then(
+      (v) => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(v);
+      },
+      (e: unknown) => {
+        signal.removeEventListener('abort', onAbort);
+        reject(e);
+      },
+    );
+  });
+}
+
 export class Player {
   private index: DocIndex | null = null;
   private doc: DocRecord | null = null;
@@ -49,10 +105,17 @@ export class Player {
   private sentenceStartedAt = 0;
   private controller: AbortController | null = null;
   private loop: Promise<void> = Promise.resolve();
+  /** play() waiting for the voice to be chosen; startGen cancels it (ADR-23). */
+  private starting: Promise<void> | null = null;
+  private startGen = 0;
   private listeners = new Set<(e: PlayerEvent) => void>();
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
   private engine: VoiceEngine | null = null;
   private voice: Voice | null = null;
+  /** Audio-engine clips by chunk text, oldest first; all for `clipOwner` (engine|voice). */
+  private clips = new Map<string, Clip>();
+  private clipOwner = '';
+  private cachePuts = 0;
   private _state: PlayerState;
   basicFallback = false;
   private readonly deps: PlayerDeps;
@@ -99,6 +162,7 @@ export class Player {
   async load(doc: DocRecord, startAt?: string): Promise<void> {
     await this.halt('idle');
     this.flushPosition();
+    this.dropClips();
     this.doc = doc;
     this.index = new DocIndex(doc);
     const at = startAt ? this.index.get(startAt) : undefined;
@@ -107,12 +171,23 @@ export class Player {
     if (this.currentSentenceId) this.emit({ type: 'sentence', sentenceId: this.currentSentenceId });
   }
 
-  async play(): Promise<void> {
-    if (!this.index || this.index.order.length === 0) return;
-    if (this._state.status === 'playing' || this._state.status === 'buffering') return;
+  play(): Promise<void> {
+    if (!this.index || this.index.order.length === 0) return Promise.resolve();
+    if (this._state.status === 'playing' || this._state.status === 'buffering') return Promise.resolve();
+    // One start at a time: Play pressed again while the voice is being chosen joins it (ADR-23).
+    this.starting ??= this.start().finally(() => {
+      this.starting = null;
+    });
+    return this.starting;
+  }
+
+  private async start(): Promise<void> {
+    const gen = ++this.startGen;
+    if (!this.index) return;
     if (this._state.status === 'ended' || this.pos >= this.index.order.length) this.pos = 0;
     if (!this.engine || !this.voice) {
       const pick = await this.deps.registry.pick(this.deps.settings());
+      if (gen !== this.startGen) return; // paused, stopped or loaded another document meanwhile
       if (!pick) {
         this.setState({ status: 'error', error: 'No voice is available on this device.' });
         this.emit({ type: 'error', message: 'No voice is available on this device.' });
@@ -134,6 +209,7 @@ export class Player {
   }
 
   pause(): void {
+    this.startGen++; // also cancels a start that is still choosing the voice
     if (this._state.status !== 'playing' && this._state.status !== 'buffering') return;
     this.controller?.abort();
     this.setState({ status: 'paused' });
@@ -150,7 +226,9 @@ export class Player {
   }
 
   stop(): void {
+    this.startGen++;
     this.controller?.abort();
+    this.dropClips();
     this.setState({ status: 'idle' });
     this.flushPosition();
   }
@@ -176,7 +254,9 @@ export class Player {
   }
 
   setRate(r: number): void {
-    this.setState({ rate: clampRate(r) });
+    const rate = clampRate(r);
+    this.setState({ rate });
+    this.deps.audio?.setRate?.(rate);
   }
 
   async setVoice(engineId: EngineId, voiceId: string): Promise<void> {
@@ -218,6 +298,7 @@ export class Player {
   }
 
   private async halt(status: 'idle' | 'paused'): Promise<void> {
+    this.startGen++;
     const running = this._state.status === 'playing' || this._state.status === 'buffering';
     this.controller?.abort();
     if (running) this.setState({ status });
@@ -252,8 +333,12 @@ export class Player {
         const isHeading = block.type === 'heading' && settings.announceHeadings;
         if (isHeading && sentence.index === 0) await abortableSleep(settings.pauseAfterHeadingMs / 2, signal);
         if (signal.aborted) return;
-        for (const chunk of sentence.chunks) {
-          const ok = await this.speakWithRetry(engine, voice, chunk, signal);
+        const unit = engine.kind === 'audio' ? this.unitAt(this.pos) : null;
+        const pieces = unit ? [unit.text] : sentence.chunks;
+        for (const [c, chunk] of pieces.entries()) {
+          const ahead = engine.kind === 'audio' ? this.upcoming(this.pos, c, PREFETCH_CHUNKS) : [];
+          const follow = unit ? (fraction: number) => this.follow(unit, fraction) : undefined;
+          const ok = await this.speakWithRetry(engine, voice, chunk, ahead, signal, follow);
           if (signal.aborted) return;
           if (!ok) {
             // ADR-14: never advance past text that was not confirmed spoken.
@@ -263,20 +348,28 @@ export class Player {
             return;
           }
         }
-        const lastOfBlock = sentence.index === block.sentences.length - 1;
+        if (unit) this.follow(unit, 1);
+        const lastOfBlock = index.order[this.pos]!.sentence.index === block.sentences.length - 1;
         if (isHeading && lastOfBlock) await abortableSleep(settings.pauseAfterHeadingMs, signal);
-        else if (engine.kind === 'direct') await abortableSleep(settings.pauseBetweenSentencesMs, signal);
+        else await abortableSleep(settings.pauseBetweenSentencesMs, signal);
         if (signal.aborted) return;
       }
       this.pos++;
     }
   }
 
-  private async speakWithRetry(engine: VoiceEngine, voice: Voice, text: string, signal: AbortSignal): Promise<boolean> {
+  private async speakWithRetry(
+    engine: VoiceEngine,
+    voice: Voice,
+    text: string,
+    ahead: string[],
+    signal: AbortSignal,
+    follow?: (fraction: number) => void,
+  ): Promise<boolean> {
     for (let attempt = 0; attempt < 2; attempt++) {
       if (signal.aborted) return true;
       try {
-        await this.speakOnce(engine, voice, text, signal);
+        await this.speakOnce(engine, voice, text, ahead, signal, follow);
         return true;
       } catch (e) {
         if (signal.aborted) return true;
@@ -287,7 +380,14 @@ export class Player {
     return false;
   }
 
-  private async speakOnce(engine: VoiceEngine, voice: Voice, text: string, signal: AbortSignal): Promise<void> {
+  private async speakOnce(
+    engine: VoiceEngine,
+    voice: Voice,
+    text: string,
+    ahead: string[],
+    signal: AbortSignal,
+    follow?: (fraction: number) => void,
+  ): Promise<void> {
     const rate = this._state.rate;
     if (engine.kind === 'direct') {
       if (!engine.speak) throw new Error(`${engine.label} cannot speak directly.`);
@@ -295,11 +395,158 @@ export class Player {
       return;
     }
     if (!engine.synthesize || !this.deps.audio) throw new Error(`${engine.label} needs an audio output.`);
-    this.setState({ status: 'buffering' });
-    const blob = await engine.synthesize(text, { voice, rate: 1.0 }, signal);
-    if (signal.aborted) return;
+    this.prefetch(engine, voice, [text, ...ahead]);
+    const clip = this.clip(engine, voice, text);
+    if (!clip.ready) this.setState({ status: 'buffering' });
+    // Pausing stops the wait, not the clip, so Play reuses it.
+    const blob = await untilAborted(clip.promise, signal);
+    if (!blob || signal.aborted) return;
     this.setState({ status: 'playing' });
-    await this.deps.audio.play(blob, rate, signal);
+    await this.deps.audio.play(blob, this._state.rate, signal, follow);
+  }
+
+  /**
+   * Audio engines: Kokoro mispronounces a one- or two-word sentence said on its own ("Four." came
+   * out as "Thor"), so a short sentence is made in one clip with its neighbour in the same block,
+   * and the highlight follows by character share (spec 8.3, ADR-22). A short first sentence joins
+   * the next one; short sentences after a sentence join it.
+   */
+  private unitAt(pos: number): Unit | null {
+    const item = this.index?.order[pos];
+    if (!item) return null;
+    const { block, sentence } = item;
+    const single = (s: Sentence | undefined): s is Sentence => s !== undefined && s.chunks.length === 1;
+    const short = (s: Sentence | undefined): s is Sentence => single(s) && s.speakText.trim().split(/\s+/).length <= SHORT_SENTENCE_WORDS;
+    if (!single(sentence)) return null;
+    const members: Sentence[] = [sentence];
+    let length = sentence.chunks[0]!.length;
+    const add = (s: Sentence): boolean => {
+      if (length + 1 + s.chunks[0]!.length > UNIT_MAX_CHARS) return false;
+      members.push(s);
+      length += 1 + s.chunks[0]!.length;
+      return true;
+    };
+    let k = sentence.index + 1;
+    const next = block.sentences[k];
+    if (short(sentence) && single(next) && add(next)) k++;
+    for (let s = block.sentences[k]; short(s) && add(s); s = block.sentences[++k]);
+    if (members.length === 1) return null;
+    const starts: number[] = [];
+    let at = 0;
+    for (const m of members) {
+      starts.push(at);
+      at += m.chunks[0]!.length + 1;
+    }
+    return { first: pos, count: members.length, text: members.map((m) => m.chunks[0]!).join(' '), starts };
+  }
+
+  /** Moves the highlight through a unit as its clip plays; never backwards. */
+  private follow(unit: Unit, fraction: number): void {
+    let i = 0;
+    for (let j = 1; j < unit.count; j++) if (fraction * unit.text.length >= unit.starts[j]!) i = j;
+    const target = unit.first + i;
+    if (target <= this.pos) return;
+    this.pos = target;
+    this.sentenceStartedAt = this.deps.now?.() ?? Date.now();
+    const id = this.currentSentenceId;
+    if (!id) return;
+    this.setState({ sentenceId: id });
+    this.emit({ type: 'sentence', sentenceId: id });
+    this.schedulePosition();
+  }
+
+  /** What an audio engine is given for the sentence at `pos`: its unit's text, or its chunks. */
+  private pieces(pos: number): string[] {
+    const unit = this.unitAt(pos);
+    return unit ? [unit.text] : (this.index?.order[pos]?.sentence.chunks ?? []);
+  }
+
+  /** The position after the sentence (or unit) at `pos`. */
+  private after(pos: number): number {
+    const unit = this.unitAt(pos);
+    return unit ? unit.first + unit.count : pos + 1;
+  }
+
+  /** The next `n` texts after piece `piece` at sentence `from`, in reading order (audio engines). */
+  private upcoming(from: number, piece: number, n: number): string[] {
+    const out: string[] = [];
+    const index = this.index;
+    if (!index) return out;
+    const skipCode = this.deps.settings().skipCodeBlocks;
+    let list = this.pieces(from).slice(piece + 1);
+    for (let p = from; ; ) {
+      for (const text of list) {
+        if (out.length >= n) return out;
+        out.push(text);
+      }
+      p = this.after(p);
+      const item = index.order[p];
+      if (!item) return out;
+      list = item.block.type === 'code' && skipCode ? [] : this.pieces(p);
+    }
+  }
+
+  /** The clip for `text`, started if needed. Clips belong to one engine and voice. */
+  private clip(engine: VoiceEngine, voice: Voice, text: string): Clip {
+    const owner = `${engine.id}|${voice.id}`;
+    if (owner !== this.clipOwner) {
+      this.dropClips();
+      this.clipOwner = owner;
+    }
+    const existing = this.clips.get(text);
+    if (existing) {
+      this.clips.delete(text); // re-insert as newest
+      this.clips.set(text, existing);
+      return existing;
+    }
+    const controller = new AbortController();
+    const clip: Clip = { controller, ready: false, promise: this.fetchClip(engine, voice, text, controller.signal) };
+    clip.promise.then(
+      () => void (clip.ready = true),
+      () => {
+        // A failed clip is made again on retry.
+        if (this.clips.get(text) === clip) this.clips.delete(text);
+      },
+    );
+    this.clips.set(text, clip);
+    return clip;
+  }
+
+  /** Starts clips for `window` and cancels unfinished ones outside it (after a seek). */
+  private prefetch(engine: VoiceEngine, voice: Voice, window: string[]): void {
+    for (const text of window) this.clip(engine, voice, text);
+    const wanted = new Set(window);
+    let kept = 0;
+    for (const [text, c] of [...this.clips].reverse()) {
+      if (wanted.has(text)) continue;
+      if (!c.ready) {
+        c.controller.abort();
+        this.clips.delete(text);
+      } else if (++kept > KEEP_CLIPS) this.clips.delete(text);
+    }
+  }
+
+  private dropClips(): void {
+    for (const c of this.clips.values()) c.controller.abort();
+    this.clips.clear();
+  }
+
+  /** Cache first (spec 8.4), then the engine. */
+  private async fetchClip(engine: VoiceEngine, voice: Voice, text: string, signal: AbortSignal): Promise<Blob> {
+    if (!engine.synthesize) throw new Error(`${engine.label} cannot make audio.`);
+    const cache = this.deps.audioCache;
+    const key = `${engine.id}|${voice.id}|1.0|${await sha256Hex(new TextEncoder().encode(text))}`;
+    const hit = cache ? await cache.getAudio(key).catch(() => undefined) : undefined;
+    if (hit) return hit;
+    signal.throwIfAborted();
+    const blob = await engine.synthesize(text, { voice, rate: 1.0 }, signal);
+    if (cache) {
+      void cache
+        .putAudio(key, blob)
+        .then(() => (++this.cachePuts % PRUNE_EVERY_PUTS === 0 ? cache.pruneAudio() : 0))
+        .catch(() => undefined);
+    }
+    return blob;
   }
 
   private positionRecord(): PositionRecord | null {

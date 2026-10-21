@@ -3,9 +3,9 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import type { EngineId, Settings, Voice } from '../../core/types';
 import { RATE_MAX, RATE_MIN } from '../../core/store/settings';
 import { DataTransfer } from '../components/DataTransfer';
+import { KokoroDownload } from '../components/KokoroDownload';
 import { VoicePicker, shortVoiceName } from '../components/VoicePicker';
-import { isEdge } from '../hooks/useDevice';
-import { useServices, useSettings } from '../services';
+import { useKokoro, useServices, useSettings } from '../services';
 
 const CHECK_SENTENCES = [
   'This is the first test sentence, read by the voice you chose.',
@@ -21,15 +21,16 @@ interface CheckResult {
 }
 
 const engineLabels: Record<EngineId, string> = {
-  webspeech: 'Browser voices (Edge natural voices)',
-  azure: 'Azure Speech (Phase 2, not built yet)',
-  kokoro: 'Offline Kokoro voices (Phase 4, not built yet)',
+  kokoro: 'Kokoro natural voices (made on this device)',
+  webspeech: 'Browser voices (Microsoft, Google or Samsung)',
+  azure: 'Azure Speech (dropped, ADR-21)',
 };
 
 export function SettingsScreen() {
   const services = useServices();
   const { registry } = services;
   const s = useSettings();
+  const kokoroInstalled = useKokoro().installed;
   const [voices, setVoices] = useState<Voice[]>([]);
   const [chosen, setChosen] = useState<Voice | null>(null);
   const [check, setCheck] = useState<CheckResult[] | null>(null);
@@ -46,14 +47,12 @@ export function SettingsScreen() {
       setChosen(pick?.voice ?? null);
     })();
     return () => abort.current?.abort();
-  }, [registry, services]);
-
-  const natural = voices.filter((v) => v.quality === 'neural');
+  }, [registry, services, kokoroInstalled]);
 
   const speakAll = async (sentences: string[], record: boolean) => {
     if (!chosen) return;
     const engine = registry.get(chosen.engineId);
-    if (!engine?.speak) return;
+    if (!engine) return;
     abort.current?.abort();
     const ac = new AbortController();
     abort.current = ac;
@@ -63,7 +62,11 @@ export function SettingsScreen() {
     for (let i = 0; i < sentences.length; i++) {
       const t0 = performance.now();
       try {
-        await engine.speak(sentences[i]!, { voice: chosen, rate: 1 }, ac.signal);
+        if (engine.speak) await engine.speak(sentences[i]!, { voice: chosen, rate: 1 }, ac.signal);
+        else if (engine.synthesize) {
+          const clip = await engine.synthesize(sentences[i]!, { voice: chosen, rate: 1 }, ac.signal);
+          await services.audio.play(clip, 1, ac.signal);
+        }
         if (ac.signal.aborted) break;
         results.push({ sentence: i + 1, ok: true, seconds: (performance.now() - t0) / 1000 });
       } catch (e) {
@@ -106,13 +109,9 @@ export function SettingsScreen() {
 
       <section>
         <h2>Voice</h2>
-        <p class="hint">
-          {natural.length > 0
-            ? `${natural.length} natural voices found in this browser.`
-            : isEdge()
-              ? 'No natural voices found. Edge needs an internet connection for its natural voices.'
-              : 'No natural voices found. Open this app in Microsoft Edge for free natural voices.'}
-        </p>
+        <div class="hint">
+          <KokoroDownload removable />
+        </div>
         <div class="row-field">
           <VoicePicker
             voices={voices}
@@ -137,7 +136,7 @@ export function SettingsScreen() {
           <div class={`check-result ${passed ? 'pass' : check.some((r) => !r.ok) ? 'fail' : ''}`} aria-live="polite">
             <strong>Voice check: </strong>
             {check.map((r) => (r.ok ? `sentence ${r.sentence} spoke in ${r.seconds?.toFixed(1)} s` : `sentence ${r.sentence} failed (${r.error})`)).join('; ')}
-            {passed && '. All three finished. If they also sounded natural to you, Edge natural voices work on this device.'}
+            {passed && '. All three finished. If they also sounded natural to you, this voice works on this device.'}
           </div>
         )}
 
@@ -175,7 +174,7 @@ export function SettingsScreen() {
             }}
           />
         </label>
-        <p class="hint">Browser voices are capped at 2.0×; higher speeds arrive with Azure and offline voices.</p>
+        <p class="hint">Kokoro voices play up to 3.0×. Browser voices are capped at 2.0×.</p>
         <label class="field">
           Language
           <select value={s.locale} onChange={(e) => update({ locale: e.currentTarget.value })}>
@@ -231,8 +230,9 @@ export function SettingsScreen() {
       <section>
         <h2>Your data</h2>
         <p>
-          Documents, flags and reading positions stay on this device. With Edge natural voices, the text of each sentence is sent to Microsoft
-          to be spoken. Export a JSON file to move positions and flags between your PC and phone.
+          Documents, flags and reading positions stay on this device. Kokoro voices are made on this device, so your text never leaves it.
+          Browser voices may send each sentence to Microsoft or Google to be spoken. Export a JSON file to move positions and flags between
+          your PC and phone.
         </p>
         <div class="row-field">
           <DataTransfer />

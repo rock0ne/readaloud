@@ -1,0 +1,6 @@
+# Node-only native builds pulled in by kokoro-js (via transformers.js). The app runs Kokoro in
+# the browser, so these install scripts are not needed and stay switched off.
+allowBuilds:
+  onnxruntime-node: false
+  protobufjs: false
+  sharp: false

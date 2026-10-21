@@ -74,6 +74,25 @@ describe('U11 player', () => {
     expect(saved.at(-1)?.sentenceId).toBe('b3.s0');
   });
 
+  it('a second Play while the voice is being chosen joins the first (ADR-23)', async () => {
+    const { engine, player } = setup();
+    await player.load(makeDoc(sampleBlocks));
+    await Promise.all([player.play(), player.play()]);
+    await player.settled;
+    expect(engine.spoken).toEqual(['Chapter One', 'First sentence here.', 'Second sentence here.', 'Final paragraph.']);
+  });
+
+  it('Pause while the voice is being chosen cancels the start', async () => {
+    const { engine, player } = setup();
+    await player.load(makeDoc(sampleBlocks));
+    const started = player.play();
+    player.pause();
+    await started;
+    await player.settled;
+    expect(engine.spoken).toEqual([]);
+    expect(player.state.status).not.toBe('playing');
+  });
+
   it('reads code blocks when skipCodeBlocks is off', async () => {
     const { engine, player } = setup({ skipCodeBlocks: false });
     await player.load(makeDoc(sampleBlocks));

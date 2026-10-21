@@ -7,7 +7,7 @@ interface Props {
   locale: string;
 }
 
-const engineName: Record<EngineId, string> = { webspeech: 'Browser', azure: 'Azure', kokoro: 'Offline' };
+const engineName: Record<EngineId, string> = { kokoro: 'Kokoro', webspeech: 'Browser', azure: 'Azure' };
 
 export function shortVoiceName(v: Voice): string {
   // "Microsoft Sonia Online (Natural) - English (United Kingdom)" -> "Sonia (United Kingdom)"
@@ -20,7 +20,7 @@ export function VoicePicker({ voices, value, onPick, locale }: Props) {
   const relevant = voices.filter((v) => v.lang.toLowerCase().startsWith(lang));
   const others = voices.filter((v) => !v.lang.toLowerCase().startsWith(lang));
   const groups: Array<[string, Voice[]]> = [];
-  for (const engine of ['webspeech', 'azure', 'kokoro'] as EngineId[]) {
+  for (const engine of ['kokoro', 'webspeech', 'azure'] as EngineId[]) {
     const n = relevant.filter((v) => v.engineId === engine && v.quality === 'neural');
     const b = relevant.filter((v) => v.engineId === engine && v.quality !== 'neural');
     if (n.length) groups.push([`${engineName[engine]} · Natural`, n]);

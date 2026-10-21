@@ -193,6 +193,7 @@ textarea {
 
 .bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   padding: 10px 16px;
@@ -257,6 +258,10 @@ textarea {
   justify-content: flex-end;
   gap: 8px;
   margin-top: 16px;
+}
+
+.dialog .paste-field {
+  max-width: none;
 }
 
 .dialog .lost {
@@ -447,4 +452,17 @@ textarea {
     scroll-behavior: auto !important;
     transition: none !important;
   }
+}
+
+.kokoro-download {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.kokoro-download progress {
+  flex: 1;
+  min-width: 160px;
+  max-width: 320px;
 }

@@ -20,6 +20,16 @@ const EXT: Record<string, DocFormat> = {
   epub: 'epub',
 };
 
+const PASTE_TITLE_MAX = 60;
+
+/** Title for pasted text (ADR-24): the one typed, else the first line, shortened; never a path. */
+export function pastedTitle(text: string, typed = ''): string {
+  const first = typed.trim() || (text.trim().split(/\r?\n/)[0] ?? '').trim();
+  const clean = first.replace(/[\\/]+/g, '-');
+  if (!clean) return 'Pasted text';
+  return clean.length > PASTE_TITLE_MAX ? `${clean.slice(0, PASTE_TITLE_MAX - 1).trimEnd()}…` : clean;
+}
+
 export function detectFormat(name: string): DocFormat | null {
   const ext = name.toLowerCase().split('.').pop() ?? '';
   return EXT[ext] ?? null;

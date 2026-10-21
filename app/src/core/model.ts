@@ -52,8 +52,13 @@ export class DocIndex {
     return this.order.find((o) => o.block.chapterIndex === index);
   }
 
-  findByQuote(quote: string): OrderedSentence | undefined {
-    return this.order.find((o) => o.sentence.text === quote);
+  findAllByQuote(quote: string): OrderedSentence[] {
+    return this.order.filter((o) => o.sentence.text === quote);
+  }
+
+  /** Text of the sentences either side of one, in reading order. */
+  neighbours(o: OrderedSentence): { before: string; after: string } {
+    return { before: this.order[o.ordinal - 1]?.sentence.text ?? '', after: this.order[o.ordinal + 1]?.sentence.text ?? '' };
   }
 }
 

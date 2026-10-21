@@ -14,78 +14,89 @@ One line per step. Keep it short. Newest at the bottom of each section.
 | 6 EPUB | done | U6 | 2026-10-20 | nav + NCX, DRM refused, progress |
 | 7 DOCX | done | U7 | 2026-10-20 | style warnings merged (ADR-20) |
 | 8 PDF | done | U8 + browser | 2026-10-21 | buffer-detach bug fixed (ADR-20) |
-| 9 Storage | done | U9 | 2026-10-20 | summaries, bytes, ordinal (ADR-19); atomic add (ADR-20) |
-| 10 Web Speech + registry | done | U10 + Edge gate | 2026-10-21 | gate: see M3 |
-| 11 Player | done | U11 | 2026-10-20 | never advances on unheard text (ADR-14) |
-| 12 Library | done | browser | 2026-10-21 | five formats added in one go |
-| 13 Reader | done | browser + Edge | 2026-10-21 | |
-| 14 Flags + corrections | done | U12 + browser | 2026-10-21 | export matches spec 10.2 |
+| 9 Storage | done | U9 | 2026-10-20 | summaries, bytes, ordinal (ADR-19); atomic add (ADR-20); atomic re-read (ADR-23) |
+| 10 Web Speech + registry | done | U10 + Edge gate | 2026-10-21 | gate: see M3; registry rule changed (ADR-22) |
+| 11 Player | done | U11 | 2026-10-21 | never advances on unheard text (ADR-14); one pending start (ADR-23) |
+| 12 Library | done | browser + phone | 2026-10-21 | five formats; Paste text added (ADR-24) |
+| 13 Reader | done | browser + Edge | 2026-10-21 | Media Session added (ADR-22) |
+| 14 Flags + corrections | done | U12 + browser | 2026-10-21 | repeated quotes placed by context (ADR-23) |
 | 15 Resume + JSON | done | U13 | 2026-10-20 | browser round trip not yet done (M7) |
 | 16 PWA, hints, offline | done | browser | 2026-10-21 | update toast added; install = M8 |
+| 17–20 Azure | dropped | | 2026-10-21 | ADR-21 |
+| 22 PWA on the S21+ | partly | phone | 2026-10-21 | runs in Firefox; upload works; voice too slow (ADR-24); not yet on the home screen |
+| 24 Kokoro web engine | done (PC) | U-kokoro + Edge M11 | 2026-10-21 | main voice, bf_emma (ADR-22) |
 | Phase 1 gate | waiting on Rockson | | | see below |
 
 ## Phase 1 gate
 
-- [x] U1–U13 green (74 tests), `pnpm build` clean, bundle budget met.
+- [x] Unit tests green: 93 tests in 13 files on 2026-10-21, covering the
+      Kokoro work (ADR-22) and the second-review fixes (ADR-23). `pnpm build`
+      clean, bundle budget met.
 - [ ] M1–M8 done in Edge. Done or partly done: M2 (sample PDF), M3, M4, M5,
-      M6. Waiting on Rockson: M1 and M2 with his chapter, M3 by ear, M8
-      install. Not yet run in a browser: M7.
-- [ ] A voice Rockson accepts is in the app (ADR-21: not Microsoft).
+      M6. Waiting on Rockson: M1 and M2 with his chapter, M8 install, and
+      everything by ear. Not yet run in a browser: M7. Still unchecked in
+      M5/M6 (not only waiting on Rockson): click to seek by hand, R, [ and ],
+      speed 2.0, a 15-second sentence, F during playback.
+- [ ] A voice Rockson accepts is in the app: Kokoro is built in (ADR-22);
+      Rockson has not yet listened to it inside the app.
 - [ ] Rockson has listened to one chapter of his book in the installed app,
       flagged mistakes with F, and exported `corrections.md`.
 
 ## Manual checks
 
-Run on 2026-10-21. "Pane" is the Chromium browser pane in the Claude app (only
-Basic Windows voices). "Edge" is Edge 155, headless and muted, with a
-throwaway profile, driven over the remote-debugging port. Sound was never
-heard, so every "by ear" item is still Rockson's.
+Run on 2026-10-21. "Pane" is the Chromium browser pane in the Claude app.
+"Edge" is Edge 155, headless and muted, with a throwaway profile, driven over
+the remote-debugging port. "Phone" is the S21+ (SM-G996B, Android 15) in
+Firefox 158, reached over USB (`adb reverse`). Sound was never heard, so
+every "by ear" item is still Rockson's.
 
-- **M1 docx**: generated sample only. Heading became a chapter, paragraphs
-  intact. Real chapter: waiting on Rockson.
-- **M2 pdf**: generated two-page sample. Running header and page numbers
-  dropped, wrapped lines joined, headings found, title from metadata, the
-  warning shown once. Real PDF: waiting on Rockson.
-- **M3 voices**: Edge lists 321 natural voices, Natural first. **Read 3
-  sentences** spoke all three (5.7 s, 5.7 s, 6.1 s, with word boundaries).
-  Sonia and Ryan each spoke a full test sentence (4.8 s and 4.6 s). The
-  automatic choice is Libby, the first natural en-GB voice, as spec 7.1 says.
-  Pane: only Basic voices and the H1 banner. By ear: waiting on Rockson.
+- **M1 docx**: generated sample only. Real chapter: waiting on Rockson.
+- **M2 pdf**: generated two-page sample. Real PDF: waiting on Rockson.
+- **M3 voices**: now Kokoro. Edge: Emma is chosen automatically; the passage
+  was read with no gaps after the first sentence; first audio about 0.7 s
+  after Play. Each clip was checked with Whisper and is word-exact (after the
+  short-sentence fix, ADR-22). By ear: waiting on Rockson.
 - **M4 library**: all five formats added at once; delete works; errors appear
-  as toasts. Duplicate detection and large-EPUB progress are unit-tested only.
-- **M5 reader**: Edge: Play spoke the heading, paused, moved on; Pause held
-  the sentence. Pane: arrow keys, F, N and G work; Contents jumps to a nested
-  EPUB entry. Not yet checked: click to seek, R, [ and ], speed 2.0 by ear,
-  and a 15-second sentence by ear.
-- **M6 flags**: F and N flag, N opens the note, Ctrl+Enter saves, flagged
-  sentences are underlined, `corrections.md` matches spec 10.2. Not yet
-  checked: F during playback.
+  as toasts. Paste text: pane, text became "Paste check" and opened. Phone:
+  the Android file picker offered `.docx`, `.md` and `.txt`; three files were
+  added at once.
+- **M5 reader**: Edge: Play, Pause, the highlight follows. Pane: arrow keys,
+  F, N and G; Contents jumps to a nested EPUB entry. Not yet checked: see
+  the gate above.
+- **M6 flags**: F and N flag, N opens the note, Ctrl+Enter saves,
+  `corrections.md` matches spec 10.2. F during playback not yet checked.
 - **M7 resume**: unit-tested only.
-- **M8 PWA**: manifest, icons, service worker (25 files precached) and
-  Content Security Policy are live. The update toast was shown after a
-  simulated update. Install and offline relaunch: waiting on Rockson.
-- **M10 mobile emulation** (Phase 3 check, done early): no sideways scroll at
-  375 px; transport buttons 48 px; FLAG 96×56 always visible; the bottom
-  sheet now ends at the controls (ADR-20).
+- **M8 PWA**: manifest, icons, service worker (28 files precached, 25 MB with
+  the voice runtime). Install: waiting on Rockson.
+- **M10 mobile emulation**: no sideways scroll at 375 px (checked before
+  Paste text was added; the header now wraps instead of overflowing).
+- **M11 offline (Kokoro)**: Edge with every request blocked (also
+  localhost) and the browser offline: the page came from the service worker,
+  and the voice made 8 new clips and read the passage to the end.
+- **Kokoro remove**: Settings, "Remove from this device": model (4 files)
+  and 11 voices deleted; the browser voice took over; downloading again took
+  13–20 s.
+- **Media Session**: Edge: title and chapter set; state "playing", then
+  "paused" after Pause.
+- **Phone voice**: downloaded in about 10 s; reported ready "on this
+  device's processor"; speed in the next section.
 
 ## Needs Rockson
 
-1. **Open the app.** Double-click `app/start-readaloud.cmd`. It serves the app
-   at `http://127.0.0.1:4173` and opens Edge. Always use that address: each
-   address keeps its own library.
-2. **Choose a voice by ear (ADR-21).** Microsoft voices are rejected. Listen
-   to the eight samples in `Fable/voice-samples-20261021/` and say which, if
-   any, sounds natural enough. That choice decides the next engine.
-3. **Install (M8).** In Edge use "Install ReadAloud" from the address bar or
-   the menu. Close the launcher window and reopen the installed app: the
-   library should still open.
-4. **Your chapter (M1, M2 and the Phase 1 gate).** Put one chapter as `.docx`
-   and as PDF (and `.md` if you have it) in `app/test/fixtures/private/`, which
-   git ignores. Then listen to it, press F on mistakes, and export
-   `corrections.md`.
-5. **From Step 17 (Phase 2):** an Azure AI Speech resource (Free F0) in the
-   production tenant, with its region and key typed into Settings on each
-   device.
+1. **Listen on the PC.** Double-click `app/start-readaloud.cmd`. In Settings,
+   press "Download natural voice" (330 MB, once), then open a document and
+   press Play. Say whether Emma is right or pick another voice.
+2. **Phone route (ADR-24).** In Firefox the voice is too slow for continuous
+   reading (0.68x real time). Decide whether to install the sherpa-onnx
+   Kokoro Android voice engine on the test phone to measure native speed.
+3. **Custom voices (ADR-24).** SAPI 5 voices cannot appear in this app.
+   Choose: more Kokoro voices inside ReadAloud, a separate SAPI 5 adapter so
+   Kokoro works in other Windows programs, or both.
+4. **Install (M8).** In Edge use "Install ReadAloud" from the address bar or
+   the menu. Close the launcher window and reopen the installed app.
+5. **Your chapter (M1, M2 and the Phase 1 gate).** Put one chapter as `.docx`
+   and as PDF in `app/test/fixtures/private/`, which git ignores. Then listen,
+   press F on mistakes, and export `corrections.md`.
 6. **Optional:** install Node 22 LTS. Today the build uses a portable Node in
    a temporary folder (see handoff section 7).
 
@@ -93,17 +104,22 @@ heard, so every "by ear" item is still Rockson's.
 
 - The toolchain lives in a temporary scratchpad folder. If it is cleaned up,
   the builder needs Node again before `pnpm` works (handoff section 7).
-- The app still speaks with Edge's Microsoft voices, which Rockson rejected
-  on 2026-10-21 (ADR-21). They stay only until a replacement engine works.
-- Delete asks with the browser's own confirm box. It works in Edge and on
-  Android, but the Claude browser pane dismisses it, so tests there must stub
-  `window.confirm`.
+- Edge's Microsoft voices stay as the fallback ("Browser voices") until the
+  natural voice is downloaded. Removing them is Rockson's call (ADR-21).
+- The app does not check its own speech with speech recognition (ADR-21,
+  ADR-22). Rockson's ear is the check.
+- Delete and Remove ask with the browser's own confirm box. The Claude
+  browser pane dismisses it, so tests there must stub `window.confirm`.
+- The phone keeps locking after 5 minutes during tests; ask Rockson before
+  changing any phone setting.
 
 ## Versions installed
 
 ```
-dependencies:    idb 8.0.4, jszip 3.10.2, mammoth 1.13.0, marked 18.1.1,
-                 pdfjs-dist 6.4.299, preact 10.29.8
+dependencies:    idb 8.0.4, jszip 3.10.2, kokoro-js 1.2.1, mammoth 1.13.0,
+                 marked 18.1.1, pdfjs-dist 6.4.299, preact 10.29.8
+  via kokoro-js: @huggingface/transformers 3.8.1,
+                 onnxruntime-web 1.22.0-dev.20250409, phonemizer 1.2.1
 devDependencies: @preact/preset-vite 2.10.6, @types/node 24.19.2,
                  fake-indexeddb 6.2.6, jsdom 30.1.3, typescript 7.0.2,
                  vite 8.3.4, vite-plugin-pwa 2.0.0, vitest 5.0.5
@@ -114,12 +130,22 @@ runtime:         Node 22.23.3 (portable), pnpm 11.19 via corepack
 
 | Measure | Result | Budget |
 |---|---|---|
-| Main JS bundle, gzipped | 27.5 kB | < 250 kB |
+| Main JS bundle, gzipped | 27.5 kB (before Kokoro; the voice loads in its own worker) | < 250 kB |
 | Parse a 500k-char `.docx` (Node + jsdom) | 0.97 s | < 5 s |
 | Parse a 1 MB EPUB (Node + jsdom) | 0.86 s | < 6 s |
-| Edge natural voice, one ~80-char sentence | about 5.7 s, start after 0.1–0.5 s | — |
+| Kokoro download, PC / phone | 13–20 s / about 10 s for 326 MB | — |
+| Kokoro first audio after Play, PC | about 0.7 s (with warm-up) | — |
 
-- Azure: dropped (ADR-21).
+Kokoro speed, 2026-10-21 ("x real time" = seconds of speech made per second;
+below 1 means reading has to keep pausing). Two sentences, voice bf_emma.
+
+| Device and browser | How | Speed |
+|---|---|---|
+| PC, RTX 3060 | WebGPU, fp32 (what the app uses on the PC) | 4.1x |
+| PC, Ryzen 9 5950X | wasm fp32, 4 threads / 8 threads | 1.1x / 1.5x |
+| PC, Ryzen 9 5950X | wasm q8, 4 threads | 0.64x |
+| S21+, Firefox 158 | wasm fp32, 1 thread (not isolated) | 0.2x |
+| S21+, Firefox 158 | wasm fp32, 4 threads (COEP require-corp) | 0.68x |
 
 Voice listening test, 2026-10-21. One 77-word passage, PC = Ryzen 9 5950X,
 RTX 3060 12 GB. "Word check" = Whisper large-v3-turbo transcript against the
@@ -127,9 +153,7 @@ text, ignoring its spelling of numbers and US spellings.
 
 | Sample | Runs on | Speed vs real time | Word check |
 |---|---|---|---|
-| Kokoro bf_emma, bm_george, af_heart, af_bella | CPU, browser, phone | about 5× faster | all exact |
+| Kokoro bf_emma, bm_george, af_heart, af_bella | CPU (Node) | about 5× faster | all exact |
 | Qwen3 designed British woman, British man | RTX 3060 | about 3.7× slower | exact |
 | Qwen3 built-in Ryan | RTX 3060 | about 3.6× slower | changed "until" to "in the" |
 | Qwen3 built-in Aiden | RTX 3060 | about 3.8× slower | "mornings" for "morning" |
-
-- Kokoro speed on the phone: not measured yet.
