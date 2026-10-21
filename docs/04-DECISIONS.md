@@ -216,8 +216,11 @@ Built (Step 24, brought forward from Phase 4):
   page reached 0.68x with 4 threads. In the app the voice then stayed on
   "Loading" for over 5 minutes. After switching back to `credentialless` the
   same stall happened twice more, and cleared only after a rebuild and two
-  Firefox restarts. So the cause is not known: it may be a stale page left
-  over from the header switch, not the threads. The app stays on
+  Firefox restarts. Likely cause, found later the same day (ADR-25): each
+  rebuild left Firefox running the old page after the new version had
+  deleted the old files, so the voice worker could not load them. The
+  threads were probably not the problem; `require-corp` was not tried
+  again. The app stays on
   `credentialless`, which is the setting verified to read on the phone. The
   model download works under both: it is a CORS fetch. A static server used
   instead of `pnpm preview` must send the same two headers.
@@ -342,3 +345,25 @@ What this changes:
      inside. More work; the result is a single app.
   3. Chrome on the phone with WebGPU. Chrome is disabled on the test phone;
      turning it on needs Rockson to accept Chrome's terms.
+
+## ADR-25 · 2026-10-21 · Reload when a new version takes over
+
+Context: the service worker updates itself (`autoUpdate`, spec 12): the new
+version takes over open pages at once and deletes the old version's files.
+A page still running the old code then fails on anything it has not loaded
+yet. On the S21+ adding a Markdown file failed with "error loading
+dynamically imported module …/md-….js", and the Kokoro voice stalled on
+"Loading" after each rebuild (ADR-22). The old toast "Update available.
+Reload the app" came too late: the page was already broken.
+
+Decision: the page reloads when a new version takes over. If nothing is
+being read, it reloads at once. While reading, it says "ReadAloud was
+updated. It reloads when you pause or stop." and reloads then, so no sentence
+is cut off; the voice and the open document are already loaded, so reading
+carries on until then. The first install, which also changes the
+controller, does not reload. Code: `app/src/ui/update.ts`, tested in
+`app/test/update.test.ts`. The reading position is saved as it goes
+(spec 9), so a reload loses nothing but an unsaved note being typed.
+
+Updates only come when the app is rebuilt on the PC, so this is rare in use.
+

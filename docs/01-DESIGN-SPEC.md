@@ -893,7 +893,9 @@ motion respected.
 `vite-plugin-pwa` with `registerType: 'autoUpdate'`, manifest name
 "ReadAloud", short name "ReadAloud", display `standalone`, theme colour from the
 app, 192/512 icons. Precache the app shell; do not cache Azure responses in the
-SW (the IndexedDB cache does that). Show a toast "Update available, reload".
+SW (the IndexedDB cache does that). When a new version takes over an open
+page, the page reloads: at once, or when reading pauses or stops, with a toast
+saying so (ADR-25).
 
 ---
 

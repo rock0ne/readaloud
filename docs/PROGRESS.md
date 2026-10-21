@@ -21,7 +21,7 @@ One line per step. Keep it short. Newest at the bottom of each section.
 | 13 Reader | done | browser + Edge | 2026-10-21 | Media Session added (ADR-22) |
 | 14 Flags + corrections | done | U12 + browser | 2026-10-21 | repeated quotes placed by context (ADR-23) |
 | 15 Resume + JSON | done | U13 | 2026-10-20 | browser round trip not yet done (M7) |
-| 16 PWA, hints, offline | done | browser | 2026-10-21 | update toast added; install = M8 |
+| 16 PWA, hints, offline | done | browser | 2026-10-21 | reloads when a new version takes over (ADR-25); install = M8 |
 | 17–20 Azure | dropped | | 2026-10-21 | ADR-21 |
 | 22 PWA on the S21+ | partly | phone | 2026-10-21 | runs in Firefox; upload works; voice too slow (ADR-24); not yet on the home screen |
 | 24 Kokoro web engine | done (PC) | U-kokoro + Edge M11 | 2026-10-21 | main voice, bf_emma (ADR-22) |
@@ -29,8 +29,9 @@ One line per step. Keep it short. Newest at the bottom of each section.
 
 ## Phase 1 gate
 
-- [x] Unit tests green: 93 tests in 13 files on 2026-10-21, covering the
-      Kokoro work (ADR-22) and the second-review fixes (ADR-23). `pnpm build`
+- [x] Unit tests green: 97 tests in 14 files on 2026-10-21, covering the
+      Kokoro work (ADR-22), the second-review fixes (ADR-23) and reloading
+      on update (ADR-25). `pnpm build`
       clean, bundle budget met.
 - [ ] M1–M8 done in Edge. Done or partly done: M2 (sample PDF), M3, M4, M5,
       M6. Waiting on Rockson: M1 and M2 with his chapter, M8 install, and
@@ -83,8 +84,8 @@ every "by ear" item is still Rockson's.
   three sentences finished 26.0 s, 20.2 s and 21.6 s after each started;
   the status then says speech is made "about 3.1× slower than it plays, so
   reading will keep pausing". Not heard. Before that, the voice stalled on
-  "Loading" three times (ADR-22); it cleared after a rebuild and two
-  Firefox restarts.
+  "Loading" three times (ADR-22): an old page left running after an update
+  (ADR-25).
 
 ## Needs Rockson
 

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
-import { createServices, ServicesContext, useSettings, type Services } from './services';
+import { createServices, ServicesContext, toast, useServices, useSettings, type Services } from './services';
+import { reloadOnUpdate, STARTED_CONTROLLED } from './update';
 import { useRoute } from './routes';
 import { Library } from './screens/Library';
 import { Reader } from './screens/Reader';
@@ -14,6 +15,15 @@ function Theme() {
     else root.setAttribute('data-theme', s.theme);
     root.style.setProperty('--reader-font', `${s.fontSizePx}px`);
   }, [s.theme, s.fontSizePx]);
+  return null;
+}
+
+function ReloadOnUpdate() {
+  const { player } = useServices();
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    return reloadOnUpdate(navigator.serviceWorker, STARTED_CONTROLLED, player, () => location.reload(), toast);
+  }, [player]);
   return null;
 }
 
@@ -42,6 +52,7 @@ export function App() {
   return (
     <ServicesContext.Provider value={services}>
       <Theme />
+      <ReloadOnUpdate />
       {route.name === 'read' ? (
         <Reader key={route.docId} docId={route.docId} />
       ) : route.name === 'settings' ? (
