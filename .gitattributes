@@ -1,0 +1,8 @@
+# Line endings that every checkout keeps, whatever the platform (ADR-29):
+# Windows scripts need CRLF, shell scripts need LF.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+app/windows/README.txt text eol=crlf
+*.sh text eol=lf
+app/android/gradlew text eol=lf

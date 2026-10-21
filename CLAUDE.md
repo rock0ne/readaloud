@@ -39,8 +39,12 @@ matter for the step you are on.
   them means bumping the schema version and writing a migration.
 - Do not build later phases early. No backend, no server, no accounts other than
   the user's own Azure key. Do not use `edge-tts` or any undocumented endpoint.
-- Do not deploy or publish anywhere. The PWA is installed locally from `pnpm
-  preview` or a local static server; the Android build goes to the phone by adb.
+- Publish only where ADR-29 says: the public repository
+  `github.com/rock0ne/readaloud`, its GitHub Pages site (built by
+  `.github/workflows/pages.yml`) and its Releases (the Windows zip from
+  `app/windows/package.ps1`, the APK signed with Rockson's own key). Nowhere
+  else. Never commit book text, a signing key or its password; commits use
+  Rockson's GitHub no-reply address.
 - When a step needs something only Rockson can supply (an Azure key, a sample
   chapter `.docx`, a voice preference), finish everything else in the step,
   write the ask in `docs/PROGRESS.md` under "Needs Rockson", and continue with
@@ -55,6 +59,8 @@ pnpm dev          # Vite dev server; open the URL in Microsoft Edge
 pnpm test         # vitest, once
 pnpm build        # production build to app/dist
 pnpm preview      # serve app/dist locally; install the PWA from Edge here
+start-readaloud.cmd   # serve app/dist with Windows PowerShell, no Node (ADR-29)
+powershell -File windows/package.ps1   # the Windows zip, into app/release/
 ```
 
 Android (Phase 3b only) is built in **WSL Ubuntu**, never in Windows. See

@@ -6,3 +6,4 @@ app/dev-dist/
 app/test/fixtures/private/
 *.local
 .claude/
+app/release/

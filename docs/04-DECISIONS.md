@@ -485,3 +485,59 @@ measured the same (below 1x for most of it). Thread counts 2, 4, 6 and 8 gave
 no clear gain (results moved by 40% between two runs of the same count), so
 it stays at 4.
 
+## ADR-29 · 2026-10-21 · Published on GitHub for anyone to use
+
+Context: Rockson wants both apps to work on other people's PCs and phones,
+and to share them on his GitHub "so it benefits the community as well".
+Until now nothing was published (CLAUDE.md), the Windows launcher needed a
+Node that only the build machine had, and the APK was a debug build.
+
+Decision (Rockson's choices, 2026-10-21):
+
+- **Repository**: public, `github.com/rock0ne/readaloud`. Commits carry his
+  GitHub no-reply address, not his personal email; the history was rewritten
+  once before the first push, which also removed a device serial and two
+  private notes from old commits.
+- **Licence**: GPL-3.0-or-later, because eSpeak NG (GPL-3.0-or-later) is part
+  of the apps: compiled to WebAssembly in `phonemizer` (the Android app's
+  phonemes, ADR-27) and built into sherpa-onnx's native library in the APK.
+  `THIRD-PARTY-NOTICES.md` lists the other parts and their licences.
+- **Windows, two ways**:
+  1. The web version on GitHub Pages, `https://rock0ne.github.io/readaloud/`,
+     built by `.github/workflows/pages.yml` on every push to `main` (tests
+     first) with `--base /<repo>/`. Open it in Edge and install it. GitHub
+     Pages cannot send the cross-origin isolation headers (ADR-22), so without
+     WebGPU the voice runs on one thread; Edge on most PCs has WebGPU, where it
+     makes no difference. Checked in headless Edge with no such headers under
+     `/readaloud/`: the service worker installs with scope `/readaloud/` and
+     precaches the onnxruntime files from `/readaloud/ort/`.
+  2. A zip on GitHub Releases, made by `app/windows/package.ps1`: the built
+     app, `ReadAloud.cmd`, `serve.ps1` and a short `README.txt`. `serve.ps1` is
+     a small static file server written for Windows PowerShell 5.1 (C# through
+     `Add-Type`), which every Windows 10 and 11 PC has: nothing to install, no
+     Node, no admin rights. It listens on `127.0.0.1:4173` only, sends the
+     isolation headers, answers GET and HEAD only, and refuses paths outside the
+     app folder. Rockson's `app/start-readaloud.cmd` now uses the same server, so
+     it no longer needs Node either, and it keeps the same address, so his
+     library and flags stay where they are.
+- **Android**: the APK on GitHub Releases is signed with Rockson's own release
+  key. He creates the key and signs the APK himself (keytool and apksigner ask
+  for the password; it is never written to a file or seen by the building
+  model). The sherpa-onnx Kokoro engine APK is not redistributed: people
+  install it from k2-fsa's download first, because ReadAloud reads the model
+  and voices from it (ADR-27). `app/android/build-apk.sh` builds the APK from
+  source on Linux or WSL.
+- New top-level folder `.github/` (the Pages workflow only). New files at the
+  root: `README.md`, `LICENSE`, `THIRD-PARTY-NOTICES.md`, `.gitattributes`
+  (Windows files keep CRLF, `gradlew` keeps LF).
+- CLAUDE.md's "do not deploy or publish anywhere" now allows exactly these
+  three places and nothing else.
+
+Not changed: no backend, no accounts, no analytics. Documents never leave the
+device; the only downloads are the app itself and the Kokoro model from
+Hugging Face. Book files stay git-ignored.
+
+Found while testing: .NET's `Path.GetFullPath` expands short 8.3 names
+(`PROGRA~1`), so `serve.ps1` answered 404 to everything when its folder was
+given in that form. It now compares against the folder in the same expanded
+form.
