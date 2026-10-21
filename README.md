@@ -74,7 +74,7 @@ adb install sherpa-onnx-1.13.8-arm64-v8a-eng-tts-engine-kokoro-multi-lang-v1_0.a
 ```
 
 ```bash
-adb install -r ReadAloud-0.1.0.apk
+adb install -r ReadAloud-0.1.1.apk
 ```
 
 The first sentence takes about 12 seconds after you press Play while the model
