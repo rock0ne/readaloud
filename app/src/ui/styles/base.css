@@ -159,6 +159,7 @@ select,
 input[type='text'],
 input[type='password'],
 input[type='date'],
+input[type='search'],
 textarea {
   border: 1px solid var(--border);
   border-radius: var(--radius);

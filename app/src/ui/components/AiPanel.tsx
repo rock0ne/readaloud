@@ -21,6 +21,7 @@ import { modelName, useAiInfo } from '../ai';
 import type { AiStep, useAiJob } from '../hooks/useAiJob';
 import { toast, useServices } from '../services';
 import { speakAloud } from '../speak';
+import { CopyForClaude } from './CopyForClaude';
 import { Reply, type CiteHelpers } from './Reply';
 
 /** Above this many words a request is confirmed first, since it is charged to the reader. */
@@ -126,7 +127,9 @@ export function AiPanel(props: Props) {
     );
   };
 
-  const card = (r: AiResult | undefined, made: AiScope, title: string, action: string, redo: AiStep) => (
+  // With the assistant off, only results made earlier are shown; Copy for Claude does the rest.
+  const card = (r: AiResult | undefined, made: AiScope, title: string, action: string, redo: AiStep) =>
+    !r && info === null ? null : (
     <ResultCard
       key={`${made.key}|${title}`}
       doc={doc}
@@ -173,6 +176,7 @@ export function AiPanel(props: Props) {
     return (
       <>
         {card(byKey.get(resultKey(id, 'book-overview', 'book')), scope, 'Overview', 'Give an overview', { scope, task: 'summary', label: 'Overview · Whole document' })}
+        {(info !== null || done.length > 0) && (
         <section class="ai-card">
           <div class="ai-card-head">
             <strong>Chapter summaries</strong>
@@ -195,6 +199,7 @@ export function AiPanel(props: Props) {
             </button>
           </div>
         </section>
+        )}
       </>
     );
   };
@@ -209,8 +214,8 @@ export function AiPanel(props: Props) {
           <span class="hint">Checking the AI assistant…</span>
         ) : info === null ? (
           <p class="ai-off">
-            The AI assistant is off. To use it, add your own key for Claude, ChatGPT or Gemini in <a href="#/settings">Settings</a>. Nothing is sent
-            anywhere until you do.
+            The built-in assistant is off: it needs your own key for Claude, ChatGPT or Gemini in <a href="#/settings">Settings</a>. Without a key,
+            use Copy for Claude below with your Claude subscription. Nothing is sent anywhere by the app.
           </p>
         ) : (
           <span class="hint">
@@ -230,6 +235,15 @@ export function AiPanel(props: Props) {
         <p class="hint scope-line">
           {scope.label} · about {words(scopeWords(scope))} words{info ? ` are sent to ${info.company}` : ''}. Your notes are never sent.
         </p>
+      )}
+
+      {scope && info === null && (
+        <section class="ai-card copy-claude-card">
+          <div class="ai-card-head">
+            <strong>Copy for Claude</strong>
+          </div>
+          <CopyForClaude doc={doc} scope={scope} valid={cite.valid} onSaveNote={props.onSaveNote} />
+        </section>
       )}
 
       {ai.job && (
@@ -258,7 +272,7 @@ export function AiPanel(props: Props) {
 
       {sections()}
 
-      {scope && (
+      {scope && (info !== null || answers.length > 0) && (
         <section class="ai-card ask">
           <label class="ai-card-head" for="ai-question">
             <strong>Ask about {scope.kind === 'paragraph' ? 'this paragraph' : scope.kind === 'book' ? 'the whole document' : scope.label}</strong>
@@ -306,6 +320,13 @@ export function AiPanel(props: Props) {
             </article>
           ))}
         </section>
+      )}
+
+      {scope && info && (
+        <details class="ai-card copy-claude-card">
+          <summary>Copy for Claude instead, with your Claude subscription</summary>
+          <CopyForClaude doc={doc} scope={scope} valid={cite.valid} onSaveNote={props.onSaveNote} />
+        </details>
       )}
     </section>
   );

@@ -14,6 +14,8 @@ import { NoteSheet } from '../components/NoteSheet';
 import { NoteEditor } from '../components/NoteEditor';
 import { NotesPanel } from '../components/NotesPanel';
 import { AiPanel } from '../components/AiPanel';
+import { TextControls } from '../components/TextControls';
+import { FindBar } from '../components/FindBar';
 import type { CiteHelpers } from '../components/Reply';
 import { useAiJob } from '../hooks/useAiJob';
 import { KokoroDownload } from '../components/KokoroDownload';
@@ -23,7 +25,7 @@ import { useKeys } from '../hooks/useKeys';
 import { useMediaSession, useOnline, useWakeLock } from '../hooks/useDevice';
 import { toast, useKokoro, useServices, useSettings } from '../services';
 
-type Panel = 'toc' | 'flags' | 'notes' | 'ai' | null;
+type Panel = 'toc' | 'flags' | 'notes' | 'ai' | 'text' | null;
 type Editing = { sentenceId: string; note?: Note };
 
 /** Says which kind of voice is reading, so "natural" is never ambiguous (ADR-30). */
@@ -54,6 +56,7 @@ export function Reader({ docId }: { docId: string }) {
   const [editing, setEditing] = useState<Editing | null>(null);
   const [aiResults, setAiResults] = useState<AiResult[]>([]);
   const [returnTo, setReturnTo] = useState<string | null>(null);
+  const [finding, setFinding] = useState(false);
   const [voices, setVoices] = useState<Voice[]>([]);
   const [auto, setAuto] = useState<Pick | null | undefined>(undefined);
   const view = usePlayer(player);
@@ -276,7 +279,8 @@ export function Reader({ docId }: { docId: string }) {
     ']': () => setRate(view.rate + 0.1),
     m: () => writeNote(),
     g: () => setPanel('toc'),
-    Escape: () => (editing ? setEditing(null) : noteFor ? setNoteFor(null) : setPanel(null)),
+    '/': () => setFinding(true),
+    Escape: () => (editing ? setEditing(null) : noteFor ? setNoteFor(null) : finding ? setFinding(false) : setPanel(null)),
   });
 
   if (doc === undefined) return <main class="boot">Opening…</main>;
@@ -335,6 +339,9 @@ export function Reader({ docId }: { docId: string }) {
           <button class={panel === 'ai' ? 'active' : ''} onClick={() => toggle('ai')} title="AI study assistant, with your own key">
             AI{ai.job ? ' …' : ''}
           </button>
+          <button class={panel === 'text' ? 'active' : ''} onClick={() => toggle('text')} title="Font, text size and line spacing" aria-label="Font, text size and line spacing">
+            Aa
+          </button>
         </div>
       </header>
 
@@ -365,6 +372,11 @@ export function Reader({ docId }: { docId: string }) {
                 onEdit={(n) => setEditing({ sentenceId: n.sentenceId, note: n })}
                 onDelete={(n) => void deleteNote(n)}
               />
+            ) : panel === 'text' ? (
+              <section class="text-panel" aria-label="Font and spacing">
+                <h2>Font and spacing</h2>
+                <TextControls />
+              </section>
             ) : (
               <AiPanel
                 doc={doc}
@@ -429,6 +441,7 @@ export function Reader({ docId }: { docId: string }) {
         />
       )}
 
+      {finding && <FindBar index={index} pages={pages} currentId={view.currentId} onGo={(id) => jump(id, false)} onClose={() => setFinding(false)} />}
       <footer class="controls" aria-label="Playback">
         <div class="transport">
           <button onClick={() => player.prev()} aria-label="Previous sentence" title="Previous sentence (←)">
@@ -442,6 +455,9 @@ export function Reader({ docId }: { docId: string }) {
           </button>
           <button onClick={() => player.replay()} aria-label="Replay sentence" title="Replay sentence (R)">
             ↺
+          </button>
+          <button class={finding ? 'active' : ''} onClick={() => setFinding(!finding)} aria-label="Go to a page or find text" title="Go to a page or find text (/)">
+            🔍
           </button>
         </div>
         <div class="speed" aria-label="Speed">

@@ -134,6 +134,32 @@ export function buildRequest(doc: ParsedDocument, scope: AiScope, task: AiTask, 
   return { system: SYSTEM_PROMPT, document: scopeText(doc, scope), task: taskText(scope, task, question) };
 }
 
+/** "Check for mistakes" in a chat: lines a person can read instead of JSON (ADR-32). */
+function chatProofreadText(scope: AiScope): string {
+  return `Proofread ${scope.phrase}. List the likely mistakes: spelling, typos, grammar, punctuation, missing or repeated words, and names spelled two ways. Do not suggest changes of style or wording that are not mistakes. Write one line per mistake: '- ', the sentence id in square brackets, what is wrong in a few words, then ' → ' and the whole sentence corrected. For example: - [b12.s3] "teh" for "the" → The cat sat on the mat. If you find no mistakes, say so.`;
+}
+
+/**
+ * The same request as one text to paste into a chat with Claude, for a reader who uses their Claude
+ * subscription instead of a key (ADR-32): the instructions, the document, then the task.
+ */
+export function chatPrompt(doc: ParsedDocument, scope: AiScope, task: AiTask, question = ''): string {
+  const r = buildRequest(doc, scope, task, question);
+  const ask = task === 'proofread' ? chatProofreadText(scope) : r.task;
+  return [r.system, '', '<document>', r.document, '</document>', '', ask].join('\n');
+}
+
+/** A reply pasted back from a chat: Markdown headings, trailing spaces and extra blank lines removed. */
+export function cleanPastedReply(text: string): string {
+  return text
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line) => line.replace(/^#{1,6}\s+/, '').replace(/\s+$/, ''))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 // ----- reading replies -----
 
 const CITE_RE = /\[\s*(b\d+\.s\d+(?:\s*[,;]\s*b\d+\.s\d+)*)\s*\]/g;

@@ -118,6 +118,14 @@ ever committed; real chapters live in `app/test/fixtures/private/` (git-ignored)
   re-read and exported; keys stored with their expiry and never exported; the
   database upgrade from version 1; no key-shaped string in the source, tests,
   docs or README.
+- **AI9** (`ai.test.ts`, ADR-32): Copy for Claude's text has the instructions,
+  the document with its sentence ids and then the task; mistakes are asked
+  for as readable lines; a question is passed on; a pasted reply is tidied.
+- **S1** (`search.test.ts`, ADR-34): find in reading order, ignoring case,
+  curly quotes and extra spaces, nothing under 2 characters, a cap on matches;
+  a page typed as "2", "p. 2" or "page 2", and none for a page that is not
+  there. Settings from 0.2.0 get the reading font and spacing (`store.test.ts`,
+  ADR-33).
 
 ## Manual checks (record results in `PROGRESS.md`)
 
@@ -154,6 +162,11 @@ ever committed; real chapters live in `app/test/fixtures/private/` (git-ignored)
 - **M13 notes and pen**: M opens a note on the current sentence; pen
   handwriting in the box becomes text (Windows); a drawing is kept; the Notes
   panel's order, Go to, Edit and Delete; `notes.md` downloads.
+- **M15 Copy for Claude (ADR-32)**: with a real Claude account, copy a chapter
+  summary, paste it in claude.ai, paste the reply back as a note; its page
+  links go to the right sentences. On the phone: does claude.ai open?
+- **M16 fonts and find (ADR-33, ADR-34)**: each font on Windows and on the
+  phone; find and go to a page in a long book.
 - **M14 flow (ADR-31)**: at 1× and 1.5× a full stop is a short breath and a
   new paragraph a longer one, with Kokoro and with an online Edge voice; the
   two pause settings change them.

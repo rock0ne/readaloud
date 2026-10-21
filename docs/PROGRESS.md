@@ -29,16 +29,20 @@ One line per step. Keep it short. Newest at the bottom of each section.
 | 29 Public release | done | fresh clone in WSL + headless Edge on the live site | 2026-10-21 | github.com/rock0ne/readaloud, Pages site, releases v0.1.0, v0.1.1 (clip-order fix, ADR-28) and v0.2.0 (AI assistant, notes, flowing full stops: ADR-30, ADR-31) with the Windows zip and the APK signed with Rockson's key (CN=rock0ne, cert SHA-256 c5f96167…5dbc0f), ADR-29 |
 | 30 AI assistant, notes, pen | done, not yet with a real key | AI1–AI8, N1–N3 + Edge with a fake Claude service | 2026-10-21 | ADR-30 and its review changes; a live key is Rockson's to try |
 | 31 Flow at full stops | done | U11b + Edge, online Ryan voice | 2026-10-21 | ADR-31; Kokoro's trimmed clips not yet heard |
+| 32 Copy for Claude | done | AI9 + browser pane (clipboard and new tab stood in) | 2026-10-21 | ADR-32; not yet tried with a real Claude account or in the Android app |
+| 33 Reading font, line spacing | done | settings migration test + browser pane | 2026-10-21 | ADR-33 |
+| 34 Go to page, find | done | S1 + browser pane at desktop and phone width | 2026-10-21 | ADR-34 |
 | Phase 1 gate | waiting on Rockson | | | see below |
 
 ## Phase 1 gate
 
-- [x] Unit tests green: 156 tests in 19 files on 2026-10-21, with the
+- [x] Unit tests green: 162 tests in 20 files on 2026-10-21, with the
       git-ignored book check, covering the Kokoro work (ADR-22),
       the second-review fixes (ADR-23), reloading on update (ADR-25),
       large EPUBs (ADR-26), the Android app's voice (ADR-27), the wider
-      lead and the clip order (ADR-28), the AI assistant and notes (ADR-30)
-      and the reading flow (ADR-31). `pnpm build` clean, bundle budget met.
+      lead and the clip order (ADR-28), the AI assistant and notes (ADR-30),
+      the reading flow (ADR-31), Copy for Claude (ADR-32), reading fonts
+      (ADR-33) and find (ADR-34). `pnpm build` clean, bundle budget met.
 - [ ] M1–M8 done in Edge. Done or partly done: M2 (sample PDF), M3, M4, M5,
       M6. Waiting on Rockson: M1 and M2 with his chapter, M8 install, and
       everything by ear. Not yet run in a browser: M7. Still unchecked in
@@ -169,6 +173,10 @@ every "by ear" item is still Rockson's.
 
 ## Open issues
 
+- Copy for Claude opens claude.ai with `window.open`. In the Android app's web
+  view that is untried; if nothing opens, the "Open claude.ai" link is the
+  fallback (ADR-32).
+
 - The toolchain lives in a temporary scratchpad folder. If it is cleaned up,
   the builder needs Node again before `pnpm` works (handoff section 7).
 - Edge's Microsoft voices stay as the fallback ("Browser voices") until the
@@ -206,7 +214,7 @@ runtime:         Node 22.23.3 (portable), pnpm 11.19 via corepack
 
 | Measure | Result | Budget |
 |---|---|---|
-| Main JS bundle, gzipped | 54 kB with the AI assistant and notes (27.5 kB before Kokoro; the voice loads in its own worker) | < 250 kB |
+| Main JS bundle, gzipped | 57 kB with the AI assistant, notes, Copy for Claude, fonts and find (27.5 kB before Kokoro; the voice loads in its own worker) | < 250 kB |
 | Parse a 500k-char `.docx` (Node + jsdom) | 0.97 s | < 5 s |
 | Parse a 1 MB EPUB (Node + jsdom) | 0.86 s | < 6 s |
 | Kokoro download, PC / phone | 13–20 s / about 10 s for 326 MB | — |

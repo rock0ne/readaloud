@@ -44,9 +44,9 @@
 .text-pane article {
   max-width: 68ch;
   margin: 0 auto;
-  font-family: var(--serif);
+  font-family: var(--reader-family, var(--serif));
   font-size: var(--reader-font);
-  line-height: 1.7;
+  line-height: var(--reader-line, 1.7);
 }
 
 .text-pane h2,
@@ -577,4 +577,87 @@ pre.raw {
 
 .ai-key p {
   margin: 0;
+}
+
+.copy-claude-card > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.copy-claude-card[open] > summary {
+  margin-bottom: 8px;
+}
+
+.copy-claude .field {
+  display: block;
+  margin-top: 8px;
+}
+
+.copy-claude select,
+.copy-claude input[type='text'],
+.copy-claude textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.copy-claude .done {
+  margin: 8px 0 0;
+}
+
+.font-preview {
+  font-family: var(--reader-family, var(--serif));
+  font-size: var(--reader-font);
+  line-height: var(--reader-line, 1.7);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  margin: 8px 0 0;
+}
+
+.find-bar {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 8px 48px 8px 16px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+}
+
+.find-bar form {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+
+.find-bar .find {
+  flex: 1 1 260px;
+}
+
+.find-bar .find input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.find-bar .count {
+  white-space: nowrap;
+}
+
+.find-bar .close {
+  position: absolute;
+  top: 8px;
+  right: 6px;
+  font-size: 1.2rem;
+  padding: 2px 10px;
+}
+
+.find-bar .problem {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.text-panel h2 {
+  margin-top: 0;
 }

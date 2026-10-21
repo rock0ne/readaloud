@@ -3,7 +3,7 @@ import type { EngineId, Settings } from '../types';
 
 export function defaultSettings(touch = false): Settings {
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     enginePreference: ['kokoro', 'webspeech'],
     voiceByEngine: {},
     rate: 1.0,
@@ -17,6 +17,8 @@ export function defaultSettings(touch = false): Settings {
     keepAwake: true,
     pauseOnFlag: touch,
     fontSizePx: 18,
+    readerFont: 'serif',
+    lineSpacing: 1.7,
     theme: 'auto',
     ai: { provider: null, models: {} },
   };
@@ -41,6 +43,7 @@ export function migrateSettings(saved: StoredSettings): Partial<Settings> {
     // ADR-31: a full stop no longer gets the old fixed 0.15 s; paragraphs get their own pause.
     if (out.pauseBetweenSentencesMs === 150) out.pauseBetweenSentencesMs = 0;
   }
+  // v4 (ADR-33): the reading font and line spacing are new and come from the defaults.
   delete out.schemaVersion;
   return out as Partial<Settings>;
 }

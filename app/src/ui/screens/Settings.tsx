@@ -5,6 +5,7 @@ import { RATE_MAX, RATE_MIN } from '../../core/store/settings';
 import { AiSettings } from '../components/AiSettings';
 import { DataTransfer } from '../components/DataTransfer';
 import { KokoroDownload } from '../components/KokoroDownload';
+import { TextControls } from '../components/TextControls';
 import { VoicePicker, shortVoiceName } from '../components/VoicePicker';
 import { useKokoro, useServices, useSettings } from '../services';
 
@@ -223,10 +224,7 @@ export function SettingsScreen() {
 
       <section>
         <h2>Display</h2>
-        <label class="field">
-          Text size <strong>{s.fontSizePx}px</strong>
-          <input type="range" min={14} max={30} step={1} value={s.fontSizePx} onInput={(e) => update({ fontSizePx: Number(e.currentTarget.value) })} />
-        </label>
+        <TextControls />
         <label class="field">
           Theme
           <select value={s.theme} onChange={(e) => update({ theme: e.currentTarget.value as Settings['theme'] })}>
@@ -264,6 +262,7 @@ export function SettingsScreen() {
             <tr><td>M</td><td>Write a note on the sentence</td></tr>
             <tr><td>[ / ]</td><td>Slower or faster</td></tr>
             <tr><td>G</td><td>Open contents</td></tr>
+            <tr><td>/</td><td>Go to a page or find text</td></tr>
             <tr><td>Esc</td><td>Close a panel or a note</td></tr>
           </tbody>
         </table>

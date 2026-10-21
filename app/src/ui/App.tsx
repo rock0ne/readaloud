@@ -6,6 +6,7 @@ import { Library } from './screens/Library';
 import { Reader } from './screens/Reader';
 import { SettingsScreen } from './screens/Settings';
 import { Toasts } from './components/Toast';
+import { READER_FONTS } from './components/TextControls';
 
 function Theme() {
   const s = useSettings();
@@ -14,7 +15,9 @@ function Theme() {
     if (s.theme === 'auto') root.removeAttribute('data-theme');
     else root.setAttribute('data-theme', s.theme);
     root.style.setProperty('--reader-font', `${s.fontSizePx}px`);
-  }, [s.theme, s.fontSizePx]);
+    root.style.setProperty('--reader-family', (READER_FONTS[s.readerFont] ?? READER_FONTS.serif).stack);
+    root.style.setProperty('--reader-line', String(s.lineSpacing));
+  }, [s.theme, s.fontSizePx, s.readerFont, s.lineSpacing]);
   return null;
 }
 

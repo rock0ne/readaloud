@@ -295,8 +295,11 @@ export interface DocSummary {
 
 export interface AudioCacheRecord { key: string; blob: Blob; bytes: number; lastUsed: number; }
 
+/** The reading font (ADR-33): system fonts only, nothing is downloaded. */
+export type ReaderFont = 'serif' | 'sans' | 'wide' | 'mono';
+
 export interface Settings {
-  schemaVersion: 3;                             // 2: Kokoro first (ADR-22); 3: ai (ADR-30), paragraph pause (ADR-31)
+  schemaVersion: 4;                             // 2: Kokoro first (ADR-22); 3: ai (ADR-30), paragraph pause (ADR-31); 4: reading font (ADR-33)
   enginePreference: EngineId[];                 // default ['kokoro', 'webspeech']
   voiceByEngine: Partial<Record<EngineId, string>>;
   rate: number;                                 // default 1.0
@@ -310,6 +313,8 @@ export interface Settings {
   keepAwake: boolean;                           // default true
   pauseOnFlag: boolean;                         // default false on desktop, true on touch devices
   fontSizePx: number;                           // default 18
+  readerFont: ReaderFont;                       // default 'serif' (ADR-33)
+  lineSpacing: number;                          // default 1.7 (ADR-33)
   theme: 'auto' | 'light' | 'dark';             // default 'auto'
   ai: AiSettings;                               // default { provider: null, models: {} }
 }
@@ -911,8 +916,9 @@ block's position); replace; write `{name}.corrected.md` and a unified diff.
 
 Layout (desktop): header (back, title, chapter name, engine/voice badge);
 left: text pane; right: collapsible panel with tabs **Contents**, **Flags**,
-**Notes** and **AI** (ADR-30); the chapter name shows the page (17.1);
-bottom: controls bar.
+**Notes**, **AI** (ADR-30) and **Aa** (font, text size and line spacing,
+ADR-33); the chapter name shows the page (17.1); bottom: controls bar, with
+the find bar above it when open (ADR-34).
 
 Text pane: renders **only the current chapter's blocks**. Each sentence is a
 `<span data-sid>`; the current sentence has class `current` and is scrolled
@@ -920,7 +926,7 @@ into view (`block: 'center'`) when it is not visible. Clicking a sentence seeks
 to it. Flagged sentences get class `flagged` (underline). Headings use
 `h2`-style sizing; code blocks are monospaced and dimmed when skipped.
 
-Controls bar: Prev · Play/Pause · Next · Replay · speed (−/value/+) ·
+Controls bar: Prev · Play/Pause · Next · Replay · Find (🔍) · speed (−/value/+) ·
 voice picker · **FLAG** · Note · panel toggle. Status text: "Buffering…",
 "Edge natural voices", "Basic voice (offline)".
 
@@ -937,6 +943,7 @@ Keyboard (desktop):
 | Esc | close panel / blur note field |
 | G | open Contents |
 | M | write a note on the current sentence (ADR-30) |
+| / | go to a page or find text (ADR-34) |
 
 Keys are ignored while a text field has focus (except Esc).
 
@@ -961,8 +968,8 @@ Engine order (drag or up/down buttons), voice per engine (with "Test" button
 speaking a fixed sentence), speed, the extra pause at a full stop and the pause
 between paragraphs (ADR-31), locale, Azure region + key (password field,
 "Verify" button that calls the voices list), Kokoro model download/remove
-(Phase 4), skip code blocks, announce headings, pause lengths, keep awake, font
-size, theme, "Clear audio cache" with size shown, Export/Import JSON, and the
+(Phase 4), skip code blocks, announce headings, pause lengths, keep awake, font,
+text size and line spacing (ADR-33), theme, "Clear audio cache" with size shown, Export/Import JSON, and the
 AI assistant (17.3).
 
 ### 11.7 Accessibility
@@ -1138,6 +1145,10 @@ a Markdown image.
   send; each stored result with Read aloud, Save as note, Copy and Redo; a
   question box; earlier answers, newest first. Citations are buttons labelled
   with the page; pressing one seeks there and plays.
+- Copy for Claude (ADR-32): for the scope, a task (explain, summary, page by
+  page, mistakes or a question), "Copy and open Claude" and "Copy only"; a box
+  for Claude's reply and "Save as note". At the top of the panel when no key
+  is set, a fold-out at the bottom otherwise.
 - Notes panel: notes in reading order with place, quote, text and drawing;
   Go to, Edit, Delete; Export notes.md.
 - Note sheet (M or ✎): a text box and an optional drawing pad (canvas, Pointer

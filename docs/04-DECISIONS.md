@@ -713,3 +713,67 @@ to a second.
 wants a slower pace sets the pauses. Pausing in the middle of a paragraph run
 resumes at the sentence that was being read. `SpeakOptions.onBoundary` and
 `VoiceEngine.boundaries` are added to spec 4.
+
+## ADR-32 · 2026-10-21 · Copy for Claude: a Claude subscription without a key
+
+**Context.** Rockson's US$200 in the Anthropic Console can only be spent through
+Claude Code, and he asked whether ReadAloud could sign in to Claude the way
+Claude Code does. Anthropic's legal and compliance page for Claude Code says
+Claude.ai sign-in is for Anthropic's own apps: other developers may not offer
+it in their applications, route requests through Free, Pro or Max plan
+credentials, or collect Claude.ai credentials or session tokens. So the app
+does not sign in to Claude.
+
+**Decision.**
+- The AI panel has **Copy for Claude** for the paragraph, page, chapter or
+  whole document. It copies one text: the built-in assistant's instructions,
+  the part inside `<document>` tags with its sentence ids, then the task
+  (explain, summary, page by page, mistakes or a question). "Check it for
+  mistakes" asks for lines a person can read (`- [id] what is wrong →
+  corrected sentence`) instead of JSON. "Copy and open Claude" also opens
+  `https://claude.ai/new` in a new tab; the reader pastes and sends, and
+  Claude answers under the reader's own subscription and terms.
+- The reply can be pasted back and saved as a note. Markdown headings and
+  extra blank lines are removed; the note goes on the first sentence it cites,
+  else the start of the part; sentence ids become page links, as in AI replies.
+- The app sends nothing: the text leaves the device only when the reader
+  pastes it. No key, no account, and no new host in the Content Security
+  Policy (opening a tab is navigation, not a request from the page).
+- With no key the card is at the top of the AI panel and only results made
+  earlier are listed; with a key it is a fold-out at the bottom.
+- If the browser will not copy, the text is shown in a box to copy by hand.
+
+**Consequences.** A reader with a Claude subscription gets summaries and
+checks at no extra cost, at the price of two pastes per request. A long
+document may not fit one chat; the card says so above 100,000 words. Not yet
+tried in the Android app, where opening claude.ai goes through the web view.
+
+## ADR-33 · 2026-10-21 · Reading font and line spacing
+
+**Context.** Rockson asked for font changes on the reading page.
+
+**Decision.**
+- Settings gain `readerFont`: `serif` (book, the old look), `sans` (clean),
+  `wide` (Verdana where it exists) and `mono` (typewriter, every letter the
+  same width, for spotting typos), and `lineSpacing` (1.2 to 2.4, default
+  1.7), beside the existing text size. Only fonts already on the device, with
+  stacks for Windows and Android, so nothing is downloaded.
+- The controls are in Settings, Display, and in the reader's **Aa** panel,
+  with a preview line; changes apply at once.
+- Settings schema version 4: settings saved by 0.2.0 keep everything and get
+  the defaults (book font, 1.7).
+
+## ADR-34 · 2026-10-21 · Go to a page and find text
+
+**Context.** Rockson asked for "move to page" and search at the bottom.
+
+**Decision.**
+- 🔍 in the controls, or `/`, opens a bar above the controls with a page box
+  ("12", "p. 12" or "page 12") and a find box. Find lists the sentences that
+  contain the text, ignoring case, curly quotes and extra spaces, in reading
+  order, up to 1,000. Enter goes to the next match (the first press: the next
+  one after where you are), Shift+Enter to the one before, and the count shows
+  "2 of 12 · p. 40". Esc closes the bar.
+- Going somewhere uses the same jump as citations, so "Back to where I was"
+  appears.
+- Search works per sentence: words that run across two sentences are not found.

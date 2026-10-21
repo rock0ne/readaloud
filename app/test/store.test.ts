@@ -63,7 +63,7 @@ describe('U9 store', () => {
     const desk = await fresh(false);
     const s = await desk.getSettings();
     expect(s.enginePreference).toEqual(['kokoro', 'webspeech']);
-    expect(s.schemaVersion).toBe(3);
+    expect(s.schemaVersion).toBe(4);
     expect(s.ai).toEqual({ provider: null, models: {} });
     expect(s.pauseOnFlag).toBe(false);
     desk.close();
@@ -85,12 +85,19 @@ describe('U9 store', () => {
     } as unknown as Settings;
     await r.saveSettings(v1);
     const s = await r.getSettings();
-    expect(s.schemaVersion).toBe(3);
+    expect(s.schemaVersion).toBe(4);
     expect(s.ai).toEqual({ provider: null, models: {} });
     expect(s.enginePreference).toEqual(['kokoro', 'webspeech']);
     expect(s.voiceByEngine).toEqual({ webspeech: 'Microsoft Sonia Online (Natural)' });
     expect(s.azure).toBeNull();
     expect(s.rate).toBe(1.7);
+  });
+
+  it('gives settings from 0.2.0 the book font and line spacing, keeping the rest (ADR-33)', async () => {
+    const r = await fresh();
+    const { readerFont: _f, lineSpacing: _l, ...v3 } = await r.getSettings();
+    await r.saveSettings({ ...v3, schemaVersion: 3, fontSizePx: 22, rate: 1.4 } as unknown as Settings);
+    expect(await r.getSettings()).toMatchObject({ schemaVersion: 4, readerFont: 'serif', lineSpacing: 1.7, fontSizePx: 22, rate: 1.4 });
   });
 
   it('drops the old fixed full-stop pause and adds a paragraph pause (ADR-31)', async () => {

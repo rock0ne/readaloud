@@ -6,7 +6,7 @@ import { GeminiProvider } from '../src/core/ai/gemini';
 import { AiError, type FetchFn } from '../src/core/ai/provider';
 import { dateBounds, expiryAfterDays, expiryOnDate, isExpired, keyHint, keyRecord } from '../src/core/ai/keys';
 import { PageIndex, PAGE_CHARS, makePages } from '../src/core/text/pages';
-import { bookScope, buildRequest, chapterScope, pageScope, paragraphScope, parseSuggestions, replaceCitations, scopeIds, scopeText, speakable, splitCitations, splitPages } from '../src/core/ai/prompts';
+import { bookScope, buildRequest, chapterScope, chatPrompt, cleanPastedReply, pageScope, paragraphScope, parseSuggestions, replaceCitations, scopeIds, scopeText, speakable, splitCitations, splitPages } from '../src/core/ai/prompts';
 import { runAi, scopeHash } from '../src/core/ai/assistant';
 import type { AiResult } from '../src/core/types';
 import type { RawBlock } from '../src/core/ingest/raw';
@@ -417,5 +417,33 @@ describe('AI8 failures and freshness', () => {
     expect(await scopeHash(edited, paragraphScope(edited, new PageIndex(edited), 'b2')!)).not.toBe(r?.inputHash);
     // A new document title or chapter label changes no sentence, so the result stays current.
     expect(await scopeHash({ ...doc, title: 'Renamed' }, { ...scope, label: 'Another label' })).toBe(r?.inputHash);
+  });
+});
+
+describe('AI9 Copy for Claude (ADR-32)', () => {
+  const doc = makeDoc([
+    { type: 'heading', level: 1, text: 'The Start' },
+    { type: 'paragraph', text: 'Anna met Ben. They talkd.' },
+  ]);
+  const scope = chapterScope(doc, new PageIndex(doc), 0);
+
+  it('puts the instructions, the document with its sentence ids and then the task in one text', () => {
+    const text = chatPrompt(doc, scope, 'summary');
+    const req = buildRequest(doc, scope, 'summary');
+    expect(text.startsWith(req.system)).toBe(true);
+    expect(text).toContain(`<document>\n${req.document}\n</document>`);
+    expect(text.endsWith(req.task)).toBe(true);
+    expect(text).toContain('[b1.s1] They talkd.');
+  });
+
+  it('asks for mistakes as lines a person can read, and passes a question on', () => {
+    const mistakes = chatPrompt(doc, scope, 'proofread');
+    expect(mistakes).toContain(' → ');
+    expect(mistakes).not.toContain('JSON');
+    expect(chatPrompt(doc, scope, 'answer', 'Who met?')).toMatch(/Question: Who met\?$/);
+  });
+
+  it('tidies a pasted reply', () => {
+    expect(cleanPastedReply('## Summary\r\n\r\n\r\n- Anna meets Ben [b1.s0]  \r\n')).toBe('Summary\n\n- Anna meets Ben [b1.s0]');
   });
 });

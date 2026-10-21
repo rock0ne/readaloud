@@ -103,11 +103,14 @@ can pause for a few seconds between some sentences.
    | N | Flag it and write a note |
    | M | Write a note on the sentence (no flag) |
    | [ / ] | Slower or faster |
+   | / | Go to a page or find text |
    | Esc | Close the panel or leave the note |
 
    On a phone, tap the flag button instead. Click or tap a sentence to read
    from there. In Settings you can set an extra pause at a full stop and the
-   pause between paragraphs; both get shorter as you speed up.
+   pause between paragraphs; both get shorter as you speed up. The **Aa**
+   button changes the font, text size and line spacing, and 🔍 goes to a
+   page or finds text.
 4. Download the corrections file from the **Flags** panel (or from the
    document in the library) and fix the mistakes in your manuscript.
 
@@ -123,6 +126,11 @@ can pause for a few seconds between some sentences.
   1 year. The **AI** panel in a document then summarises the paragraph, page,
   chapter or whole document, explains a paragraph, answers your questions
   and checks a chapter for mistakes, which you can add as flags.
+- **Copy for Claude (no key).** With a Claude subscription, the AI panel can
+  copy the part you are reading with the instructions and open claude.ai:
+  paste it there and send. Paste Claude's reply back to keep it as a note,
+  with page links. ReadAloud cannot sign in to Claude for you: Anthropic does
+  not let other apps use Claude sign-in.
 - Replies point to the sentences they rely on: press "p. 12" to go there, and
   "Back to where I was" to return. A reply can be read aloud or saved as a note.
 - Each request is charged to your own account with that company. Before a
@@ -143,6 +151,8 @@ straight from your device to the company whose key you added, under that
 company's terms. Your key is kept only in this browser on this device, for as
 long as you chose, and is never included in an export. Forgetting the key in
 the app does not cancel it: to cancel it, delete it on the company's key page.
+Copy for Claude sends nothing itself: the text reaches Claude only when you
+paste it there.
 
 ## Build it yourself
 

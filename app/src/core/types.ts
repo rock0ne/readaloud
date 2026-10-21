@@ -192,8 +192,11 @@ export interface DocSummary {
 
 export interface AudioCacheRecord { key: string; blob: Blob; bytes: number; lastUsed: number; }
 
+/** The reading font (ADR-33): system fonts only, nothing is downloaded. */
+export type ReaderFont = 'serif' | 'sans' | 'wide' | 'mono';
+
 export interface Settings {
-  schemaVersion: 3;                             // 2: Kokoro first (ADR-22); 3: ai (ADR-30), paragraph pause (ADR-31)
+  schemaVersion: 4;                             // 2: Kokoro first (ADR-22); 3: ai (ADR-30), paragraph pause (ADR-31); 4: reading font (ADR-33)
   enginePreference: EngineId[];                 // default ['kokoro', 'webspeech']
   voiceByEngine: Partial<Record<EngineId, string>>;
   rate: number;                                 // default 1.0
@@ -207,6 +210,8 @@ export interface Settings {
   keepAwake: boolean;                           // default true
   pauseOnFlag: boolean;                         // default false on desktop, true on touch devices
   fontSizePx: number;                           // default 18
+  readerFont: ReaderFont;                       // default 'serif' (ADR-33)
+  lineSpacing: number;                          // default 1.7 (ADR-33)
   theme: 'auto' | 'light' | 'dark';             // default 'auto'
   ai: AiSettings;                               // default { provider: null, models: {} }
 }
