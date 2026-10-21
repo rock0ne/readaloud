@@ -66,13 +66,19 @@ fixed (ADR-23). The phone runs the app in Firefox but the voice is too slow
 there (ADR-24). `docs/PROGRESS.md` has
 the step-by-step status, the manual checks done, and what still needs Rockson.
 
+Since then (2026-10-21): the public release (ADR-29), the Android app with
+Kokoro inside it (ADR-27, ADR-28), an optional AI study assistant with the
+reader's own key, notes and pen input (ADR-30), and reading that flows at
+full stops (ADR-31).
+
 ```
 ReadAloudApp/
   CLAUDE.md, BUILD-APPROACH.md, docs/      as before
   app/
     src/core/        no UI imports: types, text/, ingest/ (txt md docx epub pdf),
                      model.ts, store/ (db, repo, settings, export), engines/
-                     (webspeech, registry), player/, flags/
+                     (webspeech, registry), player/, flags/, ai/ (one file
+                     per provider, prompts, keys), notes/
     src/ui/          Preact: screens/ (Library, Reader, Settings), components/,
                      hooks/, styles/ (base, reader, mobile)
     test/            vitest, one file per unit-test group, helpers/ build

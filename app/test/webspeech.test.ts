@@ -85,6 +85,19 @@ describe('U10 WebSpeechEngine', () => {
     return { ...ctx, p, u, ac };
   }
 
+  it('passes the voice\'s word boundaries on as character offsets (ADR-31)', async () => {
+    const ctx = setup();
+    ctx.synth.voices = [SONIA];
+    const [voice] = await ctx.engine.listVoices();
+    const seen: number[] = [];
+    void ctx.engine.speak(LONG, { voice: voice!, rate: 1, onBoundary: (i) => seen.push(i) }, new AbortController().signal);
+    const u = ctx.synth.spoken[0] as FakeUtterance & { onboundary?: (ev: { charIndex: number }) => void };
+    u.onboundary?.({ charIndex: 0 });
+    u.onboundary?.({ charIndex: 5 });
+    expect(seen).toEqual([0, 5]);
+    expect(ctx.engine.boundaries).toBe(true);
+  });
+
   it('resolves on end after a plausible duration and caps the rate at 2.0', async () => {
     const { p, u, advance } = await speaking();
     expect(u.rate).toBe(2);

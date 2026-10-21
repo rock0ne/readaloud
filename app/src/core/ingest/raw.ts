@@ -6,6 +6,7 @@ export interface RawBlock {
   level?: number;
   text: string;
   anchor?: { href: string; ids: string[] };
+  page?: number; // PDF only: the page the block starts on (ADR-30)
 }
 
 export interface LoaderResult {

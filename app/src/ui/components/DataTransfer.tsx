@@ -14,7 +14,7 @@ export function DataTransfer({ onImported }: { onImported?: () => void }) {
   const doExport = async () => {
     const bundle = await buildExport(repo);
     downloadText(exportFileName(), JSON.stringify(bundle, null, 1), 'application/json');
-    toast(`Exported positions and flags for ${bundle.docs.length} document${bundle.docs.length === 1 ? '' : 's'}.`);
+    toast(`Exported positions, flags and notes for ${bundle.docs.length} document${bundle.docs.length === 1 ? '' : 's'}.`);
   };
 
   const onFile = async (file: File | undefined) => {
@@ -82,6 +82,8 @@ export function DataTransfer({ onImported }: { onImported?: () => void }) {
         <Dialog title="Import finished" onClose={() => setSummary(null)}>
           <ul class="summary">
             <li>{summary.added} flags added, {summary.updated} updated, {summary.unchanged} unchanged.</li>
+            <li>{summary.notesAdded} notes added, {summary.notesUpdated} updated.</li>
+            {summary.notesUnplaced > 0 && <li>{summary.notesUnplaced} notes are kept although their sentence is not in this copy of the text.</li>}
             <li>{summary.positionsUpdated} reading positions updated.</li>
             {summary.possibleSkipped.length > 0 && <li>Skipped unconfirmed: {summary.possibleSkipped.join(', ')}.</li>}
             {summary.unmatched.length > 0 && <li>Not in this library, add the file first: {summary.unmatched.join(', ')}.</li>}

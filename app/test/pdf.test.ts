@@ -47,12 +47,14 @@ describe('U8 pdf reconstruction', () => {
     expect(all).not.toContain('13');
 
     const blocks = linesToBlocks(pages.flatMap((p) => p.lines));
-    expect(blocks[0]).toEqual({ type: 'heading', level: 1, text: 'The Title' });
+    expect(blocks[0]).toEqual({ type: 'heading', level: 1, text: 'The Title', page: 1 });
     expect(blocks[1]?.text).toBe('This is the first paragraph of the text and it is wonderfully incredible to read on a page like this one.');
     expect(blocks[2]?.text).toBe(
       'A new paragraph starts with an indent here and continues on the next line without one at all ok and finishes on the following page.',
     );
     expect(blocks).toHaveLength(3);
+    // Each block keeps the page it starts on (ADR-30); the last one runs on to page 2.
+    expect(blocks.map((b) => b.page)).toEqual([1, 1, 1]);
   });
 
   it('detects scanned PDFs', () => {

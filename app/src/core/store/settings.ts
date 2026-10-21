@@ -3,7 +3,7 @@ import type { EngineId, Settings } from '../types';
 
 export function defaultSettings(touch = false): Settings {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     enginePreference: ['kokoro', 'webspeech'],
     voiceByEngine: {},
     rate: 1.0,
@@ -12,11 +12,13 @@ export function defaultSettings(touch = false): Settings {
     skipCodeBlocks: true,
     announceHeadings: true,
     pauseAfterHeadingMs: 600,
-    pauseBetweenSentencesMs: 150,
+    pauseBetweenSentencesMs: 0,
+    pauseBetweenParagraphsMs: 700,
     keepAwake: true,
     pauseOnFlag: touch,
     fontSizePx: 18,
     theme: 'auto',
+    ai: { provider: null, models: {} },
   };
 }
 
@@ -33,6 +35,12 @@ export function migrateSettings(saved: StoredSettings): Partial<Settings> {
     if (!out.enginePreference.includes('webspeech')) out.enginePreference.push('webspeech');
     out.azure = null;
   }
+  if ((out.schemaVersion ?? 1) < 3) {
+    // v3 (ADR-30): the AI assistant, off until the user adds a key.
+    out.ai = { provider: null, models: {} };
+    // ADR-31: a full stop no longer gets the old fixed 0.15 s; paragraphs get their own pause.
+    if (out.pauseBetweenSentencesMs === 150) out.pauseBetweenSentencesMs = 0;
+  }
   delete out.schemaVersion;
   return out as Partial<Settings>;
 }
@@ -41,7 +49,13 @@ export function withDefaults(saved: StoredSettings | undefined, touch = false): 
   const d = defaultSettings(touch);
   if (!saved) return d;
   const m = migrateSettings(saved);
-  return { ...d, ...m, schemaVersion: d.schemaVersion, voiceByEngine: { ...d.voiceByEngine, ...(m.voiceByEngine ?? {}) } };
+  return {
+    ...d,
+    ...m,
+    schemaVersion: d.schemaVersion,
+    voiceByEngine: { ...d.voiceByEngine, ...(m.voiceByEngine ?? {}) },
+    ai: { ...d.ai, ...(m.ai ?? {}), models: { ...(m.ai?.models ?? {}) } },
+  };
 }
 
 export const RATE_MIN = 0.8;

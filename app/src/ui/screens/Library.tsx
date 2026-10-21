@@ -116,7 +116,7 @@ export function Library() {
   };
 
   const remove = async (d: DocSummary) => {
-    if (!confirm(`Remove “${d.title}” and its flags from this device?`)) return;
+    if (!confirm(`Remove “${d.title}” and its flags, notes and AI summaries from this device?`)) return;
     await repo.deleteDocument(d.id);
     await refresh();
   };
@@ -224,7 +224,7 @@ export function Library() {
       <footer class="bar footer">
         <DataTransfer onImported={refresh} />
         <span class="spacer" />
-        <span class="hint">Documents, flags and positions stay on this device.</span>
+        <span class="hint">Documents, flags, notes and positions stay on this device.</span>
       </footer>
     </main>
   );

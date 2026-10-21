@@ -7,11 +7,12 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 // Content Security Policy (spec 15). Added to production builds only, because the
 // dev server injects inline scripts for hot reload. 'wasm-unsafe-eval' lets the Kokoro voice
-// and pdf.js compile WebAssembly; it does not allow eval of JavaScript (ADR-22).
+// and pdf.js compile WebAssembly; it does not allow eval of JavaScript (ADR-22). The three AI
+// hosts are reached only when the reader adds their own key and asks for something (ADR-30).
 const CSP = [
   "default-src 'self'",
   "script-src 'self' 'wasm-unsafe-eval'",
-  "connect-src 'self' https://huggingface.co https://*.hf.co",
+  "connect-src 'self' https://huggingface.co https://*.hf.co https://api.anthropic.com https://api.openai.com https://generativelanguage.googleapis.com",
   "img-src 'self' data: blob:",
   "media-src 'self' blob:",
   "worker-src 'self' blob:",

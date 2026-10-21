@@ -57,6 +57,21 @@ export function decodeWav(bytes: ArrayBuffer): { samples: Float32Array; sampleRa
 }
 
 /** Joins sample runs end to end. */
+/**
+ * Cuts the quiet start and end of a clip down to `lead` and `tail` seconds (ADR-31). Kokoro pads each
+ * clip with about 0.3 s before and 0.7 s after the speech, which made every full stop a long gap.
+ */
+export function trimSilence(samples: Float32Array, sampleRate: number, lead = 0.05, tail = 0.2, threshold = 0.005): Float32Array {
+  let first = 0;
+  while (first < samples.length && Math.abs(samples[first]!) < threshold) first++;
+  if (first === samples.length) return samples;
+  let last = samples.length - 1;
+  while (last > first && Math.abs(samples[last]!) < threshold) last--;
+  const from = Math.max(0, first - Math.round(lead * sampleRate));
+  const to = Math.min(samples.length, last + 1 + Math.round(tail * sampleRate));
+  return from === 0 && to === samples.length ? samples : samples.subarray(from, to);
+}
+
 export function concatSamples(parts: Float32Array[]): Float32Array {
   if (parts.length === 1) return parts[0]!;
   const out = new Float32Array(parts.reduce((n, p) => n + p.length, 0));

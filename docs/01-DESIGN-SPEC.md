@@ -124,6 +124,7 @@ export interface Block {
   chapterIndex: number;
   sentences: Sentence[];
   anchor?: { href: string; ids: string[] }; // ingest-time only; used to map an EPUB TOC
+  page?: number;       // PDF only: the page the block starts on (ADR-30)
 }
 
 export interface Chapter { index: number; title: string; firstBlockId: string; }
@@ -162,7 +163,12 @@ export interface Voice {
   offline: boolean;
 }
 
-export interface SpeakOptions { voice: Voice; rate: number; } // engine rate; 1.0 = normal
+export interface SpeakOptions {
+  voice: Voice;
+  rate: number;                                 // engine rate; 1.0 = normal
+  /** Direct engines with `boundaries`: called with a character offset in the text as it is spoken (ADR-31). */
+  onBoundary?: (charIndex: number) => void;
+}
 
 export interface EngineAvailability { ok: boolean; reason?: string; }
 
@@ -171,6 +177,8 @@ export interface VoiceEngine {
   readonly label: string;
   readonly kind: 'direct' | 'audio';
   readonly maxEngineRate: number;  // webspeech 2.0; audio engines 1.0 (speed via playbackRate)
+  /** Direct engines: can be given a paragraph at once and report progress with onBoundary (ADR-31). */
+  readonly boundaries?: boolean;
   isAvailable(): Promise<EngineAvailability>;
   listVoices(): Promise<Voice[]>;
   /** kind 'direct': speaks the text; resolves when finished or when `signal` aborts. */
@@ -221,6 +229,59 @@ export interface Flag {
 /** The sentences before and after a flagged one in reading order ('' at either end). */
 export interface FlagContext { before: string; after: string; }
 
+// ===== Notes (ADR-30) =====
+export interface Note {
+  id: string;
+  docId: string;
+  sentenceId: string;          // the sentence being read when the note was made
+  blockId: string;
+  chapterIndex: number;
+  chapterTitle: string;
+  paragraphInChapter: number;
+  quote: string;               // Sentence.text when the note was made
+  context?: FlagContext;       // places the note again after a re-read, as for flags
+  text: string;                // typed note (or pen handwriting turned into text), may be ''
+  sketch?: string;             // a drawing, as a PNG data URL
+  source: 'me' | 'ai';         // 'ai': a saved AI reply
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ===== AI assistant (ADR-30) =====
+export type AiProviderId = 'anthropic' | 'openai' | 'gemini';
+export type AiKind = 'page-summary' | 'page-summaries' | 'chapter-summary' | 'book-overview' | 'explanation' | 'proofread' | 'answer';
+
+export interface AiSuggestion {
+  sentenceId: string;
+  issue: string;               // what looks wrong
+  fix: string;                 // the whole corrected sentence
+  state: 'new' | 'flagged' | 'dismissed';
+}
+
+export interface AiResult {
+  key: string;                 // `${docId}|${kind}|${scope}`; answers `${docId}|answer|${id}`
+  docId: string;
+  kind: AiKind;
+  scope: string;               // 'book', 'c3' (chapter index), 'c3p12' (page key), 'b40' (paragraph)
+  question?: string;           // answers only
+  text: string;                // the reply; cites sentences as [b12.s3]
+  suggestions?: AiSuggestion[]; // 'proofread' only
+  provider: AiProviderId;
+  model: string;
+  createdAt: string;
+  usage?: { input: number; output: number }; // tokens, when the provider reports them
+  truncated?: boolean;         // the reply stopped at the length limit
+  inputHash?: string;          // sha256 of the text sent; a different hash now means out of date
+}
+
+/** An API key, kept only in IndexedDB on this device and never exported (ADR-30). */
+export interface AiKeyRecord { provider: AiProviderId; key: string; savedAt: string; expiresAt: string; }
+
+export interface AiSettings {
+  provider: AiProviderId | null;               // null: the assistant is off
+  models: Partial<Record<AiProviderId, string>>;
+}
+
 // ===== Storage =====
 // ordinal = the sentence's 0-based reading-order index; lets the library show
 // progress without loading the document (ADR-19). Optional for old exports.
@@ -235,7 +296,7 @@ export interface DocSummary {
 export interface AudioCacheRecord { key: string; blob: Blob; bytes: number; lastUsed: number; }
 
 export interface Settings {
-  schemaVersion: 2;                             // 2: Kokoro first (ADR-22)
+  schemaVersion: 3;                             // 2: Kokoro first (ADR-22); 3: ai (ADR-30), paragraph pause (ADR-31)
   enginePreference: EngineId[];                 // default ['kokoro', 'webspeech']
   voiceByEngine: Partial<Record<EngineId, string>>;
   rate: number;                                 // default 1.0
@@ -244,11 +305,13 @@ export interface Settings {
   skipCodeBlocks: boolean;                      // default true
   announceHeadings: boolean;                    // default true
   pauseAfterHeadingMs: number;                  // default 600
-  pauseBetweenSentencesMs: number;              // default 150 (all engines)
+  pauseBetweenSentencesMs: number;              // default 0: added at a full stop (ADR-31)
+  pauseBetweenParagraphsMs: number;             // default 700 (ADR-31); all pauses are divided by the speed
   keepAwake: boolean;                           // default true
   pauseOnFlag: boolean;                         // default false on desktop, true on touch devices
   fontSizePx: number;                           // default 18
   theme: 'auto' | 'light' | 'dark';             // default 'auto'
+  ai: AiSettings;                               // default { provider: null, models: {} }
 }
 
 export interface ExportBundleV1 {
@@ -257,7 +320,7 @@ export interface ExportBundleV1 {
   docs: Array<{
     id: string; title: string; format: DocFormat; sourceName: string;
     sourceHash: string; charCount: number;
-    position?: PositionRecord; flags: Flag[];
+    position?: PositionRecord; flags: Flag[]; notes?: Note[]; // notes: ADR-30
   }>;
   settings?: Partial<Omit<Settings, 'azure'>>;   // never export the Azure key
 }
@@ -630,15 +693,24 @@ while status === 'playing':
   s = current sentence; emit {type:'sentence', sentenceId}
   if block.type === 'code' && settings.skipCodeBlocks → advance; continue
   if s.speakText === '' → advance; continue
-  if block.type === 'heading' && announceHeadings → await sleep(pauseAfterHeadingMs / 2)
-  for chunk of s.chunks:
+  if block.type === 'heading' && announceHeadings → await sleep(pauseAfterHeadingMs / 2 / rate)
+  if engine.boundaries && pauseBetweenSentencesMs === 0 && the paragraph has ≥ 2 sentences left:
+     run = s and the rest of its paragraph, up to 1,200 characters (ADR-31)
+     await engine.speak(run.text, {voice, rate, onBoundary}, signal)  // onBoundary moves the highlight
+     a voice with no boundary after 1.5 s is followed by the clock (expected speech time)
+     if it fails: read the sentence it reached on its own, as below
+  else for chunk of s.chunks:
      if engine.kind === 'direct': await engine.speak(chunk, {voice, rate: min(rate, engine.maxEngineRate)}, signal)
      else: blob = await getAudio(chunk); await playBlob(blob, playbackRate = rate, signal)
      if signal aborted → return
-  if block.type === 'heading' && announceHeadings → await sleep(pauseAfterHeadingMs)
-  else → await sleep(pauseBetweenSentencesMs)
+  pause = heading && last of block ? pauseAfterHeadingMs
+        : last of block ? pauseBetweenParagraphsMs : pauseBetweenSentencesMs
+  await sleep(pause / rate)   // pauses shorten as the reading speeds up (ADR-31)
   advance(): next sentence in document order; if none → status 'ended', emit 'ended'
 ```
+
+Kokoro clips have their quiet start and end cut to 0.05 s and 0.2 s
+(`trimSilence`, ADR-31); the model pads each clip with about 0.3 s and 0.7 s.
 
 **Failure handling (ADR-14).** If `speak`/`synthesize`/`playBlob` rejects
 (other than by our own abort), retry the same chunk once after 500 ms. If the
@@ -687,7 +759,8 @@ Concurrency limits alone do not enforce that, so (review correction, ADR-15):
 
 ### 8.4 Audio cache
 
-Key: `${engineId}|${voiceId}|1.0|${sha256hex(chunkText)}`. Store `Blob` in the
+Key: `${engineId}|${voiceId}|1.0|v2|${sha256hex(chunkText)}` (`v2`: trimmed
+clips, ADR-31; older entries are never read and are pruned). Store `Blob` in the
 `audio` object store with `bytes` and `lastUsed`. Budget 300 MB; when exceeded,
 delete least-recently-used records until under 250 MB. `getAudio` updates
 `lastUsed` on hit.
@@ -711,7 +784,7 @@ so no silent element is needed.)
 
 ## 9. Storage
 
-### 9.1 IndexedDB (`idb`), database `readaloud`, version 1
+### 9.1 IndexedDB (`idb`), database `readaloud`, version 2
 
 | Store | Key | Value | Indexes |
 |---|---|---|---|
@@ -722,13 +795,17 @@ so no silent element is needed.)
 | `flags` | `id` | `Flag` | `byDoc` (docId) |
 | `audio` | `key` | `AudioCacheRecord` | `byLastUsed` |
 | `settings` | `key` | `{ key: 'settings', value: Settings }` | |
+| `notes` | `id` | `Note` (version 2, ADR-30) | `byDoc` (docId) |
+| `ai` | `key` | `AiResult` (version 2) | `byDoc` (docId) |
+| `keys` | `provider` | `AiKeyRecord` (version 2; never exported) | |
 
 `addDocument` writes `docs`, `summaries` and `sources` in one transaction and
 aborts it if any write fails, so a document never exists without its source.
 
 Migrations live in `db.ts` `upgrade(db, oldVersion)`. Deleting a document
-deletes its summary, source, position and flags (not its cached audio; the cache is
-pruned by LRU).
+deletes its summary, source, position, flags, notes and AI results (not its cached
+audio; the cache is pruned by LRU). A re-read places notes again like flags; a note
+that cannot be placed is kept as it was.
 
 Call `navigator.storage.persist()` once at first launch.
 
@@ -761,6 +838,8 @@ Import is two-phase so nothing is merged by guesswork (review correction, ADR-16
      updates the PC copy). Equal timestamps keep the local copy.
    - **Position**: the newer `updatedAt` wins, after its `sentenceId` is
      validated the same way (dropped if it cannot be placed).
+   - **Notes** (ADR-30) merge by id like flags. A note that cannot be placed is
+     still imported, marked "place not found", so a note is never lost.
 3. The summary reports counts: added, updated, unchanged, could not be placed,
    possible matches skipped, unmatched documents.
 
@@ -831,7 +910,8 @@ block's position); replace; write `{name}.corrected.md` and a unified diff.
 ### 11.3 Reader
 
 Layout (desktop): header (back, title, chapter name, engine/voice badge);
-left: text pane; right: collapsible panel with tabs **Contents** and **Flags**;
+left: text pane; right: collapsible panel with tabs **Contents**, **Flags**,
+**Notes** and **AI** (ADR-30); the chapter name shows the page (17.1);
 bottom: controls bar.
 
 Text pane: renders **only the current chapter's blocks**. Each sentence is a
@@ -856,6 +936,7 @@ Keyboard (desktop):
 | [ / ] | speed −0.1 / +0.1 |
 | Esc | close panel / blur note field |
 | G | open Contents |
+| M | write a note on the current sentence (ADR-30) |
 
 Keys are ignored while a text field has focus (except Esc).
 
@@ -877,10 +958,12 @@ note and fix fields (inline edit, autosave on blur), status toggle
 ### 11.6 Settings
 
 Engine order (drag or up/down buttons), voice per engine (with "Test" button
-speaking a fixed sentence), speed, locale, Azure region + key (password field,
+speaking a fixed sentence), speed, the extra pause at a full stop and the pause
+between paragraphs (ADR-31), locale, Azure region + key (password field,
 "Verify" button that calls the voices list), Kokoro model download/remove
 (Phase 4), skip code blocks, announce headings, pause lengths, keep awake, font
-size, theme, "Clear audio cache" with size shown, Export/Import JSON.
+size, theme, "Clear audio cache" with size shown, Export/Import JSON, and the
+AI assistant (17.3).
 
 ### 11.7 Accessibility
 
@@ -933,22 +1016,34 @@ without a decision entry.
 | IndexedDB quota error | Toast: "Storage full. Clear the audio cache in Settings." |
 | Empty document after parse | "No readable text found in {name}." |
 | Sentence `speakText` empty | Skipped silently. |
+| AI key refused (401/403) | "{Provider} refused the key. Check it in Settings." Nothing is stored. |
+| AI 429 or no credit | "{Provider} says too many requests, or the account has no credit left." |
+| AI unreachable | "Could not reach {provider}. Check the connection." |
+| AI declined (safety) | "The model declined this request." The partial reply is not kept. |
+| AI reply cut off (length) | The reply is kept and marked "cut off". |
 
 ---
 
 ## 15. Privacy and security
 
-- All documents, flags and positions stay on the device.
+- All documents, flags, notes and positions stay on the device. The one
+  exception is the AI assistant (section 17): when the user presses one of its
+  buttons, the text that button names goes to the AI provider whose key the
+  user added, and nothing else does.
 - Kokoro keeps text on the device. Browser voices may send each sentence to
   Microsoft or Google (Edge's online voices). The Settings screen says this.
   Azure is dropped (ADR-21).
 - The Azure key is stored only in IndexedDB on that device and is excluded from
-  JSON export. It is never logged or placed in a URL.
+  JSON export. It is never logged or placed in a URL. The same holds for AI
+  keys, which also expire (17.3).
 - No analytics, no third-party scripts, no fonts from CDNs. The only remote
-  hosts are `huggingface.co` and its CDN (Kokoro model download).
+  hosts are `huggingface.co` and its CDN (Kokoro model download) and, only with
+  a key added, `api.anthropic.com`, `api.openai.com` and
+  `generativelanguage.googleapis.com`.
 - Content Security Policy in `index.html`: `default-src 'self'; script-src
   'self' 'wasm-unsafe-eval'; connect-src 'self' https://huggingface.co
-  https://*.hf.co; img-src 'self' data: blob:; media-src 'self' blob:;
+  https://*.hf.co https://api.anthropic.com https://api.openai.com
+  https://generativelanguage.googleapis.com; img-src 'self' data: blob:; media-src 'self' blob:;
   worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self';
   object-src 'none'; base-uri 'self'`.
 - Response headers (dev and preview servers): `Cross-Origin-Opener-Policy:
@@ -967,3 +1062,84 @@ without a decision entry.
 | Highlight move on sentence change | < 50 ms |
 | Audio engines: sentences ready ahead on 4G | ≥ 2 |
 | Main JS bundle (gz), excluding lazy loaders | < 250 kB |
+
+---
+
+## 17. AI assistant and notes (ADR-30)
+
+### 17.1 Pages (`core/text/pages.ts`)
+
+`makePages(doc): Page[]`, derived, never stored:
+
+- PDF blocks carry `page` (the page each block starts on). A new page starts
+  when `page` changes or a chapter starts, labelled with the PDF's own page
+  number.
+- Otherwise reading pages: blocks are added to a page until the next block
+  would take it past 1,800 characters; a page always holds at least one block,
+  never crosses a chapter, and pages are numbered 1, 2, 3... through the
+  document.
+- `Page { key, label, chapterIndex, blockIds, firstSentenceId, chars }`;
+  `key` is `c{chapterIndex}p{label}`, unique in the document.
+
+### 17.2 Providers (`core/ai/`)
+
+One file per provider implementing `AiProvider`: `listModels(key)`,
+`suggestModel(models)` and `complete(request, { key, model, signal, onText })`.
+Requests are streamed (SSE) with `fetch`; `onText` receives the text so far.
+The request is a system prompt, the document text and the task, kept apart so
+the document can be cached.
+
+| Provider | Endpoint | Key header |
+|---|---|---|
+| Claude | `POST https://api.anthropic.com/v1/messages` (`anthropic-version: 2023-06-01`, `anthropic-dangerous-direct-browser-access: true`) | `x-api-key` |
+| ChatGPT | `POST https://api.openai.com/v1/chat/completions` | `Authorization: Bearer` |
+| Gemini | `POST https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent?alt=sse` | `x-goog-api-key` |
+
+Claude: the document block carries `cache_control: {type: "ephemeral"}`;
+Claude 5 models get `output_config.effort: "medium"`; Opus 5.5, Opus 5,
+Sonnet 5.5 and Fable 5.1 get `fallbacks: "default"` with `anthropic-beta:
+server-side-fallback-2026-07-01`, dropped and retried once if the API refuses
+the option. `stop_reason: "refusal"` (or the others' safety stops) is an
+`AiError` of kind `refused`; a length stop marks the reply cut off.
+
+### 17.3 Keys
+
+`AiKeyRecord` in store `keys`. Lifetimes offered: 1 day, 7 days, 30 days
+(default), 90 days, 1 year, or a date (end of that day, at most 365 days
+ahead). `Repo.getKey` deletes an expired key and returns nothing. Saving a key
+first lists the models with it, so a wrong key is never stored. Settings shows
+the expiry date and "Forget key". On a `*.github.io` address Settings warns
+that every site under that address shares the browser's storage.
+
+### 17.4 Prompts and replies (`core/ai/prompts.ts`)
+
+The document is sent as plain text with each sentence's id before it
+(`[b12.s3] Sentence text.`), one paragraph per line; page-by-page requests add
+`=== Page {label} ===` lines. Replies cite ids in square brackets.
+`citations(text, validIds)` splits a reply into text and citations, keeping
+only ids that were sent. Page-by-page replies are split by their
+`Page {label}:` lines into one `page-summary` result per page as well.
+"Check for mistakes" replies are one JSON object per line,
+`{"id", "issue", "fix"}`; lines that do not parse, ids outside the chapter and
+fixes equal to the sentence are dropped.
+
+### 17.5 Notes (`core/notes/notes.ts`)
+
+`createNote(index, docId, sentenceId, text, sketch?, source)` fills the
+location fields as `createFlag` does. `notesMarkdown(doc, notes)` writes
+`notes-{title}.md`: chapter headings, then for each note its paragraph, the
+quoted sentence, the text with citations shown as "(p. 12)", and the drawing as
+a Markdown image.
+
+### 17.6 UI
+
+- AI panel: the provider and model in use (or a link to Settings); a scope
+  switch (page, chapter, book); for the scope its actions with the words they
+  send; each stored result with Read aloud, Save as note, Copy and Redo; a
+  question box; earlier answers, newest first. Citations are buttons labelled
+  with the page; pressing one seeks there and plays.
+- Notes panel: notes in reading order with place, quote, text and drawing;
+  Go to, Edit, Delete; Export notes.md.
+- Note sheet (M or ✎): a text box and an optional drawing pad (canvas, Pointer
+  Events, `touch-action: none`; a pen's pressure sets the line width and its
+  eraser end erases). The pad is light paper with dark ink in both themes.

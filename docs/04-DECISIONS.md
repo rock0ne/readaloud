@@ -550,3 +550,166 @@ Found while testing: .NET's `Path.GetFullPath` expands short 8.3 names
 (`PROGRA~1`), so `serve.ps1` answered 404 to everything when its folder was
 given in that form. It now compares against the folder in the same expanded
 form.
+
+## ADR-30 · 2026-10-21 · An AI study assistant with the reader's own key, and notes
+
+Context: Rockson (2026-10-21) wants AI in the app to "speed up learning and
+reading": people add their own API key for ChatGPT, Claude or Gemini, and the
+AI summarises the document chapter by chapter and page by page and answers
+questions about it. Notes while reading, and a tablet pen if it needs nothing
+extra. "The keys should never be saved to the GitHub", and a key is kept for as
+long as the user chooses, up to a year.
+
+Decision:
+
+- **Off until a key is added.** Three providers: Claude (Anthropic), ChatGPT
+  (OpenAI) and Gemini (Google), called straight from the browser with `fetch`
+  and read as a stream, so text appears as it is written. No SDKs and no new
+  dependency: one small file per provider in `core/ai/`. Three SDKs would add
+  three dependencies and a lot of code to an offline web app for one HTTP call
+  each. Anthropic asks browser callers to send
+  `anthropic-dangerous-direct-browser-access: true`; the name warns that a key
+  in a web page can be read by that page's scripts. Here the key belongs to the
+  person using the page and the app loads no third-party scripts (spec 15).
+- **Models.** "Check key" lists the models the key can use, so the list is
+  always the account's own. Claude defaults to Claude Opus 5.5
+  (`claude-opus-5-5`); the user can pick Sonnet 5.5 or Haiku 5.5 (cheaper),
+  Fable 5.1, or any model listed. ChatGPT and Gemini suggest the first listed
+  model from a short preference list, otherwise the user picks. Claude 5 models
+  get `output_config.effort: "medium"`. Opus 5.5, Opus 5, Sonnet 5.5 and Fable
+  5.1 also get `fallbacks: "default"` (beta header
+  `server-side-fallback-2026-07-01`): if a safety check declines a request,
+  Anthropic retries it on its recommended model instead of failing. If the API
+  rejects that option, the app retries once without it. A decline that remains
+  is shown as "The model declined this request" and its partial text is not
+  kept. The document is sent as its own block marked `cache_control`, so a
+  second question about the same chapter costs less.
+- **Keys** live only in IndexedDB on that device (store `keys`), with the expiry
+  the user picks when saving: 1 day, 7 days, 30 days (default), 90 days, 1 year,
+  or a date up to a year ahead. An expired key is deleted the first time the app
+  looks for it; "Forget key" deletes it at once. A key goes only to its own
+  provider's API, in a header, never in a URL. It is never logged, exported in
+  JSON or written to a file, and a test fails if a key-shaped string appears in
+  the source, the docs or the README. Every site at `rock0ne.github.io` shares
+  one browser storage, so on a `github.io` address Settings says that the
+  Windows download (its own address on this PC) is the safer place for a key.
+- **Privacy.** Nothing is sent until the user presses a button, and each button
+  says what it sends and where ("This chapter, about 4,200 words, to Claude").
+  Saving a key needs a tick: the text asked about is sent to that provider with
+  the user's key and billed to their account. The Content Security Policy's
+  `connect-src` gains exactly the three API hosts. README and Settings say so.
+- **What it does** (Reader, AI panel), for the current page, the current
+  chapter or the whole book:
+  - Summaries: a chapter summary; page-by-page summaries of a chapter (one
+    request, one summary per page); a page summary; an overview of the book;
+    "Summarise every chapter" (one request per chapter not yet done, with the
+    count and the words shown first).
+  - Questions about the page, chapter or book.
+  - Replies cite sentences (`[b12.s3]` in the reply, shown as "p. 12"). A
+    citation jumps to the sentence, highlights it and reads from there. A
+    citation of a sentence that was not sent is shown as plain text.
+  - "Check for mistakes" in a chapter lists likely typos and grammar mistakes
+    with a corrected sentence. Each can be listened to and added as a flag
+    (note: the mistake; fix: the corrected sentence) or dismissed. Nothing
+    becomes a flag without the user's click, so `corrections.md` still holds
+    only what the user confirmed.
+  - Any summary or answer can be read aloud with the current voice, or saved
+    as a note.
+  - Results are kept per document (store `ai`), so a summary is paid for once;
+    "Redo" replaces it. They are deleted with the document and not exported.
+- **Pages.** A PDF block now keeps the page it starts on (`Block.page`; re-read
+  an older PDF from the library to get it). Other formats have no pages, so the
+  app makes reading pages of about 1,800 characters (about 300 words, a printed
+  page), cut at paragraph ends, never across a chapter, numbered through the
+  document. The reader shows the page number.
+- **Notes** belong to the sentence being read (M, or the ✎ button). A note has
+  typed text, a drawing, or both; AI replies can be saved as notes. The Notes
+  panel lists them in reading order and exports `notes-<title>.md`. Notes go in
+  the JSON export (an optional `notes` list per document, which older versions
+  ignore) and are placed again like flags after a re-read or an import. A note
+  whose sentence cannot be found is kept and marked, never dropped.
+- **Pen.** Browsers treat a pen like a mouse, so tapping sentences and buttons
+  already works. On Windows 11 a pen can write in any text box and Windows turns
+  the handwriting into text, so note boxes take handwriting with no extra code.
+  A drawing pad (a canvas, thicker lines with more pen pressure, the pen's
+  eraser end erases) keeps handwriting or a sketch as a picture. Nothing to
+  install.
+- Data model: `Settings.schemaVersion` 3 adds `ai` (the provider and a model
+  per provider); IndexedDB version 2 adds the stores `notes`, `ai` and `keys`.
+- CLAUDE.md: "no accounts other than the user's own Azure key" now also allows
+  the AI provider account whose key the user adds.
+
+Not built (Rockson's question about OneNote and Word links): a Word file
+already opens with Add files or Open with. A OneDrive or SharePoint link
+cannot be fetched by a web page without the owner's sign-in, and OneNote pages
+are not files. Both need Microsoft sign-in through Microsoft Graph (an app
+registration, MSAL as a new dependency, and an account the app signs in to),
+which this project does not have. Recorded as a later option for Rockson to
+decide.
+
+Changes after review, same day. Rockson passed on advice from the developer
+AI of his training platform. Taken:
+
+- **A cut-off reply is an error.** Each provider ends a stream with a finish
+  signal (Claude `stop_reason`, ChatGPT `finish_reason`, Gemini
+  `finishReason`). A stream that ends without one is a dropped connection:
+  nothing is saved and the reader is told to try again. Stop does the same
+  ("Stopped. The unfinished reply was not saved."). When several requests run,
+  as in "Summarise every chapter", the ones that finished are kept and the
+  message says how many.
+- **Out of date.** Each result keeps `inputHash`, the SHA-256 of the sentences
+  that were sent. If a re-read changes those sentences, the result shows "Out
+  of date" with Redo. Only the sentences count, so a new document title or
+  chapter label leaves a result current.
+- **Explain this paragraph.** A fourth scope: one paragraph with the paragraph
+  either side of it in the same chapter, so the explanation has its context.
+- **Back to where I was.** After a jump to a citation, a note or a flag, a bar
+  offers the way back to the sentence that was being read.
+- **A key for this session only.** "Only until I close the app" keeps the key
+  in memory and never stores it. On a `github.io` address it is the default.
+- **Forgetting is not cancelling.** Settings says that forgetting a key in the
+  app does not cancel it, and links to the provider's key page to delete it.
+- **Which voice is reading.** The reader names the voice and where it is made:
+  "Kokoro, on this device", "Online Microsoft voice" (Edge sends the text to
+  Microsoft) or "Basic voice on this device".
+- **Prompts keep the detail.** Every summary and answer is asked to keep the
+  names, numbers and dates, and any doubts, conditions or exceptions the text
+  states, and to add nothing that is not in the text.
+
+Not taken: a server that keeps the keys and calls the providers. The app has
+no backend (CLAUDE.md), and a server holding other people's keys is a larger
+risk than a key that stays on the reader's own device.
+
+## ADR-31 · 2026-10-21 · Reading that flows at full stops
+
+**Context.** Rockson, reading his book: a full stop took as long as a new
+paragraph, and at 1.5× the speech got faster but the gaps did not, so a book
+with many short sentences lost its flow. Measured in Edge with the online Ryan
+voice (four short sentences): one utterance per sentence took 12.4 s at 1× and
+8.9 s at 1.5×; the same four as one utterance took 11.0 s and 7.4 s, about half
+a second lost at every full stop whatever the speed. Edge reported 24 word
+boundaries for those four sentences. Kokoro clips start with about 0.3 s and
+end with about 0.7 s of near-silence, so with Kokoro each full stop was close
+to a second.
+
+**Decision.**
+- Browser voices that report word boundaries (`VoiceEngine.boundaries`) are
+  given the rest of the paragraph as one utterance, up to 1,200 characters, so
+  the voice pauses at a full stop as it would in speech. The highlight follows
+  `onBoundary`; a voice that reports none is followed by the clock after 1.5 s.
+  If a paragraph fails part way, the sentence it reached is read on its own
+  with the usual retry, so ADR-14 still holds.
+- Kokoro clips keep 0.05 s before and 0.2 s after the speech (`trimSilence`).
+  The audio cache key gains `v2`, so clips made before are not reused.
+- Two pauses in Settings, both divided by the speed: an extra pause at a full
+  stop (default none) and a pause between paragraphs (default 0.7 s). An extra
+  full-stop pause turns paragraph runs off, because a single utterance cannot
+  hold a pause; browser voices then add about half a second at each full stop.
+- Settings stay at schema version 3, which is not released yet: its migration
+  also turns the old fixed 0.15 s full-stop pause into none, and
+  `pauseBetweenParagraphsMs` comes from the defaults.
+
+**Consequences.** Faster, more natural reading at every speed; a reader who
+wants a slower pace sets the pauses. Pausing in the middle of a paragraph run
+resumes at the sentence that was being read. `SpeakOptions.onBoundary` and
+`VoiceEngine.boundaries` are added to spec 4.

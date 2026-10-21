@@ -1,9 +1,10 @@
 // Typed access to storage (spec 9.1). The only consumer of db.ts.
-import type { AudioCacheRecord, DocRecord, DocSummary, Flag, ParsedDocument, PositionRecord, Settings } from '../types';
+import type { AiKeyRecord, AiProviderId, AiResult, AudioCacheRecord, DocRecord, DocSummary, Flag, FlagContext, Note, ParsedDocument, PositionRecord, Settings } from '../types';
 import { DocIndex, sentenceCount, type OrderedSentence } from '../model';
 import { newId, nowIso } from '../util/ids';
 import { openReadAloudDb, type ReadAloudDb } from './db';
 import { withDefaults } from './settings';
+import { isExpired } from '../ai/keys';
 
 export class DuplicateDocumentError extends Error {
   readonly existingId: string;
@@ -30,13 +31,25 @@ export function summaryOf(doc: DocRecord): DocSummary {
   };
 }
 
+/** The fields a flag or a note is placed by (ADR-23, ADR-30). */
+export interface Anchored {
+  docId: string;
+  sentenceId: string;
+  blockId: string;
+  chapterIndex: number;
+  chapterTitle: string;
+  paragraphInChapter: number;
+  quote: string;
+  context?: FlagContext;
+}
+
 /**
- * Places a flag on a document (ADR-23). A quote found once is placed there. A quote found more
+ * Places a flag (or a note) on a document (ADR-23). A quote found once is placed there. A quote found more
  * than once is placed only where the flag's neighbouring sentences match, or failing that at its
  * exact old place (same sentence id, chapter and paragraph). Anything else stays unplaced, so the
  * user re-flags it rather than finding the correction on the wrong sentence.
  */
-export function anchorFlag(flag: Flag, index: DocIndex, docId: string): Flag | null {
+export function anchorFlag<T extends Anchored>(flag: T, index: DocIndex, docId: string): T | null {
   const hits = index.findAllByQuote(flag.quote);
   const hit = hits.length === 1 ? hits[0] : pickRepeated(hits, flag, index);
   if (!hit) return null;
@@ -52,7 +65,7 @@ export function anchorFlag(flag: Flag, index: DocIndex, docId: string): Flag | n
   };
 }
 
-function pickRepeated(hits: OrderedSentence[], flag: Flag, index: DocIndex): OrderedSentence | undefined {
+function pickRepeated(hits: OrderedSentence[], flag: Anchored, index: DocIndex): OrderedSentence | undefined {
   let candidates = hits;
   const ctx = flag.context;
   if (ctx) {
@@ -130,13 +143,14 @@ export class Repo {
    * placed. Reads and writes share one transaction, so a failure leaves the old version intact.
    */
   async replaceParsed(id: string, parsed: ParsedDocument): Promise<Flag[]> {
-    const tx = this.db.transaction(['docs', 'summaries', 'flags', 'positions'], 'readwrite');
+    const tx = this.db.transaction(['docs', 'summaries', 'flags', 'positions', 'notes'], 'readwrite');
     const lost: Flag[] = [];
     try {
       const old = await tx.objectStore('docs').get(id);
       if (!old) throw new Error('Document not found');
       const flags = await tx.objectStore('flags').index('byDoc').getAll(id);
       const pos = await tx.objectStore('positions').get(id);
+      const notes = await tx.objectStore('notes').index('byDoc').getAll(id);
       const doc: DocRecord = { ...old, ...parsed, id, sourceName: old.sourceName, sourceHash: old.sourceHash, addedAt: old.addedAt };
       const index = new DocIndex(doc);
       const ops: Array<Promise<unknown>> = [tx.objectStore('docs').put(doc), tx.objectStore('summaries').put(summaryOf(doc))];
@@ -144,6 +158,10 @@ export class Repo {
         const placed = anchorFlag(f, index, id);
         if (placed) ops.push(tx.objectStore('flags').put(placed));
         else lost.push(f);
+      }
+      for (const n of notes) {
+        const placed = anchorFlag(n, index, id);
+        if (placed) ops.push(tx.objectStore('notes').put(placed));
       }
       if (pos && !index.get(pos.sentenceId)) ops.push(tx.objectStore('positions').delete(id));
       await Promise.all([...ops, tx.done]);
@@ -182,13 +200,17 @@ export class Repo {
 
   async deleteDocument(id: string): Promise<void> {
     const flagKeys = await this.db.getAllKeysFromIndex('flags', 'byDoc', id);
-    const tx = this.db.transaction(['docs', 'summaries', 'sources', 'positions', 'flags'], 'readwrite');
+    const noteKeys = await this.db.getAllKeysFromIndex('notes', 'byDoc', id);
+    const aiKeys = await this.db.getAllKeysFromIndex('ai', 'byDoc', id);
+    const tx = this.db.transaction(['docs', 'summaries', 'sources', 'positions', 'flags', 'notes', 'ai'], 'readwrite');
     await Promise.all([
       tx.objectStore('docs').delete(id),
       tx.objectStore('summaries').delete(id),
       tx.objectStore('sources').delete(id),
       tx.objectStore('positions').delete(id),
       ...flagKeys.map((k) => tx.objectStore('flags').delete(k)),
+      ...noteKeys.map((k) => tx.objectStore('notes').delete(k)),
+      ...aiKeys.map((k) => tx.objectStore('ai').delete(k)),
       tx.done,
     ]);
   }
@@ -223,6 +245,57 @@ export class Repo {
 
   async deleteFlag(id: string): Promise<void> {
     await this.db.delete('flags', id);
+  }
+
+  // ----- notes (ADR-30) -----
+
+  async listNotes(docId: string): Promise<Note[]> {
+    return this.db.getAllFromIndex('notes', 'byDoc', docId);
+  }
+
+  getNote(id: string): Promise<Note | undefined> {
+    return this.db.get('notes', id);
+  }
+
+  async putNote(note: Note): Promise<void> {
+    await this.db.put('notes', note);
+  }
+
+  async deleteNote(id: string): Promise<void> {
+    await this.db.delete('notes', id);
+  }
+
+  // ----- AI results (ADR-30) -----
+
+  async listAiResults(docId: string): Promise<AiResult[]> {
+    return this.db.getAllFromIndex('ai', 'byDoc', docId);
+  }
+
+  async putAiResult(r: AiResult): Promise<void> {
+    await this.db.put('ai', r);
+  }
+
+  async deleteAiResult(key: string): Promise<void> {
+    await this.db.delete('ai', key);
+  }
+
+  // ----- AI keys (spec 17.3): only here, never exported -----
+
+  /** The saved key for a provider; an expired key is deleted and not returned. */
+  async getKey(provider: AiProviderId, now = new Date()): Promise<AiKeyRecord | undefined> {
+    const rec = await this.db.get('keys', provider);
+    if (!rec) return undefined;
+    if (!isExpired(rec, now)) return rec;
+    await this.db.delete('keys', provider);
+    return undefined;
+  }
+
+  async putKey(rec: AiKeyRecord): Promise<void> {
+    await this.db.put('keys', rec);
+  }
+
+  async deleteKey(provider: AiProviderId): Promise<void> {
+    await this.db.delete('keys', provider);
   }
 
   // ----- settings -----

@@ -27,16 +27,18 @@ One line per step. Keep it short. Newest at the bottom of each section.
 | 24 Kokoro web engine | done (PC) | U-kokoro + Edge M11 | 2026-10-21 | main voice, bf_emma (ADR-22) |
 | 23 Capacitor wrapper | partly | phone | 2026-10-21 | brought forward; Kokoro made inside the app, every word spoken (ADR-27); clips about 40 s ahead (ADR-28); not yet heard by Rockson |
 | 29 Public release | done | fresh clone in WSL + headless Edge on the live site | 2026-10-21 | github.com/rock0ne/readaloud, Pages site, releases v0.1.0 and v0.1.1 (clip-order fix, ADR-28) with the Windows zip and the APK signed with Rockson's key (CN=rock0ne, cert SHA-256 c5f96167…5dbc0f), ADR-29 |
+| 30 AI assistant, notes, pen | done, not yet with a real key | AI1–AI8, N1–N3 + Edge with a fake Claude service | 2026-10-21 | ADR-30 and its review changes; a live key is Rockson's to try |
+| 31 Flow at full stops | done | U11b + Edge, online Ryan voice | 2026-10-21 | ADR-31; Kokoro's trimmed clips not yet heard |
 | Phase 1 gate | waiting on Rockson | | | see below |
 
 ## Phase 1 gate
 
-- [x] Unit tests green: 114 tests in 16 files on 2026-10-21 (115 in 17
-      with the git-ignored book check), covering the Kokoro work (ADR-22),
+- [x] Unit tests green: 156 tests in 19 files on 2026-10-21, with the
+      git-ignored book check, covering the Kokoro work (ADR-22),
       the second-review fixes (ADR-23), reloading on update (ADR-25),
-      large EPUBs (ADR-26), the Android app's voice (ADR-27) and the wider
-      lead and the clip order (ADR-28). `pnpm build`
-      clean, bundle budget met.
+      large EPUBs (ADR-26), the Android app's voice (ADR-27), the wider
+      lead and the clip order (ADR-28), the AI assistant and notes (ADR-30)
+      and the reading flow (ADR-31). `pnpm build` clean, bundle budget met.
 - [ ] M1–M8 done in Edge. Done or partly done: M2 (sample PDF), M3, M4, M5,
       M6. Waiting on Rockson: M1 and M2 with his chapter, M8 install, and
       everything by ear. Not yet run in a browser: M7. Still unchecked in
@@ -151,6 +153,19 @@ every "by ear" item is still Rockson's.
 7. **Back up the release key** (`readaloud-release.jks`) and its password
    somewhere safe, away from this PC. Without them no update can be installed
    over the published app. Sign each new release with `app/android/sign-apk.sh`.
+8. **Try the AI assistant with your own key (ADR-30).** Settings, AI
+   assistant: choose a provider, open its key page from the link, make a key,
+   paste it and press "Check and save key". Then in a document open **AI**:
+   summarise a chapter, ask a question, try Check for mistakes. Say whether
+   the replies help, and check the cost on the provider's usage page.
+9. **Listen to the new flow (ADR-31)** at 1× and 1.5×. If full stops now feel
+   too quick, raise "Extra pause at a full stop" in Settings; if paragraphs
+   feel too long or short, move "Pause between paragraphs".
+10. **OneNote and Word links: decide.** A Word file already opens with Add
+   files or Open with. Opening a OneDrive or SharePoint link, or OneNote,
+   needs Microsoft sign-in (Microsoft Graph, an app registration, MSAL as a
+   new dependency). Recommended: a later phase with its own decision.
+   Second best: keep saving the Word file and adding it.
 
 ## Open issues
 
@@ -171,6 +186,10 @@ every "by ear" item is still Rockson's.
   threads; a faster (int8) model or preparing a chapter before listening
   would be the next steps, both Rockson's call.
 
+- The Pages site, the Windows zip and the Android app still have v0.1.1. The
+  AI assistant, notes and the new reading flow are only in this PC's build
+  (`app/dist`) until a new release.
+
 ## Versions installed
 
 ```
@@ -190,7 +209,7 @@ runtime:         Node 22.23.3 (portable), pnpm 11.19 via corepack
 
 | Measure | Result | Budget |
 |---|---|---|
-| Main JS bundle, gzipped | 27.5 kB (before Kokoro; the voice loads in its own worker) | < 250 kB |
+| Main JS bundle, gzipped | 54 kB with the AI assistant and notes (27.5 kB before Kokoro; the voice loads in its own worker) | < 250 kB |
 | Parse a 500k-char `.docx` (Node + jsdom) | 0.97 s | < 5 s |
 | Parse a 1 MB EPUB (Node + jsdom) | 0.86 s | < 6 s |
 | Kokoro download, PC / phone | 13–20 s / about 10 s for 326 MB | — |
@@ -219,3 +238,19 @@ text, ignoring its spelling of numbers and US spellings.
 | Qwen3 designed British woman, British man | RTX 3060 | about 3.7× slower | exact |
 | Qwen3 built-in Ryan | RTX 3060 | about 3.6× slower | changed "until" to "in the" |
 | Qwen3 built-in Aiden | RTX 3060 | about 3.8× slower | "mornings" for "morning" |
+
+Reading flow, 2026-10-21 (ADR-31). The built app in headless, muted Edge,
+online voice Ryan (United Kingdom), nine short sentences in two paragraphs,
+from Play to "Finished".
+
+| Speed | One sentence at a time, 0.15 s pauses (as before) | A paragraph at a time (now) |
+|---|---|---|
+| 1× | 27.5 s | 25.4 s |
+| 1.5× | 19.6 s | 17.2 s |
+
+Seven full stops and one paragraph break: each full stop is about 0.4 s
+shorter, and the paragraph break is longer (0.7 s by default, divided by the
+speed). At 1.5× the "before" run already had its pauses divided by the speed,
+which the old version did not do, so the old version was a little slower
+still. Kokoro clips are trimmed to 0.05 s before and 0.2 s after the speech
+(they had about 0.3 s and 0.7 s); not yet timed in the app.

@@ -1,12 +1,14 @@
 // Wires core services together once per app start.
 import { createContext } from 'preact';
 import { useContext, useEffect, useState } from 'preact/hooks';
+import { makeProviders } from '../core/ai/assistant';
+import type { AiProvider } from '../core/ai/provider';
 import { KokoroEngine } from '../core/engines/kokoro';
 import { EngineRegistry } from '../core/engines/registry';
 import { WebSpeechEngine } from '../core/engines/webspeech';
 import { Player } from '../core/player/player';
 import { Repo } from '../core/store/repo';
-import type { EngineId, Settings } from '../core/types';
+import type { AiProviderId, EngineId, Settings } from '../core/types';
 import { PhoneKokoro } from './android/phone-kokoro';
 import { IN_ANDROID_APP, readAloudTts, readAppFile } from './android/plugin';
 import { HtmlAudioOutput } from './audio';
@@ -18,6 +20,9 @@ export interface Services {
   player: Player;
   kokoro: KokoroService;
   audio: HtmlAudioOutput;
+  ai: Record<AiProviderId, AiProvider>;
+  /** AI keys kept only until the app closes: in memory, never stored (ADR-30). */
+  sessionKeys: Map<AiProviderId, string>;
   getSettings(): Settings;
   updateSettings(patch: Partial<Settings>): Promise<Settings>;
   subscribeSettings(fn: (s: Settings) => void): () => void;
@@ -71,6 +76,8 @@ export async function createServices(): Promise<Services> {
     player,
     kokoro,
     audio,
+    ai: makeProviders(),
+    sessionKeys: new Map(),
     isTouch,
     getSettings: () => settings,
     updateSettings,

@@ -1,6 +1,6 @@
 // Kokoro neural voices, generated on this device (spec 7.4, ADR-22). The model runs in a Web
 // Worker owned by the UI layer; this engine only sees the KokoroBackend interface.
-import { concatSamples, encodeWav } from '../audio/wav';
+import { concatSamples, encodeWav, trimSilence } from '../audio/wav';
 import type { EngineAvailability, SpeakOptions, Voice, VoiceEngine } from '../types';
 
 export interface KokoroBackend {
@@ -83,7 +83,8 @@ export class KokoroEngine implements VoiceEngine {
     for (const piece of splitForKokoro(text)) {
       signal.throwIfAborted();
       const out = await this.backend.generate(piece, opts.voice.id, signal);
-      parts.push(out.samples);
+      // Each piece keeps only a short quiet start and end, so full stops do not drag (ADR-31).
+      parts.push(trimSilence(out.samples, out.sampleRate));
       sampleRate = out.sampleRate;
     }
     return encodeWav(concatSamples(parts), sampleRate);

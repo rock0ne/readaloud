@@ -157,6 +157,8 @@ button.link {
 
 select,
 input[type='text'],
+input[type='password'],
+input[type='date'],
 textarea {
   border: 1px solid var(--border);
   border-radius: var(--radius);

@@ -44,10 +44,27 @@ class FakeDirect implements VoiceEngine {
   }
 }
 
-function setup(over: Partial<Settings> = {}) {
-  const engine = new FakeDirect();
+/** A voice like Edge's: takes a paragraph at once and reports each word (ADR-31). */
+class FakeFlowing extends FakeDirect {
+  readonly boundaries = true;
+  /** Stop with an error at this character, after reporting the words before it. */
+  failAt = new Map<string, number>();
+  override speak(text: string, opts: SpeakOptions, _signal: AbortSignal): Promise<void> {
+    this.spoken.push(text);
+    this.rates.push(opts.rate);
+    const stop = this.failAt.get(text);
+    if (stop !== undefined) this.failAt.delete(text);
+    for (const m of text.matchAll(/\S+/g)) {
+      if (stop !== undefined && (m.index ?? 0) >= stop) return Promise.reject(new Error('stalled'));
+      opts.onBoundary?.(m.index ?? 0);
+    }
+    return Promise.resolve();
+  }
+}
+
+function setup(over: Partial<Settings> = {}, engine: FakeDirect = new FakeDirect()) {
   const saved: PositionRecord[] = [];
-  const settings: Settings = { ...defaultSettings(), pauseAfterHeadingMs: 0, pauseBetweenSentencesMs: 0, ...over };
+  const settings: Settings = { ...defaultSettings(), pauseAfterHeadingMs: 0, pauseBetweenSentencesMs: 0, pauseBetweenParagraphsMs: 0, ...over };
   const player = new Player({
     positions: { savePosition: async (p) => void saved.push(p) },
     registry: new EngineRegistry([engine]),
@@ -204,5 +221,76 @@ describe('U11 player', () => {
     await player.load(makeDoc(sampleBlocks));
     await player.play();
     expect(player.state.status).toBe('error');
+  });
+});
+
+describe('U11b reading that flows at full stops (ADR-31)', () => {
+  afterEach(() => vi.useRealTimers());
+  const blocks = [
+    { type: 'heading' as const, level: 1, text: 'Chapter One' },
+    { type: 'paragraph' as const, text: 'First one here. Second one here. Third one here.' },
+    { type: 'paragraph' as const, text: 'Next paragraph.' },
+  ];
+
+  it('gives a voice that reports words the rest of the paragraph at once, and the highlight follows', async () => {
+    const { engine, player } = setup({}, new FakeFlowing());
+    const order: string[] = [];
+    await player.load(makeDoc(blocks));
+    player.subscribe((e) => e.type === 'sentence' && order.push(e.sentenceId));
+    await player.play();
+    await player.settled;
+    expect(engine.spoken).toEqual(['Chapter One', 'First one here. Second one here. Third one here.', 'Next paragraph.']);
+    expect(order).toEqual(['b0.s0', 'b1.s0', 'b1.s1', 'b1.s2', 'b2.s0']);
+    expect(player.state.status).toBe('ended');
+  });
+
+  it('starts the paragraph at the sentence the reader is on', async () => {
+    const { engine, player } = setup({}, new FakeFlowing());
+    await player.load(makeDoc(blocks), 'b1.s1');
+    await player.play();
+    await player.settled;
+    expect(engine.spoken[0]).toBe('Second one here. Third one here.');
+  });
+
+  it('reads one sentence at a time when an extra full-stop pause is set', async () => {
+    const { engine, player } = setup({ pauseBetweenSentencesMs: 50 }, new FakeFlowing());
+    await player.load(makeDoc(blocks), 'b1.s0');
+    await player.play();
+    await player.settled;
+    expect(engine.spoken).toEqual(['First one here.', 'Second one here.', 'Third one here.', 'Next paragraph.']);
+  });
+
+  it('after a paragraph fails part way, reads the sentence it reached on its own and carries on (ADR-14)', async () => {
+    const engine = new FakeFlowing();
+    const { player } = setup({}, engine);
+    const text = 'First one here. Second one here. Third one here.';
+    engine.failAt.set(text, text.indexOf('Second') + 7);
+    await player.load(makeDoc(blocks), 'b1.s0');
+    await player.play();
+    await player.settled;
+    // The sentence it reached is read alone (with the usual retry), then paragraphs again.
+    expect(engine.spoken).toEqual([text, 'Second one here.', 'Third one here.', 'Next paragraph.']);
+    expect(player.state.status).toBe('ended');
+  });
+
+  it('pauses longer between paragraphs than at a full stop, and both shorten with speed', async () => {
+    vi.useFakeTimers();
+    const { engine, player } = setup({ pauseBetweenSentencesMs: 400, pauseBetweenParagraphsMs: 1000 });
+    player.setRate(2);
+    await player.load(makeDoc(blocks), 'b1.s0');
+    await player.play();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(engine.spoken).toEqual(['First one here.']);
+    await vi.advanceTimersByTimeAsync(199);
+    expect(engine.spoken).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(engine.spoken).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(200);
+    expect(engine.spoken.at(-1)).toBe('Third one here.');
+    await vi.advanceTimersByTimeAsync(499);
+    expect(engine.spoken).toHaveLength(3);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(engine.spoken.at(-1)).toBe('Next paragraph.');
+    player.stop();
   });
 });

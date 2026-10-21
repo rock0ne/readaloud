@@ -1,6 +1,7 @@
 // Player state machine and reading loop (spec 8.1, 8.2, 8.5; ADR-14).
 import type { EngineId, PlayerEvent, PlayerState, PositionRecord, Sentence, Settings, Voice, VoiceEngine } from '../types';
 import type { EngineRegistry } from '../engines/registry';
+import { expectedSpeechMs } from '../engines/webspeech';
 import { DocIndex } from '../model';
 import type { DocRecord } from '../types';
 import { clampRate } from '../store/settings';
@@ -58,8 +59,12 @@ const PRUNE_EVERY_PUTS = 50;
 export const SHORT_SENTENCE_WORDS = 2;
 /** Longest joined text; stays under Kokoro's split limit (KOKORO_MAX_CHARS). */
 export const UNIT_MAX_CHARS = 300;
+/** Direct engines: the longest stretch of a paragraph given to the voice at once (ADR-31). */
+export const RUN_MAX_CHARS = 1200;
+/** A voice that reports no word boundaries this long into a paragraph is followed by the clock. */
+export const BOUNDARY_WAIT_MS = 1500;
 
-/** Consecutive sentences of one block made as one clip; `starts` are character offsets in `text`. */
+/** Consecutive sentences of one block made as one clip or utterance; `starts` are character offsets in `text`. */
 interface Unit {
   first: number;
   count: number;
@@ -320,6 +325,8 @@ export class Player {
     const voice = this.voice;
     if (!index || !engine || !voice) return;
 
+    // After a paragraph fails part way, the sentence it reached is read on its own (ADR-14, ADR-31).
+    let alone = false;
     while (!signal.aborted) {
       const item = index.order[this.pos];
       if (!item) {
@@ -340,30 +347,72 @@ export class Player {
       const skip = (block.type === 'code' && settings.skipCodeBlocks) || sentence.chunks.length === 0;
       if (!skip) {
         const isHeading = block.type === 'heading' && settings.announceHeadings;
-        if (isHeading && sentence.index === 0) await abortableSleep(settings.pauseAfterHeadingMs / 2, signal);
+        // Pauses shorten as the reading speeds up, like the speech itself (ADR-31).
+        const speed = this._state.rate;
+        if (isHeading && sentence.index === 0) await abortableSleep(settings.pauseAfterHeadingMs / 2 / speed, signal);
         if (signal.aborted) return;
-        const unit = engine.kind === 'audio' ? this.unitAt(this.pos) : null;
-        const pieces = unit ? [unit.text] : sentence.chunks;
-        for (const [c, chunk] of pieces.entries()) {
-          const ahead = engine.kind === 'audio' ? this.upcoming(this.pos, c) : [];
-          const follow = unit ? (fraction: number) => this.follow(unit, fraction) : undefined;
-          const ok = await this.speakWithRetry(engine, voice, chunk, ahead, signal, follow);
+        const unit = engine.kind === 'audio' ? this.unitAt(this.pos) : alone ? null : this.runAt(this.pos, engine, settings);
+        alone = false;
+        if (unit && engine.kind === 'direct') {
+          const ok = await this.speakRun(engine, voice, unit, signal);
           if (signal.aborted) return;
           if (!ok) {
-            // ADR-14: never advance past text that was not confirmed spoken.
-            this.setState({ status: 'error', error: STOPPED_MESSAGE });
-            this.emit({ type: 'error', message: STOPPED_MESSAGE });
-            this.flushPosition();
-            return;
+            alone = true;
+            continue;
+          }
+        } else {
+          const pieces = unit ? [unit.text] : sentence.chunks;
+          for (const [c, chunk] of pieces.entries()) {
+            const ahead = engine.kind === 'audio' ? this.upcoming(this.pos, c) : [];
+            const follow = unit ? (fraction: number) => this.follow(unit, fraction) : undefined;
+            const ok = await this.speakWithRetry(engine, voice, chunk, ahead, signal, follow);
+            if (signal.aborted) return;
+            if (!ok) {
+              // ADR-14: never advance past text that was not confirmed spoken.
+              this.setState({ status: 'error', error: STOPPED_MESSAGE });
+              this.emit({ type: 'error', message: STOPPED_MESSAGE });
+              this.flushPosition();
+              return;
+            }
           }
         }
         if (unit) this.follow(unit, 1);
         const lastOfBlock = index.order[this.pos]!.sentence.index === block.sentences.length - 1;
-        if (isHeading && lastOfBlock) await abortableSleep(settings.pauseAfterHeadingMs, signal);
-        else await abortableSleep(settings.pauseBetweenSentencesMs, signal);
+        const pause = isHeading && lastOfBlock ? settings.pauseAfterHeadingMs : lastOfBlock ? settings.pauseBetweenParagraphsMs : settings.pauseBetweenSentencesMs;
+        await abortableSleep(pause / speed, signal);
         if (signal.aborted) return;
       }
       this.pos++;
+    }
+  }
+
+  /**
+   * Speaks a paragraph run in one utterance; the highlight follows the voice's word boundaries, or
+   * the clock for a voice that reports none. One try: false means the text was not confirmed spoken.
+   */
+  private async speakRun(engine: VoiceEngine, voice: Voice, unit: Unit, signal: AbortSignal): Promise<boolean> {
+    if (!engine.speak) return false;
+    const rate = Math.min(this._state.rate, engine.maxEngineRate);
+    const now = () => this.deps.now?.() ?? Date.now();
+    const started = now();
+    let reported = false;
+    const clock = setInterval(() => {
+      const elapsed = now() - started;
+      if (!reported && elapsed >= BOUNDARY_WAIT_MS) this.follow(unit, Math.min(0.99, elapsed / expectedSpeechMs(unit.text, rate)));
+    }, 250);
+    try {
+      const onBoundary = (charIndex: number) => {
+        reported = true;
+        this.follow(unit, charIndex / unit.text.length);
+      };
+      await engine.speak(unit.text, { voice, rate, onBoundary }, signal);
+      return true;
+    } catch (e) {
+      if (signal.aborted) return true;
+      console.warn('[player] paragraph failed', e);
+      return false;
+    } finally {
+      clearInterval(clock);
     }
   }
 
@@ -449,7 +498,37 @@ export class Player {
     return { first: pos, count: members.length, text: members.map((m) => m.chunks[0]!).join(' '), starts };
   }
 
-  /** Moves the highlight through a unit as its clip plays; never backwards. */
+  /**
+   * Direct engines that report boundaries: the sentences from `pos` to the end of the paragraph as one
+   * utterance, so the voice pauses at a full stop as it would in speech instead of stopping and starting
+   * again (ADR-31). Only when no extra full-stop pause is set; a sentence in several chunks is read alone.
+   */
+  private runAt(pos: number, engine: VoiceEngine, settings: Settings): Unit | null {
+    if (!engine.boundaries || settings.pauseBetweenSentencesMs > 0) return null;
+    const item = this.index?.order[pos];
+    if (!item) return null;
+    const { block, sentence } = item;
+    const members: Sentence[] = [];
+    let length = -1;
+    for (let k = sentence.index; k < block.sentences.length; k++) {
+      const s = block.sentences[k]!;
+      if (s.chunks.length !== 1) break;
+      const add = 1 + s.chunks[0]!.length;
+      if (members.length > 0 && length + add > RUN_MAX_CHARS) break;
+      members.push(s);
+      length += add;
+    }
+    if (members.length < 2) return null;
+    const starts: number[] = [];
+    let at = 0;
+    for (const m of members) {
+      starts.push(at);
+      at += m.chunks[0]!.length + 1;
+    }
+    return { first: pos, count: members.length, text: members.map((m) => m.chunks[0]!).join(' '), starts };
+  }
+
+  /** Moves the highlight through a unit as its clip or utterance plays; never backwards. */
   private follow(unit: Unit, fraction: number): void {
     let i = 0;
     for (let j = 1; j < unit.count; j++) if (fraction * unit.text.length >= unit.starts[j]!) i = j;
@@ -555,7 +634,8 @@ export class Player {
     this.lastAsk = new Promise<void>((resolve) => (asked = resolve));
     try {
       const cache = this.deps.audioCache;
-      const key = `${engine.id}|${voice.id}|1.0|${await sha256Hex(new TextEncoder().encode(text))}`;
+      // 'v2': clips with their quiet start and end trimmed (ADR-31); older clips are pruned in time.
+      const key = `${engine.id}|${voice.id}|1.0|v2|${await sha256Hex(new TextEncoder().encode(text))}`;
       const hit = cache ? await cache.getAudio(key).catch(() => undefined) : undefined;
       if (hit) return hit;
       await earlier;

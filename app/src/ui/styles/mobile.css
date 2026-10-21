@@ -23,6 +23,31 @@
     position: relative;
   }
 
+  /* The panel buttons get a row of their own under the titles. */
+  .reader .bar {
+    flex-wrap: wrap;
+  }
+
+  .reader .bar .titles {
+    flex: 1;
+  }
+
+  .reader .bar .spacer {
+    display: none;
+  }
+
+  .panel-buttons {
+    flex-basis: 100%;
+  }
+
+  .panel-buttons button {
+    flex: 1;
+  }
+
+  .return-bar {
+    bottom: 12px;
+  }
+
   .side-panel {
     position: absolute;
     left: 0;
@@ -41,11 +66,11 @@
   .controls {
     position: relative;
     display: grid;
-    grid-template-columns: auto auto 1fr;
+    grid-template-columns: auto auto 1fr auto;
     grid-template-areas:
-      'transport transport flag'
-      'speed voice voice'
-      'status status note';
+      'transport transport transport flag'
+      'speed voice voice voice'
+      'status status jot note';
     gap: 8px;
     padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
     z-index: 35;
@@ -82,6 +107,12 @@
 
   .controls .note {
     grid-area: note;
+    min-height: 44px;
+  }
+
+  .controls .jot {
+    grid-area: jot;
+    justify-self: end;
     min-height: 44px;
   }
 

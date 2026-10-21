@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { concatSamples, encodeWav } from '../src/core/audio/wav';
+import { concatSamples, encodeWav, trimSilence } from '../src/core/audio/wav';
 import { KOKORO_MAX_CHARS, KokoroEngine, splitForKokoro, type KokoroBackend } from '../src/core/engines/kokoro';
 import { EngineRegistry } from '../src/core/engines/registry';
 import { Player, STOPPED_MESSAGE, type AudioCache, type AudioOutput } from '../src/core/player/player';
@@ -85,6 +85,20 @@ describe('Kokoro engine (ADR-22)', () => {
     const blob = await engine.synthesize(text, { voice, rate: 1 }, new AbortController().signal);
     expect(backend.calls).toEqual(parts);
     expect(new DataView(await blob.arrayBuffer()).getUint32(40, true)).toBe(parts.join('').length * 2);
+  });
+
+  it('cuts a clip\'s quiet start and end down to a short lead and tail (ADR-31)', () => {
+    const rate = 1000;
+    const clip = new Float32Array(300 + 100 + 700);
+    clip.fill(0.001, 0, 300);
+    clip.fill(0.5, 300, 400);
+    const out = trimSilence(clip, rate);
+    expect(out.length).toBe(50 + 100 + 200);
+    expect(out[50]).toBe(0.5);
+    const quiet = new Float32Array(100);
+    expect(trimSilence(quiet, rate)).toBe(quiet);
+    const tight = new Float32Array([0.5, 0.5]);
+    expect(trimSilence(tight, rate)).toBe(tight);
   });
 
   it('joins sample runs in order', () => {
@@ -183,7 +197,7 @@ class ReorderingCache extends MemoryCache {
 function setupAudio(over: Partial<Settings> = {}, cache: MemoryCache = new MemoryCache()) {
   const engine = new FakeAudioEngine();
   const audio = new FakeOutput();
-  const settings: Settings = { ...defaultSettings(), pauseAfterHeadingMs: 0, pauseBetweenSentencesMs: 0, ...over };
+  const settings: Settings = { ...defaultSettings(), pauseAfterHeadingMs: 0, pauseBetweenSentencesMs: 0, pauseBetweenParagraphsMs: 0, ...over };
   const player = new Player({
     positions: { savePosition: async () => undefined },
     registry: new EngineRegistry([engine]),
@@ -231,7 +245,7 @@ describe('player with an audio engine (spec 8.3, 8.4)', () => {
   it('keeps that order when a clip in between is already cached', async () => {
     const cache = new ReorderingCache();
     const cached = 'First sentence here.';
-    cache.map.set(`kokoro|bf_emma|1.0|${await sha256Hex(new TextEncoder().encode(cached))}`, new Blob([cached]));
+    cache.map.set(`kokoro|bf_emma|1.0|v2|${await sha256Hex(new TextEncoder().encode(cached))}`, new Blob([cached]));
     const { engine, audio, player } = setupAudio({}, cache);
     audio.hold = true;
     await player.load(makeDoc(sampleBlocks));
@@ -270,7 +284,7 @@ describe('player with an audio engine (spec 8.3, 8.4)', () => {
     await player.play();
     await vi.waitFor(() => expect(audio.played).toHaveLength(8));
     expect(engine.made).toHaveLength(4);
-    expect([...cache.map.keys()][0]).toMatch(/^kokoro\|bf_emma\|1\.0\|[0-9a-f]{64}$/);
+    expect([...cache.map.keys()][0]).toMatch(/^kokoro\|bf_emma\|1\.0\|v2\|[0-9a-f]{64}$/);
   });
 
   it('cancels audio still being made for text no longer ahead after a seek', async () => {

@@ -31,7 +31,7 @@ export function sortFlags(flags: Flag[], index: DocIndex): Flag[] {
   return [...flags].sort((a, b) => pos(a) - pos(b) || a.createdAt.localeCompare(b.createdAt));
 }
 
-function stamp(d: Date): string {
+export function stamp(d: Date): string {
   const p = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
@@ -72,7 +72,11 @@ export function correctionsMarkdown(doc: DocRecord, flags: Flag[], opts: Correct
   return lines.join('\n') + '\n';
 }
 
+/** A title as a safe part of a file name. */
+export function fileBase(title: string): string {
+  return title.replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '').slice(0, 60) || 'document';
+}
+
 export function correctionsFileName(doc: DocRecord): string {
-  const base = doc.title.replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '').slice(0, 60) || 'document';
-  return `corrections-${base}.md`;
+  return `corrections-${fileBase(doc.title)}.md`;
 }

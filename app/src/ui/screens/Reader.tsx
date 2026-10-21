@@ -1,14 +1,21 @@
-// Reader screen (spec 11.3, 11.4, 10.1, 14).
+// Reader screen (spec 11.3, 11.4, 10.1, 14, 17.6).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { DocIndex } from '../../core/model';
 import { createFlag } from '../../core/flags/corrections';
+import { createNote } from '../../core/notes/notes';
 import { RATE_MAX, RATE_MIN, clampRate } from '../../core/store/settings';
-import type { DocRecord, EngineId, Flag, Voice } from '../../core/types';
+import { PageIndex } from '../../core/text/pages';
+import type { AiResult, AiSuggestion, DocRecord, EngineId, Flag, Note, Voice } from '../../core/types';
 import type { Pick } from '../../core/engines/registry';
 import { TextPane } from '../components/TextPane';
 import { FlagPanel } from '../components/FlagPanel';
 import { TocPanel } from '../components/TocPanel';
 import { NoteSheet } from '../components/NoteSheet';
+import { NoteEditor } from '../components/NoteEditor';
+import { NotesPanel } from '../components/NotesPanel';
+import { AiPanel } from '../components/AiPanel';
+import type { CiteHelpers } from '../components/Reply';
+import { useAiJob } from '../hooks/useAiJob';
 import { KokoroDownload } from '../components/KokoroDownload';
 import { VoicePicker, shortVoiceName } from '../components/VoicePicker';
 import { usePlayer } from '../hooks/usePlayer';
@@ -16,7 +23,23 @@ import { useKeys } from '../hooks/useKeys';
 import { useMediaSession, useOnline, useWakeLock } from '../hooks/useDevice';
 import { toast, useKokoro, useServices, useSettings } from '../services';
 
-type Panel = 'toc' | 'flags' | null;
+type Panel = 'toc' | 'flags' | 'notes' | 'ai' | null;
+type Editing = { sentenceId: string; note?: Note };
+
+/** Says which kind of voice is reading, so "natural" is never ambiguous (ADR-30). */
+function voiceLabel(v: Voice): string {
+  const name = shortVoiceName(v);
+  if (v.engineId === 'kokoro') return `Kokoro, on this device: ${name}`;
+  if (v.quality === 'neural' && !v.offline) {
+    const from = /microsoft/i.test(v.name) ? 'Microsoft' : /google/i.test(v.name) ? 'Google' : /samsung/i.test(v.name) ? 'Samsung' : 'browser';
+    return `Online ${from} voice: ${name}`;
+  }
+  return `${v.quality === 'neural' ? 'Natural' : 'Basic'} voice on this device: ${name}`;
+}
+
+function upsert<T>(xs: T[], x: T, same: (a: T, b: T) => boolean): T[] {
+  return xs.some((y) => same(y, x)) ? xs.map((y) => (same(y, x) ? x : y)) : [...xs, x];
+}
 
 export function Reader({ docId }: { docId: string }) {
   const services = useServices();
@@ -27,12 +50,18 @@ export function Reader({ docId }: { docId: string }) {
   const [flags, setFlags] = useState<Flag[]>([]);
   const [panel, setPanel] = useState<Panel>(isTouch || innerWidth < 900 ? null : 'toc');
   const [noteFor, setNoteFor] = useState<Flag | null>(null);
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [editing, setEditing] = useState<Editing | null>(null);
+  const [aiResults, setAiResults] = useState<AiResult[]>([]);
+  const [returnTo, setReturnTo] = useState<string | null>(null);
   const [voices, setVoices] = useState<Voice[]>([]);
   const [auto, setAuto] = useState<Pick | null | undefined>(undefined);
   const view = usePlayer(player);
   const online = useOnline();
   const wasOnline = useRef(online);
   const index = useMemo(() => (doc ? new DocIndex(doc) : null), [doc]);
+  const pages = useMemo(() => (doc ? new PageIndex(doc) : null), [doc]);
+  const ai = useAiJob(docId, doc ?? null, (rs) => setAiResults((xs) => rs.reduce((acc, r) => upsert(acc, r, (a, b) => a.key === b.key), xs)));
 
   // Load the document, its flags and the saved position.
   useEffect(() => {
@@ -41,9 +70,12 @@ export function Reader({ docId }: { docId: string }) {
       const d = await repo.getDocument(docId);
       if (!alive) return;
       if (!d) return setDoc(null);
-      const [f, pos] = await Promise.all([repo.listFlags(docId), repo.getPosition(docId)]);
+      const [f, pos, n, results] = await Promise.all([repo.listFlags(docId), repo.getPosition(docId), repo.listNotes(docId), repo.listAiResults(docId)]);
       if (!alive) return;
       setFlags(f);
+      setNotes(n);
+      setAiResults(results);
+      setReturnTo(null);
       setDoc(d);
       await player.load(d, pos?.sentenceId);
       void repo.touchOpened(docId);
@@ -146,12 +178,80 @@ export function Reader({ docId }: { docId: string }) {
     if (withNote) setNoteFor(flag);
   };
 
+  const narrow = () => isTouch || innerWidth < 900;
+
+  // A jump from a citation, a note or a suggestion can be undone with "Back to where I was".
+  const jump = (sentenceId: string, play: boolean) => {
+    const here = view.currentId;
+    if (here && here !== sentenceId && returnTo === null) setReturnTo(here);
+    player.seek(sentenceId);
+    if (play && player.state.status !== 'playing' && player.state.status !== 'buffering') void player.play();
+    if (narrow()) setPanel(null);
+  };
+  const goBack = () => {
+    if (returnTo) player.seek(returnTo);
+    setReturnTo(null);
+  };
+
+  const cite: CiteHelpers | null =
+    index && pages
+      ? {
+          valid: (id) => index.get(id) !== undefined,
+          pageOf: (id) => pages.ofSentence(id)?.label,
+          quoteOf: (id) => index.get(id)?.sentence.text,
+          onCite: (id) => jump(id, true),
+        }
+      : null;
+
+  const saveNote = async (n: Note) => {
+    await repo.putNote(n);
+    setNotes((xs) => upsert(xs, n, (a, b) => a.id === b.id));
+  };
+  const deleteNote = async (n: Note) => {
+    await repo.deleteNote(n.id);
+    setNotes((xs) => xs.filter((x) => x.id !== n.id));
+  };
+  const writeNote = () => {
+    const at = view.currentId ?? index?.order[0]?.sentence.id;
+    if (!at) return;
+    player.pause();
+    setEditing({ sentenceId: at });
+  };
+  const saveAiNote = (sentenceId: string, text: string) => {
+    if (!doc || !index) return;
+    const n = createNote(index, doc.id, sentenceId, text, { source: 'ai' });
+    if (!n) return;
+    void saveNote(n).then(() => toast('Saved to your notes.'));
+  };
+
+  // A suggested mistake becomes a flag: the issue as its note and the fix as the corrected sentence.
+  const flagSuggestion = async (s: AiSuggestion) => {
+    if (!doc || !index) return;
+    const existing = flags.find((f) => f.sentenceId === s.sentenceId && f.status !== 'dismissed');
+    if (existing) {
+      await saveFlag({ ...existing, note: existing.note || s.issue, fixedText: existing.fixedText || s.fix, updatedAt: new Date().toISOString() });
+    } else {
+      const created = createFlag(index, doc.id, s.sentenceId);
+      if (!created) return;
+      await saveFlag({ ...created, note: s.issue, fixedText: s.fix });
+    }
+    toast('Added as a flag.');
+  };
+  const updateAiResult = async (r: AiResult) => {
+    await repo.putAiResult(r);
+    setAiResults((xs) => upsert(xs, r, (a, b) => a.key === b.key));
+  };
+  const deleteAiResult = async (r: AiResult) => {
+    await repo.deleteAiResult(r.key);
+    setAiResults((xs) => xs.filter((x) => x.key !== r.key));
+  };
+
   const go = (blockId: string) => {
     if (!index) return;
     const start = index.block(blockId);
     const first = start?.sentences[0] ?? index.order.find((o) => o.block.index >= (start?.index ?? 0))?.sentence;
     if (first) player.seek(first.id);
-    if (isTouch || innerWidth < 900) setPanel(null);
+    if (narrow()) setPanel(null);
   };
 
   const pickVoice = async (engineId: EngineId, voiceId: string) => {
@@ -174,12 +274,13 @@ export function Reader({ docId }: { docId: string }) {
     n: () => void flagCurrent(true),
     '[': () => setRate(view.rate - 0.1),
     ']': () => setRate(view.rate + 0.1),
+    m: () => writeNote(),
     g: () => setPanel('toc'),
-    Escape: () => (noteFor ? setNoteFor(null) : setPanel(null)),
+    Escape: () => (editing ? setEditing(null) : noteFor ? setNoteFor(null) : setPanel(null)),
   });
 
   if (doc === undefined) return <main class="boot">Opening…</main>;
-  if (doc === null || !index)
+  if (doc === null || !index || !pages || !cite)
     return (
       <main class="boot">
         <p>This document is not in the library on this device.</p>
@@ -202,8 +303,13 @@ export function Reader({ docId }: { docId: string }) {
         : view.status === 'ended'
           ? 'Finished'
           : activeVoice
-            ? `${activeVoice.quality === 'neural' ? 'Natural' : 'Basic'} voice: ${shortVoiceName(activeVoice)}`
+            ? voiceLabel(activeVoice)
             : 'Looking for voices…';
+  const page = view.currentId ? pages.ofSentence(view.currentId) : undefined;
+  const chapterLine = [index.chapter(chapterIndex)?.title ?? '', page ? `page ${page.label}` : ''].filter(Boolean).join(' · ');
+  const toggle = (p: Exclude<Panel, null>) => setPanel(panel === p ? null : p);
+  const editingAt = editing ? index.get(editing.sentenceId) : undefined;
+  const placeOf = (chapter: number, title: string, paragraph: number) => `${title || `Chapter ${chapter + 1}`} · Paragraph ${paragraph}`;
 
   return (
     <main class={`reader${panel ? ' with-panel' : ''}`}>
@@ -213,15 +319,23 @@ export function Reader({ docId }: { docId: string }) {
         </a>
         <div class="titles">
           <div class="doc-title">{doc.title}</div>
-          <div class="chapter-title">{index.chapter(chapterIndex)?.title ?? ''}</div>
+          <div class="chapter-title">{chapterLine}</div>
         </div>
         <div class="spacer" />
-        <button class={panel === 'toc' ? 'active' : ''} onClick={() => setPanel(panel === 'toc' ? null : 'toc')}>
-          Contents
-        </button>
-        <button class={panel === 'flags' ? 'active' : ''} onClick={() => setPanel(panel === 'flags' ? null : 'flags')}>
-          Flags{flags.length ? ` (${flags.filter((f) => f.status === 'open').length})` : ''}
-        </button>
+        <div class="panel-buttons">
+          <button class={panel === 'toc' ? 'active' : ''} onClick={() => toggle('toc')}>
+            Contents
+          </button>
+          <button class={panel === 'flags' ? 'active' : ''} onClick={() => toggle('flags')}>
+            Flags{flags.length ? ` (${flags.filter((f) => f.status === 'open').length})` : ''}
+          </button>
+          <button class={panel === 'notes' ? 'active' : ''} onClick={() => toggle('notes')}>
+            Notes{notes.length ? ` (${notes.length})` : ''}
+          </button>
+          <button class={panel === 'ai' ? 'active' : ''} onClick={() => toggle('ai')} title="AI study assistant, with your own key">
+            AI{ai.job ? ' …' : ''}
+          </button>
+        </div>
       </header>
 
       {kokoroBanner && (
@@ -236,12 +350,76 @@ export function Reader({ docId }: { docId: string }) {
           <aside class="side-panel">
             {panel === 'toc' ? (
               <TocPanel doc={doc} currentChapter={chapterIndex} onGo={go} />
+            ) : panel === 'flags' ? (
+              <FlagPanel doc={doc} index={index} flags={flags} currentId={view.currentId} onSave={saveFlag} onDelete={deleteFlag} onJump={(id) => jump(id, false)} />
+            ) : panel === 'notes' ? (
+              <NotesPanel
+                doc={doc}
+                index={index}
+                pages={pages}
+                notes={notes}
+                currentId={view.currentId}
+                cite={cite}
+                onNew={writeNote}
+                onJump={(id) => jump(id, false)}
+                onEdit={(n) => setEditing({ sentenceId: n.sentenceId, note: n })}
+                onDelete={(n) => void deleteNote(n)}
+              />
             ) : (
-              <FlagPanel doc={doc} index={index} flags={flags} currentId={view.currentId} onSave={saveFlag} onDelete={deleteFlag} onJump={(id) => player.seek(id)} />
+              <AiPanel
+                doc={doc}
+                index={index}
+                pages={pages}
+                currentId={view.currentId}
+                chapterIndex={chapterIndex}
+                results={aiResults}
+                ai={ai}
+                cite={cite}
+                onSaveNote={saveAiNote}
+                onAddFlag={flagSuggestion}
+                onUpdateResult={(r) => void updateAiResult(r)}
+                onDeleteResult={(r) => void deleteAiResult(r)}
+              />
             )}
           </aside>
         )}
+        {returnTo && (
+          <div class="return-bar">
+            <button class="primary" onClick={goBack}>
+              ↩ Back to where I was
+            </button>
+            <button class="link" aria-label="Stay here" title="Stay here" onClick={() => setReturnTo(null)}>
+              ×
+            </button>
+          </div>
+        )}
       </div>
+
+      {editing && (
+        <NoteEditor
+          key={editing.note?.id ?? editing.sentenceId}
+          quote={editing.note?.quote ?? editingAt?.sentence.text ?? ''}
+          place={
+            editing.note
+              ? placeOf(editing.note.chapterIndex, editing.note.chapterTitle, editing.note.paragraphInChapter)
+              : editingAt
+                ? placeOf(editingAt.block.chapterIndex, index.chapter(editingAt.block.chapterIndex)?.title ?? '', index.paragraphInChapter(editingAt.block))
+                : ''
+          }
+          {...(editing.note ? { text: editing.note.text, sketch: editing.note.sketch } : {})}
+          onClose={() => setEditing(null)}
+          onSave={(text, sketch) => {
+            const old = editing.note;
+            if (old) {
+              const { sketch: _old, ...rest } = old;
+              void saveNote({ ...rest, text, ...(sketch ? { sketch } : {}), updatedAt: new Date().toISOString() });
+              return;
+            }
+            const n = createNote(index, doc.id, editing.sentenceId, text, sketch ? { sketch } : {});
+            if (n) void saveNote(n).then(() => toast('Note saved.'));
+          }}
+        />
+      )}
 
       {noteFor && (
         <NoteSheet
@@ -285,8 +463,11 @@ export function Reader({ docId }: { docId: string }) {
           {status}
           {view.rate > 2 && player.currentVoice?.engineId === 'webspeech' ? ' · capped at 2.0× for browser voices' : ''}
         </div>
-        <button class="note" onClick={() => void flagCurrent(true)} title="Flag with a note (N)">
-          Note
+        <button class="jot" onClick={writeNote} title="Write a note on this sentence (M)">
+          ✎ Note
+        </button>
+        <button class="note" onClick={() => void flagCurrent(true)} title="Flag with a note about the mistake (N)">
+          Flag + note
         </button>
         <button class="flag-btn" onClick={() => void flagCurrent(false)} title="Flag this sentence (F)">
           FLAG

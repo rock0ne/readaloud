@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { EngineId, Settings, Voice } from '../../core/types';
 import { RATE_MAX, RATE_MIN } from '../../core/store/settings';
+import { AiSettings } from '../components/AiSettings';
 import { DataTransfer } from '../components/DataTransfer';
 import { KokoroDownload } from '../components/KokoroDownload';
 import { VoicePicker, shortVoiceName } from '../components/VoicePicker';
@@ -176,6 +177,19 @@ export function SettingsScreen() {
         </label>
         <p class="hint">Kokoro voices play up to 3.0×. Browser voices are capped at 2.0×.</p>
         <label class="field">
+          Extra pause at a full stop <strong>{s.pauseBetweenSentencesMs === 0 ? 'none' : `${(s.pauseBetweenSentencesMs / 1000).toFixed(2)} s`}</strong>
+          <input type="range" min={0} max={1000} step={50} value={s.pauseBetweenSentencesMs} onInput={(e) => update({ pauseBetweenSentencesMs: Number(e.currentTarget.value) })} />
+        </label>
+        <label class="field">
+          Pause between paragraphs <strong>{(s.pauseBetweenParagraphsMs / 1000).toFixed(1)} s</strong>
+          <input type="range" min={0} max={3000} step={100} value={s.pauseBetweenParagraphsMs} onInput={(e) => update({ pauseBetweenParagraphsMs: Number(e.currentTarget.value) })} />
+        </label>
+        <p class="hint">
+          Pauses get shorter as you speed up. With no extra pause at a full stop the voice moves on as a person reading aloud would, and browser
+          voices read a paragraph at a time. An extra pause makes browser voices read one sentence at a time, which adds about half a second at
+          each full stop.
+        </p>
+        <label class="field">
           Language
           <select value={s.locale} onChange={(e) => update({ locale: e.currentTarget.value })}>
             <option value="en-GB">English (United Kingdom)</option>
@@ -192,10 +206,6 @@ export function SettingsScreen() {
         <label class="field">
           Pause after a heading <strong>{(s.pauseAfterHeadingMs / 1000).toFixed(1)} s</strong>
           <input type="range" min={0} max={2000} step={100} value={s.pauseAfterHeadingMs} onInput={(e) => update({ pauseAfterHeadingMs: Number(e.currentTarget.value) })} />
-        </label>
-        <label class="field">
-          Pause between sentences <strong>{(s.pauseBetweenSentencesMs / 1000).toFixed(2)} s</strong>
-          <input type="range" min={0} max={1000} step={50} value={s.pauseBetweenSentencesMs} onInput={(e) => update({ pauseBetweenSentencesMs: Number(e.currentTarget.value) })} />
         </label>
         <label class="check">
           <input type="checkbox" checked={s.skipCodeBlocks} onChange={(e) => update({ skipCodeBlocks: e.currentTarget.checked })} />
@@ -227,12 +237,15 @@ export function SettingsScreen() {
         </label>
       </section>
 
+      <AiSettings />
+
       <section>
         <h2>Your data</h2>
         <p>
-          Documents, flags and reading positions stay on this device. Kokoro voices are made on this device, so your text never leaves it.
-          Browser voices may send each sentence to Microsoft or Google to be spoken. Export a JSON file to move positions and flags between
-          your PC and phone.
+          Documents, flags, notes and reading positions stay on this device. Kokoro voices are made on this device, so your text never leaves
+          it. Browser voices may send each sentence to Microsoft or Google to be spoken. The AI assistant sends only the part you ask about, and
+          only to the company whose key you added. Export a JSON file to move positions, flags and notes between your PC and phone; AI keys are
+          never put in it.
         </p>
         <div class="row-field">
           <DataTransfer />
@@ -247,10 +260,11 @@ export function SettingsScreen() {
             <tr><td>← / →</td><td>Previous or next sentence</td></tr>
             <tr><td>R</td><td>Replay the sentence</td></tr>
             <tr><td>F</td><td>Flag the current sentence</td></tr>
-            <tr><td>N</td><td>Flag with a note</td></tr>
+            <tr><td>N</td><td>Flag with a note about the mistake</td></tr>
+            <tr><td>M</td><td>Write a note on the sentence</td></tr>
             <tr><td>[ / ]</td><td>Slower or faster</td></tr>
             <tr><td>G</td><td>Open contents</td></tr>
-            <tr><td>Esc</td><td>Close a panel or note</td></tr>
+            <tr><td>Esc</td><td>Close a panel or a note</td></tr>
           </tbody>
         </table>
       </section>

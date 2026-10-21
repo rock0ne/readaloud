@@ -27,6 +27,7 @@ interface UtteranceLike {
   pitch: number;
   onend: ((ev: Event) => void) | null;
   onerror: ((ev: SpeechSynthesisErrorEvent) => void) | null;
+  onboundary?: ((ev: SpeechSynthesisEvent) => void) | null;
 }
 
 export interface SynthLike {
@@ -66,6 +67,8 @@ export class WebSpeechEngine implements VoiceEngine {
   readonly label = 'Browser voices';
   readonly kind = 'direct' as const;
   readonly maxEngineRate = 2.0;
+  /** Edge's voices report each word, so a paragraph can be one utterance (ADR-31). */
+  readonly boundaries = true;
 
   private readonly synth: SynthLike | undefined;
   private readonly Utterance: (new (text: string) => UtteranceLike) | undefined;
@@ -141,6 +144,8 @@ export class WebSpeechEngine implements VoiceEngine {
     u.lang = opts.voice.lang;
     u.rate = rate;
     u.pitch = 1;
+    const onBoundary = opts.onBoundary;
+    if (onBoundary) u.onboundary = (ev) => onBoundary(ev.charIndex);
     keepAlive = u;
 
     const expected = expectedSpeechMs(text, rate);

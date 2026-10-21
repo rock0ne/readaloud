@@ -63,7 +63,8 @@ describe('U9 store', () => {
     const desk = await fresh(false);
     const s = await desk.getSettings();
     expect(s.enginePreference).toEqual(['kokoro', 'webspeech']);
-    expect(s.schemaVersion).toBe(2);
+    expect(s.schemaVersion).toBe(3);
+    expect(s.ai).toEqual({ provider: null, models: {} });
     expect(s.pauseOnFlag).toBe(false);
     desk.close();
     const phone = await fresh(true);
@@ -84,11 +85,24 @@ describe('U9 store', () => {
     } as unknown as Settings;
     await r.saveSettings(v1);
     const s = await r.getSettings();
-    expect(s.schemaVersion).toBe(2);
+    expect(s.schemaVersion).toBe(3);
+    expect(s.ai).toEqual({ provider: null, models: {} });
     expect(s.enginePreference).toEqual(['kokoro', 'webspeech']);
     expect(s.voiceByEngine).toEqual({ webspeech: 'Microsoft Sonia Online (Natural)' });
     expect(s.azure).toBeNull();
     expect(s.rate).toBe(1.7);
+  });
+
+  it('drops the old fixed full-stop pause and adds a paragraph pause (ADR-31)', async () => {
+    const r = await fresh();
+    const base = await r.getSettings();
+    expect(base.pauseBetweenSentencesMs).toBe(0);
+    expect(base.pauseBetweenParagraphsMs).toBe(700);
+    const { pauseBetweenParagraphsMs: _gone, ...old } = base;
+    await r.saveSettings({ ...old, schemaVersion: 2, pauseBetweenSentencesMs: 150 } as unknown as Settings);
+    expect(await r.getSettings()).toMatchObject({ pauseBetweenSentencesMs: 0, pauseBetweenParagraphsMs: 700 });
+    await r.saveSettings({ ...old, schemaVersion: 2, pauseBetweenSentencesMs: 300 } as unknown as Settings);
+    expect((await r.getSettings()).pauseBetweenSentencesMs).toBe(300);
   });
 
   it('re-parse re-anchors flags by quote and reports flags it cannot place', async () => {

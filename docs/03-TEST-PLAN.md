@@ -102,6 +102,22 @@ ever committed; real chapters live in `app/test/fixtures/private/` (git-ignored)
   of one block up to 600 chars; a 429 backs off without failing the segment;
   playback starts only once 30 s of audio (or the chapter rest) is ready; seek
   aborts outstanding requests and restarts from the new position.
+- **U11b flow** (`player.test.ts`, ADR-31): a voice that reports word
+  boundaries gets the rest of a paragraph as one utterance and the highlight
+  follows it; a start in the middle of a paragraph; an extra full-stop pause
+  reads one sentence at a time; a paragraph that fails part way is read again
+  from the sentence it reached; pauses are divided by the speed. Kokoro clips
+  are trimmed (`kokoro.test.ts`); the old fixed pause migrates (`store.test.ts`).
+- **AI1–AI8** (`ai.test.ts`, ADR-30): server-sent events; the Claude, ChatGPT
+  and Gemini requests, streams, errors and model lists; key lifetimes; pages;
+  prompts, chapter names, citations, page-by-page replies and mistakes; a
+  stream that ends before the provider finished is an error; Stop stores
+  nothing; Explain sends the paragraph with its neighbours; fingerprints
+  change with the sentences and not with a title or label.
+- **N1–N3** (`notes.test.ts`, ADR-30): notes stored, placed again after a
+  re-read and exported; keys stored with their expiry and never exported; the
+  database upgrade from version 1; no key-shaped string in the source, tests,
+  docs or README.
 
 ## Manual checks (record results in `PROGRESS.md`)
 
@@ -130,6 +146,17 @@ ever committed; real chapters live in `app/test/fixtures/private/` (git-ignored)
   sheet; bottom-sheet panels.
 - **M11 kokoro (Phase 4)**: model downloads with progress; airplane mode
   playback; note synthesis speed.
+- **M12 AI assistant (Edge, the user's own key)**: "Check and save key"
+  lists models; summarise a page, a chapter and the document; ask a question;
+  Explain a paragraph; Check for mistakes and add one as a flag; a citation
+  jumps and "Back to where I was" returns; Stop saves nothing; Forget key
+  removes it.
+- **M13 notes and pen**: M opens a note on the current sentence; pen
+  handwriting in the box becomes text (Windows); a drawing is kept; the Notes
+  panel's order, Go to, Edit and Delete; `notes.md` downloads.
+- **M14 flow (ADR-31)**: at 1× and 1.5× a full stop is a short breath and a
+  new paragraph a longer one, with Kokoro and with an online Edge voice; the
+  two pause settings change them.
 
 ## Phone checklist (Phase 3)
 

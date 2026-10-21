@@ -7,7 +7,8 @@ sound robotic; Speechify is too expensive). Reads `.txt`, `.md`, `.docx`, `.pdf`
 corrections list. Primary use right now: proofreading Rockson's finished book.
 
 The app has no backend: nothing in this project touches a server, a tenant or
-an account other than the user's own Azure key.
+an account other than the user's own Azure key, or the account of the AI
+provider whose key the user adds (ADR-30).
 
 ## Read in this order, and only what the current step needs
 
@@ -31,14 +32,16 @@ matter for the step you are on.
   Blob/URL). No UI imports in core.
 - Tests use vitest. Run `pnpm test` before claiming a step done. Voice features
   are checked manually in **Microsoft Edge**, not Chrome (spec 7.2 says why).
-- Never commit secrets. The Azure key is typed into Settings and lives only in
-  IndexedDB. `.env*` and `app/test/fixtures/private/` are git-ignored.
+- Never commit secrets. The Azure key and AI keys are typed into Settings and
+  live only in IndexedDB (or in memory, for a session-only AI key). `.env*`
+  and `app/test/fixtures/private/` are git-ignored.
 - Dependencies: only those in spec section 13. If you truly need another, add a
   decision entry with the reason before installing it.
 - The data model (spec 4) and storage schema (spec 9) are contracts. Changing
   them means bumping the schema version and writing a migration.
 - Do not build later phases early. No backend, no server, no accounts other than
-  the user's own Azure key. Do not use `edge-tts` or any undocumented endpoint.
+  the user's own Azure key and the AI provider account whose key the user
+  adds. Do not use `edge-tts` or any undocumented endpoint.
 - Publish only where ADR-29 says: the public repository
   `github.com/rock0ne/readaloud`, its GitHub Pages site (built by
   `.github/workflows/pages.yml`) and its Releases (the Windows zip from

@@ -34,6 +34,7 @@ export function buildDocument(raw: LoaderResult, meta: BuildMeta): ParsedDocumen
     text: b.text,
     chapterIndex: 0,
     sentences: [],
+    ...(b.page !== undefined ? { page: b.page } : {}),
   }));
 
   const starts = chapterStarts(raw, blocks, indexMap, title);

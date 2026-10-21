@@ -12,7 +12,13 @@ anything you would rather hear than read.
   flag it and add a note. Then download a corrections file in Markdown: every
   flag with its chapter and paragraph, the quoted sentence and your note.
 - Remembers where you stopped in each document. Works offline once it is set up.
-- Your documents never leave your device.
+- Write notes while you listen (**M**), typed or with a pen, and download them.
+- An optional AI study assistant with your own key for Claude, ChatGPT or
+  Gemini: summaries of a page, a chapter or the whole document, page by page,
+  explanations of a paragraph, answers to your questions and a check for
+  mistakes. It is off until you add a key.
+- Your documents stay on your device. Only if you use the AI assistant is the
+  part you ask about sent, to the company whose key you added.
 
 Runs on **Windows** (in Microsoft Edge) and on **Android** phones.
 
@@ -95,13 +101,32 @@ can pause for a few seconds between some sentences.
    | R | Read the sentence again |
    | F | Flag the sentence |
    | N | Flag it and write a note |
+   | M | Write a note on the sentence (no flag) |
    | [ / ] | Slower or faster |
    | Esc | Close the panel or leave the note |
 
    On a phone, tap the flag button instead. Click or tap a sentence to read
-   from there.
+   from there. In Settings you can set an extra pause at a full stop and the
+   pause between paragraphs; both get shorter as you speed up.
 4. Download the corrections file from the **Flags** panel (or from the
    document in the library) and fix the mistakes in your manuscript.
+
+## Notes and the AI assistant
+
+- **Notes.** Press **M** or ✎ Note to write a note on the sentence being read.
+  On Windows you can write in the note box with a pen and Windows turns the
+  handwriting into text, or add a drawing. The **Notes** panel lists your
+  notes in reading order and downloads them as a Markdown file.
+- **AI assistant (optional).** In Settings, choose Claude, ChatGPT or Gemini,
+  follow the link to that company's key page, make a key and paste it. Choose
+  how long the app keeps it: until you close the app, or from 1 day up to
+  1 year. The **AI** panel in a document then summarises the paragraph, page,
+  chapter or whole document, explains a paragraph, answers your questions
+  and checks a chapter for mistakes, which you can add as flags.
+- Replies point to the sentences they rely on: press "p. 12" to go there, and
+  "Back to where I was" to return. A reply can be read aloud or saved as a note.
+- Each request is charged to your own account with that company. Before a
+  large request the app says how many words it will send.
 
 ## Privacy
 
@@ -109,6 +134,15 @@ Documents, flags, notes and settings are stored in the browser on your device
 (IndexedDB) and nowhere else. There is no account, server or analytics. The
 only downloads are the app itself and, once, the Kokoro model from Hugging
 Face. On Android the voice is made on the phone from the engine app's files.
+If you choose one of Edge's online Microsoft voices instead of Kokoro, Edge
+sends each sentence to Microsoft to be spoken.
+
+The AI assistant is off until you add a key. Then, only when you press one of
+its buttons, the text of that part of the document (never your notes) goes
+straight from your device to the company whose key you added, under that
+company's terms. Your key is kept only in this browser on this device, for as
+long as you chose, and is never included in an export. Forgetting the key in
+the app does not cancel it: to cancel it, delete it on the company's key page.
 
 ## Build it yourself
 
@@ -142,6 +176,8 @@ pnpm build
   [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) makes the speech natively.
   [eSpeak NG](https://github.com/espeak-ng/espeak-ng) turns the text into
   phonemes first, so numbers and names are spoken too.
+- The AI assistant calls the provider's API straight from the browser and
+  shows the reply as it is written. There is no server in between.
 
 ## Limits
 
@@ -149,6 +185,8 @@ pnpm build
 - No text recognition: a scanned PDF (pictures of pages) cannot be read.
 - DRM-protected EPUBs are refused. Files up to 50 MB (EPUB up to 500 MB).
 - The Android app is for arm64 phones only.
+- OneNote pages and OneDrive or SharePoint links cannot be opened yet. A Word
+  file opens with Add files, or with Open with on Windows.
 
 ## Licence
 

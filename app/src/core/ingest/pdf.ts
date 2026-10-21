@@ -130,6 +130,7 @@ export function linesToBlocks(lines: PdfLine[]): RawBlock[] {
   interface Para {
     text: string;
     fontSize: number;
+    page: number;
   }
   const paras: Para[] = [];
   let cur: Para | null = null;
@@ -147,7 +148,7 @@ export function linesToBlocks(lines: PdfLine[]): RawBlock[] {
       if (Math.abs(line.fontSize - prev.fontSize) > 0.15 * Math.max(line.fontSize, prev.fontSize)) start = true;
     }
     if (start || !cur) {
-      cur = { text: line.text, fontSize: line.fontSize };
+      cur = { text: line.text, fontSize: line.fontSize, page: line.page };
       paras.push(cur);
     } else if (/[A-Za-z]-$/.test(cur.text) && /^\p{Ll}/u.test(line.text)) {
       cur.text = cur.text.slice(0, -1) + line.text;
@@ -160,8 +161,9 @@ export function linesToBlocks(lines: PdfLine[]): RawBlock[] {
   const headingSizes = [...new Set(paras.filter((p) => p.fontSize >= 1.25 * body).map((p) => round(p.fontSize)))].sort((a, b) => b - a);
   return paras.map((p) => {
     const rank = headingSizes.indexOf(round(p.fontSize));
-    if (rank !== -1 && p.text.length <= 200) return { type: 'heading', level: Math.min(3, rank + 1), text: p.text };
-    return { type: 'paragraph', text: p.text };
+    // Each block keeps the page it starts on, for page summaries (ADR-30).
+    if (rank !== -1 && p.text.length <= 200) return { type: 'heading', level: Math.min(3, rank + 1), text: p.text, page: p.page };
+    return { type: 'paragraph', text: p.text, page: p.page };
   });
 }
 
