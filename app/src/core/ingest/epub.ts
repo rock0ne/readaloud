@@ -48,6 +48,16 @@ async function readText(zip: JSZip, path: string): Promise<string | null> {
 
 const yieldToUi = () => new Promise<void>((r) => setTimeout(r, 0));
 
+// Pictures, fonts and media: never read aloud, and they can make an EPUB hundreds of MB (ADR-26).
+const NOT_READ = /\.(png|jpe?g|gif|webp|avif|bmp|tiff?|svg|ttf|otf|woff2?|mp3|m4a|aac|ogg|wav|mp4|webm)$/i;
+
+/** The same EPUB without its pictures, fonts and media: it reads to exactly the same text. */
+export async function textOnlyEpub(bytes: ArrayBuffer): Promise<ArrayBuffer> {
+  const zip = await JSZip.loadAsync(bytes);
+  for (const name of Object.keys(zip.files)) if (NOT_READ.test(name)) zip.remove(name);
+  return zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' });
+}
+
 export const loadEpub: Loader = async (bytes, opts) => {
   let zip: JSZip;
   try {

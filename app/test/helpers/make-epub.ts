@@ -25,6 +25,8 @@ const chapters = {
 interface Options {
   version?: 2 | 3;
   drm?: boolean;
+  /** adds a picture of this many bytes, stored uncompressed (ADR-26) */
+  pictureBytes?: number;
 }
 
 export async function makeEpub(opts: Options = {}): Promise<ArrayBuffer> {
@@ -40,6 +42,7 @@ export async function makeEpub(opts: Options = {}): Promise<ArrayBuffer> {
     );
   }
   for (const [name, body] of Object.entries(chapters)) zip.file(`OEBPS/${name}`, body);
+  if (opts.pictureBytes) zip.file('OEBPS/images/cover.png', new Uint8Array(opts.pictureBytes), { compression: 'STORE' });
 
   const navItem =
     version === 3

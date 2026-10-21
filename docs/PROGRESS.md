@@ -79,6 +79,15 @@ every "by ear" item is still Rockson's.
   13–20 s.
 - **Media Session**: Edge: title and chapter set; state "playing", then
   "paused" after Pause.
+- **Phone chapter, native engine (ADR-24)**: a 1,362-word test chapter
+  (written for the test, not book text) added by the file picker and read
+  to "Finished" in Firefox with the sherpa-onnx Kokoro engine as Android's
+  preferred engine (ReadAloud lists it as "Basic voice: English"). 13 min
+  44 s in all: 8 min 54 s of speech, 4 min 50 s (35%) of silence; the
+  silence before each sentence was 3.1 s median, 4.6 s at the 90th
+  percentile, 6.4 s at most. Rockson, listening: "a bit slow, reading word
+  by word instead of flowing". Cause: Firefox hands over one sentence at a
+  time, and the engine makes each one only after the last has played.
 - **Phone voice**: downloaded in about 10 s. Settings, "Read 3 sentences",
   on the final build: ready "on this device's processor" after 13 s; the
   three sentences finished 26.0 s, 20.2 s and 21.6 s after each started;

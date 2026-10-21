@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { parseBytes, pastedTitle, IngestError } from '../src/core/ingest';
+import { checkFileSize, MAX_BYTES, MAX_EPUB_BYTES, parseBytes, pastedTitle, IngestError, sourceToStore } from '../src/core/ingest';
 import { loadEpub } from '../src/core/ingest/epub';
 import { makeEpub } from './helpers/make-epub';
 import { makeDocx } from './helpers/make-docx';
@@ -40,6 +40,30 @@ describe('U5 txt and md loaders', () => {
     const bare = doc.blocks.flatMap((b) => b.sentences).find((s) => s.text.includes('example.org'));
     expect(bare?.speakText).toContain('link');
     checkOffsets(doc);
+  });
+});
+
+describe('large EPUBs (ADR-26)', () => {
+  it('reads an EPUB over 50 MB, and stores it without its pictures', async () => {
+    const bytes = await makeEpub({ pictureBytes: 51 * 1024 * 1024 });
+    expect(bytes.byteLength).toBeGreaterThan(MAX_BYTES);
+    const doc = await parseBytes(bytes, 'big.epub');
+    const kept = await sourceToStore('epub', bytes);
+    expect(kept.byteLength).toBeLessThan(100_000);
+    const again = await parseBytes(kept, 'big.epub');
+    expect(again.blocks.map((b) => b.text)).toEqual(doc.blocks.map((b) => b.text));
+    expect(again.chapters.map((c) => c.title)).toEqual(doc.chapters.map((c) => c.title));
+  });
+
+  it('keeps the 50 MB limit for other formats and 500 MB for EPUB', () => {
+    expect(() => checkFileSize({ name: 'big.pdf', size: MAX_BYTES + 1 })).toThrow('larger than 50 MB');
+    expect(() => checkFileSize({ name: 'big.epub', size: MAX_BYTES + 1 })).not.toThrow();
+    expect(() => checkFileSize({ name: 'huge.epub', size: MAX_EPUB_BYTES + 1 })).toThrow('larger than 500 MB');
+  });
+
+  it('stores other formats unchanged', async () => {
+    const bytes = new TextEncoder().encode('Plain text.').buffer as ArrayBuffer;
+    expect(await sourceToStore('txt', bytes)).toBe(bytes);
   });
 });
 

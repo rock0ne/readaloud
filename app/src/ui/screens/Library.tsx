@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
-import { ACCEPT, IngestError, parseBytes } from '../../core/ingest';
+import { ACCEPT, checkFileSize, IngestError, parseBytes, sourceToStore } from '../../core/ingest';
 import { correctionsFileName, correctionsMarkdown } from '../../core/flags/corrections';
 import { DuplicateDocumentError } from '../../core/store/repo';
 import { sha256Hex } from '../../core/util/hash';
@@ -61,6 +61,7 @@ export function Library() {
     for (const file of files) {
       setBusy({ name: file.name, done: 0, total: 0 });
       try {
+        checkFileSize(file);
         const bytes = await file.arrayBuffer();
         const hash = await sha256Hex(bytes);
         const existing = await repo.findByHash(hash);
@@ -69,7 +70,8 @@ export function Library() {
           locale: settings.locale,
           onProgress: (done, total) => setBusy({ name: file.name, done, total }),
         });
-        const doc = await repo.addDocument(parsed, bytes, file.name, hash);
+        // The hash is of the file as picked, so adding the same file again is still caught.
+        const doc = await repo.addDocument(parsed, await sourceToStore(parsed.format, bytes), file.name, hash);
         lastAdded = doc.id;
         toast(`Added “${doc.title}”.`);
         for (const w of doc.warnings.slice(0, 3)) toast(w);

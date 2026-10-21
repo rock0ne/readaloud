@@ -277,7 +277,8 @@ export async function parseFile(file: File, settings: Settings): Promise<ParsedD
 `parseFile` dispatches to a loader; each loader returns `{ title, language, html }`
 or, for PDF, pseudo-HTML. Then `htmlToDocument()` (5.1) and `buildDocument()`
 (5.7) finish the job. Errors are thrown as `IngestError { code, message }` with
-codes: `unsupported`, `drm`, `scanned-pdf`, `corrupt`, `too-large` (> 50 MB).
+codes: `unsupported`, `drm`, `scanned-pdf`, `corrupt`, `too-large` (> 50 MB;
+EPUB > 500 MB, because its pictures are not read, ADR-26).
 
 ### 5.1 `htmlToDocument(html, opts): RawBlock[]`
 
@@ -925,7 +926,7 @@ without a decision entry.
 | DRM EPUB | "This EPUB is DRM-protected and cannot be read." |
 | Scanned PDF | "This PDF has no text layer. Export the text from the source document instead." |
 | Corrupt file | "Could not read {name}: {detail}". |
-| File > 50 MB | Refused with message. |
+| File > 50 MB (EPUB > 500 MB) | Refused with message, before the file is read into memory. |
 | Azure 401/403/429 | Messages per 7.3; the engine stays selected; playback pauses. |
 | IndexedDB quota error | Toast: "Storage full. Clear the audio cache in Settings." |
 | Empty document after parse | "No readable text found in {name}." |

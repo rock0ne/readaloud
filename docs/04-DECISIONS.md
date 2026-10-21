@@ -340,7 +340,11 @@ What this changes:
      screen, speaker 21 (bf_emma), 4 threads: 16.7 s of speech in 13.2 s
      (1.26x real time), so it keeps up. The voice is one speaker number for
      the whole engine, set in its app, not ReadAloud's voice picker. Rockson
-     sets it as the preferred engine in Android settings himself.
+     set it as the preferred engine himself. Through ReadAloud in Firefox a
+     whole test chapter read to the end, but 35% of the time was silence
+     (about 3 s before each sentence; PROGRESS), because each sentence is
+     made only after the previous one has played. To flow, sentences must be
+     made ahead, as the PC does: that needs route 2 (an Android app).
   2. Step 23 + 25: ReadAloud as an Android app (Capacitor) with sherpa-onnx
      inside. More work; the result is a single app.
   3. Chrome on the phone with WebGPU. Chrome is disabled on the test phone;
@@ -366,4 +370,27 @@ controller, does not reload. Code: `app/src/ui/update.ts`, tested in
 (spec 9), so a reload loses nothing but an unsaved note being typed.
 
 Updates only come when the app is rebuilt on the PC, so this is rare in use.
+
+## ADR-26 · 2026-10-21 · Large EPUBs: read the text, store it without pictures
+
+Context: Rockson's book as an EPUB is 222 MB: 107 PNG
+pictures make up 231.8 MB unpacked, and the text is 2.2 MB in 42 XHTML files.
+The 50 MB limit (spec 5.0) refused it. The app also stores every original
+file for Re-read, which would have kept 222 MB of pictures on the phone, and
+the loader was given a second copy of the whole file in memory.
+
+Decision:
+- EPUBs may be up to 500 MB; every other format keeps 50 MB. Size is
+  checked before the file is read into memory.
+- An EPUB is stored without its pictures, fonts and media (`textOnlyEpub`):
+  everything the reader uses is kept, so Re-read gives exactly the same
+  text. The duplicate check still uses the hash of the file as picked.
+- Only the PDF loader gets its own copy of the bytes (pdf.js detaches the
+  buffer it is given); the other loaders read in place.
+
+Checked on the PC (Node) with the book itself, which stays in the git-ignored
+`app/test/fixtures/private/`: read in 2.6 s; 41 chapters, 520 contents
+entries, 22,043 sentences, 227,184 words, no warnings; stored copy 0.68 MB;
+Re-read identical. Unit tests: a 51 MB EPUB reads and is stored at under
+100 kB with the same text; the limits per format.
 

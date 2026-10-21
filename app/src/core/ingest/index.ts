@@ -8,6 +8,8 @@ export { IngestError } from './raw';
 export type { IngestErrorCode } from './raw';
 
 export const MAX_BYTES = 50 * 1024 * 1024;
+/** EPUBs may carry large pictures, which are not read aloud; only their text is kept (ADR-26). */
+export const MAX_EPUB_BYTES = 500 * 1024 * 1024;
 export const ACCEPT = '.txt,.md,.markdown,.docx,.pdf,.epub';
 
 const EXT: Record<string, DocFormat> = {
@@ -33,6 +35,28 @@ export function pastedTitle(text: string, typed = ''): string {
 export function detectFormat(name: string): DocFormat | null {
   const ext = name.toLowerCase().split('.').pop() ?? '';
   return EXT[ext] ?? null;
+}
+
+function maxBytes(format: DocFormat | null): number {
+  return format === 'epub' ? MAX_EPUB_BYTES : MAX_BYTES;
+}
+
+function checkSize(name: string, bytes: number, format: DocFormat | null): void {
+  const max = maxBytes(format);
+  if (bytes > max) throw new IngestError('too-large', `${name} is larger than ${max / 1024 / 1024} MB.`);
+}
+
+/** Refuses a file that is too large before it is read into memory. */
+export function checkFileSize(file: { name: string; size: number }): void {
+  checkSize(file.name, file.size, detectFormat(file.name));
+}
+
+/**
+ * The bytes kept as a document's source, for Re-read. An EPUB is kept without its pictures, fonts
+ * and media, which can be hundreds of MB and are never read aloud (ADR-26).
+ */
+export async function sourceToStore(format: DocFormat, bytes: ArrayBuffer): Promise<ArrayBuffer> {
+  return format === 'epub' ? (await import('./epub')).textOnlyEpub(bytes) : bytes;
 }
 
 async function sniff(bytes: ArrayBuffer): Promise<DocFormat | null> {
@@ -76,13 +100,15 @@ export interface ParseOptions {
 }
 
 export async function parseBytes(bytes: ArrayBuffer, name: string, opts: ParseOptions = {}): Promise<ParsedDocument> {
-  if (bytes.byteLength > MAX_BYTES) throw new IngestError('too-large', `${name} is larger than 50 MB.`);
+  checkSize(name, bytes.byteLength, detectFormat(name));
   const format = detectFormat(name) ?? (await sniff(bytes));
   if (!format) throw new IngestError('unsupported', `${name}: only .txt, .md, .docx, .pdf and .epub files can be read.`);
+  checkSize(name, bytes.byteLength, format);
   const loader = await loaderFor(format);
-  // Loaders get their own copy: pdf.js transfers (detaches) the buffer it is given, and the
-  // caller still needs the original bytes to store as the source.
-  const raw = await loader(bytes.slice(0), { name, ...(opts.onProgress ? { onProgress: opts.onProgress } : {}) });
+  // pdf.js transfers (detaches) the buffer it is given, and the caller still needs the original
+  // bytes to store as the source, so the PDF loader gets its own copy. The others read in place.
+  const input = format === 'pdf' ? bytes.slice(0) : bytes;
+  const raw = await loader(input, { name, ...(opts.onProgress ? { onProgress: opts.onProgress } : {}) });
   const doc = buildDocument(raw, { format, fallbackTitle: stripExtension(name), ...(opts.locale ? { locale: opts.locale } : {}) });
   if (doc.blocks.every((b) => b.sentences.every((s) => s.speakText === ''))) {
     throw new IngestError('empty', `No readable text found in ${name}.`);
@@ -91,6 +117,6 @@ export async function parseBytes(bytes: ArrayBuffer, name: string, opts: ParseOp
 }
 
 export async function parseFile(file: FileLike, opts: ParseOptions = {}): Promise<ParsedDocument> {
-  if (file.size > MAX_BYTES) throw new IngestError('too-large', `${file.name} is larger than 50 MB.`);
+  checkFileSize(file);
   return parseBytes(await file.arrayBuffer(), file.name, opts);
 }
