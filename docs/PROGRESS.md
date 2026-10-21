@@ -26,7 +26,7 @@ One line per step. Keep it short. Newest at the bottom of each section.
 | 22 PWA on the S21+ | partly | phone | 2026-10-21 | runs in Firefox; upload works; voice too slow (ADR-24); not yet on the home screen |
 | 24 Kokoro web engine | done (PC) | U-kokoro + Edge M11 | 2026-10-21 | main voice, bf_emma (ADR-22) |
 | 23 Capacitor wrapper | partly | phone | 2026-10-21 | brought forward; Kokoro made inside the app, every word spoken (ADR-27); clips about 40 s ahead (ADR-28); not yet heard by Rockson |
-| 29 Public release | done | fresh clone in WSL + headless Edge on the live site | 2026-10-21 | github.com/rock0ne/readaloud, Pages site, release v0.1.0 with the Windows zip and the APK signed with Rockson's key (CN=rock0ne, cert SHA-256 c5f96167…5dbc0f), ADR-29 |
+| 29 Public release | done | fresh clone in WSL + headless Edge on the live site | 2026-10-21 | github.com/rock0ne/readaloud, Pages site, releases v0.1.0 and v0.1.1 (clip-order fix, ADR-28) with the Windows zip and the APK signed with Rockson's key (CN=rock0ne, cert SHA-256 c5f96167…5dbc0f), ADR-29 |
 | Phase 1 gate | waiting on Rockson | | | see below |
 
 ## Phase 1 gate
@@ -154,9 +154,6 @@ every "by ear" item is still Rockson's.
 
 ## Open issues
 
-- Release v0.1.0 (the Windows zip and the APK) was built before the clip-order
-  fix (ADR-28); the GitHub Pages site has it. The next release carries it, and
-  its APK needs Rockson to sign it with `app/android/sign-apk.sh`.
 - The toolchain lives in a temporary scratchpad folder. If it is cleaned up,
   the builder needs Node again before `pnpm` works (handoff section 7).
 - Edge's Microsoft voices stay as the fallback ("Browser voices") until the
