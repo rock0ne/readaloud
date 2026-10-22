@@ -41,7 +41,7 @@ Copy-Item -LiteralPath (Join-Path $repo 'THIRD-PARTY-NOTICES.md') -Destination (
 Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
 $base = (Get-Item -LiteralPath $stage).FullName
 $files = @(Get-ChildItem -LiteralPath $base -Recurse -File)
-$names = [string[]]@($files | ForEach-Object { "$name/" + $_.FullName.Substring($base.Length + 1).Replace('', '/') })
+$names = [string[]]@($files | ForEach-Object { "$name/" + $_.FullName.Substring($base.Length + 1).Replace('\', '/') })
 $paths = [string[]]@($files | ForEach-Object { $_.FullName })
 [Array]::Sort($names, $paths, [StringComparer]::Ordinal)
 $stamp = New-Object DateTimeOffset 2026, 1, 1, 0, 0, 0, ([TimeSpan]::Zero)
@@ -65,7 +65,7 @@ Remove-Item -LiteralPath $stage -Recurse -Force
 # Check what was written: every entry under the one folder, with "/" only.
 $check = [IO.Compression.ZipFile]::OpenRead($zip)
 try {
-  $bad = @($check.Entries | Where-Object { $_.FullName.Contains('') -or -not $_.FullName.StartsWith("$name/") })
+  $bad = @($check.Entries | Where-Object { $_.FullName.Contains('\') -or -not $_.FullName.StartsWith("$name/") })
   if ($bad.Count -or $check.Entries.Count -ne $names.Length) { throw "The zip's entry names are wrong: $($bad[0].FullName)" }
 } finally { $check.Dispose() }
 
