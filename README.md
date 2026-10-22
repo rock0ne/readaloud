@@ -58,32 +58,26 @@ library between them with **Export JSON** and **Import JSON**.
 Needs a 64-bit ARM phone (almost all phones from the last few years) with
 Android 7.0 or later.
 
-**The Android app needs two apps on the phone:** the voice engine (step 1),
-which holds the voice, and ReadAloud (step 2). Without the engine there is no
-natural voice, and ReadAloud says the voice engine app is not on this phone.
-
-1. Install the **sherpa-onnx Kokoro voice engine** from the
-   [k2-fsa project](https://k2-fsa.github.io/sherpa/onnx/tts/apk-engine.html):
-   [`sherpa-onnx-1.13.8-arm64-v8a-eng-tts-engine-kokoro-multi-lang-v1_0.apk`](https://huggingface.co/csukuangfj2/sherpa-onnx-apk/resolve/main/tts-engine-new/1.13.8/sherpa-onnx-1.13.8-arm64-v8a-eng-tts-engine-kokoro-multi-lang-v1_0.apk)
-   (367 MB, SHA-256
-   `402c3628712668fb5eb8cc838add6a8f62caffd69ccc53af75384dde1e2142ec`).
-   ReadAloud reads the voice model from it. You do not have to make it your
-   phone's default text-to-speech engine. If you install it after ReadAloud,
-   close ReadAloud fully (swipe it away from the recent apps) and open it
-   again.
-2. Install `ReadAloud-<version>.apk` from
+1. Install `ReadAloud-<version>.apk` from
    [Releases](https://github.com/rock0ne/readaloud/releases). Your phone asks
    you to allow installing apps from your browser or file manager the first
    time. Every release is signed with the same key (`CN=rock0ne`, certificate
    SHA-256 `c5f96167fa4b6633523624bd275745a088d48ed875ff13e5104c6050475dbc0f`),
    so new versions install over the old one and keep your library.
+2. Open ReadAloud and press **Download natural voice**. The voice downloads
+   once, about 340 MB (Wi-Fi is best), from this project's own release
+   [`kokoro-voice-1`](https://github.com/rock0ne/readaloud/releases/tag/kokoro-voice-1).
+   ReadAloud checks it against its SHA-256 and unpacks it; after that it works
+   offline. Keep the app open while it downloads: if it stops, the next try
+   goes on from where it stopped.
 
-Or install both from a computer with [adb](https://developer.android.com/tools/adb),
+ReadAloud is the only app you need. Coming from 0.2.0: download the voice in
+ReadAloud once, then you can uninstall the sherpa-onnx Kokoro engine app.
+ReadAloud 0.2.0 and earlier still need that engine app: see the
+[0.2.0 README](https://github.com/rock0ne/readaloud/blob/v0.2.0/README.md#android).
+
+Or install it from a computer with [adb](https://developer.android.com/tools/adb),
 with the phone connected by USB and USB debugging on:
-
-```bash
-adb install sherpa-onnx-1.13.8-arm64-v8a-eng-tts-engine-kokoro-multi-lang-v1_0.apk
-```
 
 ```bash
 adb install -r ReadAloud-0.2.0.apk
@@ -149,8 +143,8 @@ can pause for a few seconds between some sentences.
 
 Documents, flags, notes and settings are stored in the browser on your device
 (IndexedDB) and nowhere else. There is no account, server or analytics. The
-only downloads are the app itself and, once, the Kokoro model from Hugging
-Face. On Android the voice is made on the phone from the engine app's files.
+only downloads are the app itself and, once, the Kokoro voice: on Windows from
+Hugging Face, in the Android app from this project's own release.
 If you choose one of Edge's online Microsoft voices instead of Kokoro, Edge
 sends each sentence to Microsoft to be spoken.
 
@@ -179,8 +173,12 @@ pnpm build
   with no Node; `powershell -ExecutionPolicy Bypass -File app\windows\package.ps1`
   makes the Windows zip.
 - The Android app is built on Linux or in WSL with JDK 21, the Android SDK
-  (platform 36) and the engine APK above, whose two native libraries it uses.
-  See `app/android/build-apk.sh`. Sign the release APK with your own key.
+  (platform 36) and the sherpa-onnx Kokoro engine APK from the
+  [k2-fsa project](https://k2-fsa.github.io/sherpa/onnx/tts/apk-engine.html)
+  ([`sherpa-onnx-1.13.8-arm64-v8a-eng-tts-engine-kokoro-multi-lang-v1_0.apk`](https://huggingface.co/csukuangfj2/sherpa-onnx-apk/resolve/main/tts-engine-new/1.13.8/sherpa-onnx-1.13.8-arm64-v8a-eng-tts-engine-kokoro-multi-lang-v1_0.apk),
+  SHA-256 `402c3628712668fb5eb8cc838add6a8f62caffd69ccc53af75384dde1e2142ec`), whose two native libraries it uses. See
+  `app/android/build-apk.sh`. Sign the release APK with your own key.
+  `app/android/make-voice-zip.py` makes the voice download from the same APK.
 - `docs/` has the design, every decision with its reasons
   (`docs/04-DECISIONS.md`) and the progress log.
 

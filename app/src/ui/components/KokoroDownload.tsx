@@ -5,6 +5,8 @@ import { useOnline } from '../hooks/useDevice';
 import { useKokoro, useServices } from '../services';
 
 const mb = (bytes: number) => Math.round(bytes / 1e6);
+/** The phone's voice download (ADR-37), until the app has asked the phone for its exact size. */
+const PHONE_VOICE_BYTES = 338e6;
 
 const STAGE_TEXT: Record<KokoroStage, string> = {
   'gpu-check': 'looking for a graphics chip',
@@ -13,12 +15,19 @@ const STAGE_TEXT: Record<KokoroStage, string> = {
   'warm-up': 'making a first test sentence',
 };
 
-/** In the Android app the voice files come from the Kokoro engine app: nothing to download (ADR-27). */
-function describePhone(s: KokoroStatus): string {
+/** In the Android app the voice files download once from ReadAloud's own release (ADR-37). */
+function describePhone(s: KokoroStatus, online: boolean): string {
+  const size = mb(s.total ?? PHONE_VOICE_BYTES);
   switch (s.phase) {
-    case 'absent':
-      return 'The natural voice needs a second app on this phone: the free sherpa-onnx Kokoro voice engine (367 MB). Install it, then close ReadAloud fully and open it again. Where to get it: the Android section at github.com/rock0ne/readaloud.';
+    case 'absent': {
+      if (!online) return `Connect to the internet once to download the natural voice (about ${size} MB).`;
+      const resume = s.loaded ? ` ${mb(s.loaded)} MB came last time; it goes on from there.` : '';
+      return `The natural voice (Kokoro) is not on this phone yet. It downloads once, about ${size} MB (Wi-Fi is best), and then works offline.${resume}`;
+    }
     case 'downloading':
+      if (!s.loaded) return 'Starting the download of the natural voice…';
+      if (s.total && s.loaded >= s.total) return 'Checking and unpacking the natural voice…';
+      return `Downloading the natural voice: ${Math.floor((s.loaded / (s.total ?? PHONE_VOICE_BYTES)) * 100)}% (${mb(s.loaded)} of ${size} MB). Keep the app open.`;
     case 'installed':
       return 'The natural voice is on this phone. It loads when you press Play.';
     case 'loading':
@@ -28,12 +37,14 @@ function describePhone(s: KokoroStatus): string {
       return `The natural voice is ready on this phone${speed}.`;
     }
     case 'error':
-      return `The natural voice could not start: ${(s.error ?? 'unknown error').replace(/\.$/, '')}.`;
+      return s.installed
+        ? `The natural voice could not start: ${(s.error ?? 'unknown error').replace(/\.$/, '')}.`
+        : `The natural voice could not be downloaded: ${(s.error ?? 'unknown error').replace(/\.$/, '')}.`;
   }
 }
 
 function describe(s: KokoroStatus, online: boolean): string {
-  if (s.source === 'phone-engine') return describePhone(s);
+  if (s.source === 'phone') return describePhone(s, online);
   const pct = s.total ? Math.floor(((s.loaded ?? 0) / s.total) * 100) : 0;
   switch (s.phase) {
     case 'absent':
@@ -72,7 +83,8 @@ export function KokoroDownload({ removable = false }: { removable?: boolean }) {
   const online = useOnline();
   const start = () => void kokoro.load().catch(() => undefined); // the failure is shown from the status
   const remove = () => {
-    if (!confirm(`Remove the natural voice from this device? You can download it again later (about ${KOKORO_DOWNLOAD_MB} MB).`)) return;
+    const size = s.source === 'phone' ? mb(s.total ?? PHONE_VOICE_BYTES) : KOKORO_DOWNLOAD_MB;
+    if (!confirm(`Remove the natural voice from this device? You can download it again later (about ${size} MB).`)) return;
     player.stop();
     player.resetVoice();
     void kokoro.remove();
@@ -82,7 +94,7 @@ export function KokoroDownload({ removable = false }: { removable?: boolean }) {
     <div class="kokoro-download" aria-live="polite">
       <span>{describe(s, online)}</span>
       {s.phase === 'downloading' && <progress max={100} value={pct} aria-label="Download progress" />}
-      {s.phase === 'absent' && online && s.source !== 'phone-engine' && (
+      {s.phase === 'absent' && online && (
         <button class="primary" onClick={start}>
           Download natural voice
         </button>
@@ -92,7 +104,7 @@ export function KokoroDownload({ removable = false }: { removable?: boolean }) {
           Try again
         </button>
       )}
-      {removable && s.installed && s.source !== 'phone-engine' && s.phase !== 'downloading' && s.phase !== 'loading' && (
+      {removable && s.installed && s.phase !== 'downloading' && s.phase !== 'loading' && (
         <button onClick={remove}>Remove from this device</button>
       )}
     </div>

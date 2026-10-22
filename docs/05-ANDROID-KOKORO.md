@@ -1,4 +1,4 @@
-# Android app: Kokoro made inside ReadAloud (ADR-27)
+# Android app: Kokoro made inside ReadAloud (ADR-27, ADR-37)
 
 The app is the same web app inside a Capacitor 8 shell. Only the voice
 backend and the screen-on call are Android code.
@@ -10,15 +10,16 @@ backend and the screen-on call are Android code.
   the Kokoro engine APK (`SHERPA_ENGINE_APK` in `app/android/build-apk.sh`)
   into `app/android/app/src/main/jniLibs/arm64-v8a/`,
   which is git-ignored.
-- The model files stay in the Kokoro engine app
-  (`com.k2fsa.sherpa.onnx.tts.engine`), which must be installed. ReadAloud
-  reads them from that app's assets through `createPackageContext`:
-  `kokoro-multi-lang-v1_0/model.onnx`, `voices.bin`, `tokens.txt` and
-  `lexicon-gb-en.txt`. The manifest's `<queries>` entry lets ReadAloud see
-  that app.
-- eSpeak NG's data must be a folder on disk, so `espeak-ng-data` is copied
-  from the engine app's assets to ReadAloud's files folder once per engine
-  version (a version stamp beside it).
+- The voice files are downloaded by the app once (ADR-37), from
+  `readaloud-kokoro-voice-1.zip` on the release `kokoro-voice-1` of
+  github.com/rock0ne/readaloud, pinned in the plugin by size and SHA-256. They
+  are unpacked into `voice/` in the app's no-backup files folder:
+  `kokoro-multi-lang-v1_0/model.onnx`, `voices.bin`, `tokens.txt`,
+  `lexicon-gb-en.txt` and `espeak-ng-data/`, with `READY` holding the zip's
+  SHA-256. `app/android/make-voice-zip.py` makes the zip from the engine APK.
+- Until 0.2.0 the model was read from the Kokoro engine app's assets
+  (`com.k2fsa.sherpa.onnx.tts.engine`), which had to be installed. That app is
+  no longer needed.
 - Why not Android's `TextToSpeech` through the engine app: the phone freezes
   that app's process while it plays no sound itself, so each clip took 18 to
   64 s.
@@ -27,8 +28,10 @@ backend and the screen-on call are Android code.
 
 | Method | Does | Returns |
 |---|---|---|
-| `engine()` | Looks for the Kokoro engine app. | `{ installed: boolean, label?: string }` |
-| `init()` | Loads the model (once; about 4 s, the first time also copies eSpeak's data). | `{}`; rejects if it does not load |
+| `voice()` | Whether the voice is in place; the download's size; how much an earlier try left. | `{ installed, bytes, downloaded }` |
+| `downloadVoice()` | Downloads the zip (going on from `voice.zip.part`), checks its size and SHA-256, unpacks it into a new folder and swaps it in. `download` events carry `{ loaded, total }`. | `{}`; rejects with the reason |
+| `removeVoice()` | Releases the model and deletes the voice and any part download. | `{}` |
+| `init()` | Loads the model (once; about 4 s). | `{}`; rejects if it does not load |
 | `synthesize({ phonemes, sid })` | Makes one clip from the phonemes with speaker `sid`, at the voice's own pace (speed is the player's, spec 8.2), and writes it as a 16-bit WAV file in the app's cache after deleting the previous files. A clip with no sound is rejected. | `{ path }`, an absolute file path |
 | `stop()` | Nothing: a clip being made cannot be cut short. | `{}` |
 | `keepScreenOn({ on })` | Sets or clears `FLAG_KEEP_SCREEN_ON`. | `{}` |
@@ -41,7 +44,7 @@ plugin passes no text to sherpa-onnx.
 `com.k2fsa.sherpa.onnx.OfflineTts` (and `GeneratedAudio`) is a small Java copy
 of sherpa-onnx's Kotlin API: the library finds these classes, their fields and
 their native methods by name, so names and field types must match sherpa-onnx
-1.13.8 exactly. ReadAloud uses `newFromAsset`, `generateWithConfigImpl` (with
+1.13.8 exactly. ReadAloud uses `newFromFile`, `generateWithConfigImpl` (with
 `GenerationConfig.phonemeCodepoints`, the text left empty and no callback, as
 the engine app does in its phoneme mode), `getSampleRate`, `getNumSpeakers` and
 `delete`.
@@ -84,7 +87,9 @@ makes the phonemes, as kokoro-js does on the PC:
 disk, does it all: `pnpm build:android` (vite `--mode android` →
 `dist-android`), `pnpm exec cap sync android`, the two native libraries from
 the engine APK into `jniLibs/arm64-v8a`, then Gradle. It needs `JAVA_HOME`
-(JDK 21), `ANDROID_HOME` (platform 36) and `SHERPA_ENGINE_APK`. A release
+(JDK 21), `ANDROID_HOME` (platform 36) and `SHERPA_ENGINE_APK`. The voice
+download is made apart, with `python -I app/android/make-voice-zip.py
+<engine APK> <zip>`, and published once on its own release. A release
 build is unsigned; `app/android/sign-apk.sh <keystore> <in> <out>` signs it,
 and apksigner asks for the key's password (ADR-29). Install with
 `adb install -r`. An APK signed with another key (the debug key, or someone

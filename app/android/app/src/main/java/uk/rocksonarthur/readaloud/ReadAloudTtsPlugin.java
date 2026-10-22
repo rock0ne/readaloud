@@ -1,9 +1,5 @@
 package uk.rocksonarthur.readaloud;
 
-import android.content.Context;
-import android.content.pm.PackageInfo;
-import android.content.pm.PackageManager;
-import android.content.res.AssetManager;
 import android.view.WindowManager;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -12,51 +8,124 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.k2fsa.sherpa.onnx.GeneratedAudio;
 import com.k2fsa.sherpa.onnx.OfflineTts;
+import java.io.BufferedInputStream;
 import java.io.File;
-import java.io.FileNotFoundException;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.security.MessageDigest;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 /**
- * Kokoro made inside ReadAloud with sherpa-onnx, from the model files of the Kokoro engine app,
- * one WAV file per piece of text; and the screen-on flag while reading (ADR-27,
- * docs/05-ANDROID-KOKORO.md). Speech is made in this app's own process: the phone freezes the
- * engine app while it plays nothing itself. The web side turns the text into phonemes as the PC
- * does, so every word is spoken: sherpa-onnx's own lexicon skips each word it does not list.
+ * Kokoro made inside ReadAloud with sherpa-onnx, one WAV file per piece of text, from voice files
+ * the app downloads once (ADR-27, ADR-37, docs/05-ANDROID-KOKORO.md); and the screen-on flag
+ * while reading. The web side turns the text into phonemes as the PC does, so every word is
+ * spoken: sherpa-onnx's own lexicon skips each word it does not list.
  */
 @CapacitorPlugin(name = "ReadAloudTts")
 public class ReadAloudTtsPlugin extends Plugin {
 
-    /** The sherpa-onnx Kokoro engine app, which holds the model (ADR-24, route 1). */
-    static final String ENGINE = "com.k2fsa.sherpa.onnx.tts.engine";
+    /**
+     * The voice files: a zip on ReadAloud's own GitHub release, pinned by size and SHA-256 and made
+     * from the sherpa-onnx Kokoro engine APK by app/android/make-voice-zip.py (ADR-37).
+     */
+    static final String VOICE_URL = "https://github.com/rock0ne/readaloud/releases/download/kokoro-voice-1/readaloud-kokoro-voice-1.zip";
+    static final long VOICE_BYTES = 337_939_917L;
+    static final String VOICE_SHA256 = "738b47b717d888468379bd44803df4089677a8b38908b0c63b1b301fd3deefdc";
+    /** Room for the zip and the 378 MB unpacked from it, with some to spare. */
+    static final long SPACE_NEEDED = 800L * 1024 * 1024;
     static final String MODEL_DIR = "kokoro-multi-lang-v1_0";
     static final int THREADS = 4;
 
     /** One clip at a time, off the plugin thread: loading takes seconds, each clip about one. */
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
+    /** The download runs on its own thread, so nothing waits behind it. */
+    private final ExecutorService downloader = Executors.newSingleThreadExecutor();
+    private volatile boolean downloading;
+    private volatile boolean cancelled;
     private OfflineTts tts;
     private int nextId;
 
-    @PluginMethod
-    public void engine(PluginCall call) {
-        JSObject out = new JSObject();
+    @Override
+    public void load() {
+        // The eSpeak data copied from the Kokoro engine app by ReadAloud 0.2 and earlier (ADR-27).
+        worker.execute(() -> {
+            deleteTree(new File(getContext().getFilesDir(), "espeak-ng-data"));
+            new File(getContext().getFilesDir(), "espeak-ng-data.version").delete();
+        });
+    }
+
+    /** Kept out of Android's backup: it can be downloaded again. */
+    private File voiceDir() {
+        return new File(getContext().getNoBackupFilesDir(), "voice");
+    }
+
+    private File partFile() {
+        return new File(getContext().getNoBackupFilesDir(), "voice.zip.part");
+    }
+
+    /** The voice is in place once its folder holds the SHA-256 of the zip it came from. */
+    private boolean voiceInstalled() {
         try {
-            PackageManager pm = getContext().getPackageManager();
-            PackageInfo info = pm.getPackageInfo(ENGINE, 0);
-            out.put("installed", true);
-            out.put("label", info.applicationInfo.loadLabel(pm).toString());
-        } catch (PackageManager.NameNotFoundException e) {
-            out.put("installed", false);
+            byte[] stamp = Files.readAllBytes(new File(voiceDir(), "READY").toPath());
+            return VOICE_SHA256.equals(new String(stamp, StandardCharsets.UTF_8).trim());
+        } catch (IOException e) {
+            return false;
         }
+    }
+
+    @PluginMethod
+    public void voice(PluginCall call) {
+        JSObject out = new JSObject();
+        out.put("installed", voiceInstalled());
+        out.put("bytes", VOICE_BYTES);
+        File part = partFile();
+        out.put("downloaded", part.exists() ? part.length() : 0);
         call.resolve(out);
+    }
+
+    /** Downloads, checks and unpacks the voice; "download" events report the bytes so far. */
+    @PluginMethod
+    public void downloadVoice(PluginCall call) {
+        if (downloading) {
+            call.reject("The natural voice is already downloading.");
+            return;
+        }
+        downloading = true;
+        cancelled = false;
+        downloader.execute(() -> {
+            try {
+                fetchVoice();
+                call.resolve();
+            } catch (Throwable e) {
+                call.reject(e.getMessage() != null ? e.getMessage() : e.toString());
+            } finally {
+                downloading = false;
+            }
+        });
+    }
+
+    @PluginMethod
+    public void removeVoice(PluginCall call) {
+        cancelled = true;
+        worker.execute(() -> {
+            if (tts != null) tts.release();
+            tts = null;
+            deleteTree(voiceDir());
+            partFile().delete();
+            call.resolve();
+        });
     }
 
     @PluginMethod
@@ -123,39 +192,108 @@ public class ReadAloudTtsPlugin extends Plugin {
      */
     private void loadModel() throws Exception {
         if (tts != null) return;
-        Context engine = getContext().createPackageContext(ENGINE, 0);
-        AssetManager assets = engine.getAssets();
-        File data = espeakData(engine, assets);
-        tts = OfflineTts.kokoro(assets, MODEL_DIR, MODEL_DIR + "/lexicon-gb-en.txt", "en-gb", data.getAbsolutePath(), THREADS);
+        if (!voiceInstalled()) throw new IllegalStateException("the natural voice is not on this phone yet");
+        File model = new File(voiceDir(), MODEL_DIR);
+        File data = new File(voiceDir(), "espeak-ng-data");
+        tts = OfflineTts.kokoro(model.getAbsolutePath(), new File(model, "lexicon-gb-en.txt").getAbsolutePath(), "en-gb", data.getAbsolutePath(), THREADS);
     }
 
-    /** eSpeak's data must be a folder on disk: copied from the engine app once per engine version. */
-    private File espeakData(Context engine, AssetManager assets) throws Exception {
-        File dir = new File(getContext().getFilesDir(), "espeak-ng-data");
-        File stamp = new File(getContext().getFilesDir(), "espeak-ng-data.version");
-        PackageInfo info = engine.getPackageManager().getPackageInfo(ENGINE, 0);
-        String version = String.valueOf(info.getLongVersionCode());
-        if (stamp.exists() && version.equals(new String(Files.readAllBytes(stamp.toPath()), StandardCharsets.UTF_8))) return dir;
-        copyAssets(assets, "espeak-ng-data", dir);
-        Files.write(stamp.toPath(), version.getBytes(StandardCharsets.UTF_8));
-        return dir;
-    }
-
-    private static void copyAssets(AssetManager assets, String path, File to) throws IOException {
-        String[] names = assets.list(path);
-        if (names != null && names.length > 0) {
-            if (!to.isDirectory() && !to.mkdirs()) throw new IOException("could not make " + to);
-            for (String name : names) copyAssets(assets, path + "/" + name, new File(to, name));
-            return;
+    /** Downloads the zip, going on from what an earlier try left; checks it; unpacks it. Downloader thread. */
+    private void fetchVoice() throws Exception {
+        if (voiceInstalled()) return;
+        File part = partFile();
+        long have = part.exists() ? part.length() : 0;
+        if (have > VOICE_BYTES) {
+            part.delete();
+            have = 0;
         }
-        try (InputStream in = assets.open(path); OutputStream out = new FileOutputStream(to)) {
-            byte[] buf = new byte[64 * 1024];
+        if (getContext().getNoBackupFilesDir().getUsableSpace() + have < SPACE_NEEDED) {
+            throw new IOException("there is not enough free space on this phone: the voice needs about 800 MB while it unpacks, and 380 MB after that");
+        }
+        if (have < VOICE_BYTES) {
+            HttpURLConnection http = (HttpURLConnection) new URL(VOICE_URL).openConnection();
+            http.setConnectTimeout(20_000);
+            http.setReadTimeout(30_000);
+            if (have > 0) http.setRequestProperty("Range", "bytes=" + have + "-");
+            try {
+                int code = http.getResponseCode();
+                if (code == HttpURLConnection.HTTP_OK) have = 0; // the whole file: start again
+                else if (code != HttpURLConnection.HTTP_PARTIAL) throw new IOException("the download server answered " + code);
+                try (InputStream in = http.getInputStream(); OutputStream out = new FileOutputStream(part, have > 0)) {
+                    byte[] buf = new byte[256 * 1024];
+                    long told = 0;
+                    int n;
+                    while ((n = in.read(buf)) > 0) {
+                        if (cancelled) throw new IOException("the download was stopped");
+                        out.write(buf, 0, n);
+                        have += n;
+                        long now = System.currentTimeMillis();
+                        if (now - told >= 250) {
+                            progress(have);
+                            told = now;
+                        }
+                    }
+                }
+            } finally {
+                http.disconnect();
+            }
+            progress(have);
+        }
+        if (part.length() != VOICE_BYTES || !VOICE_SHA256.equals(sha256(part))) {
+            part.delete();
+            throw new IOException("the download was damaged or was not the expected file, so it was deleted. Please try again");
+        }
+        unpack(part);
+        part.delete();
+    }
+
+    private void progress(long loaded) {
+        JSObject data = new JSObject();
+        data.put("loaded", loaded);
+        data.put("total", VOICE_BYTES);
+        notifyListeners("download", data);
+    }
+
+    /** Unpacks into a new folder, then swaps it in, so a half-unpacked voice is never used. */
+    private void unpack(File zip) throws IOException {
+        File fresh = new File(getContext().getNoBackupFilesDir(), "voice.new");
+        deleteTree(fresh);
+        String inside = fresh.getCanonicalPath() + File.separator;
+        try (ZipInputStream in = new ZipInputStream(new BufferedInputStream(new FileInputStream(zip)))) {
+            byte[] buf = new byte[256 * 1024];
+            for (ZipEntry e = in.getNextEntry(); e != null; e = in.getNextEntry()) {
+                File f = new File(fresh, e.getName());
+                if (!f.getCanonicalPath().startsWith(inside)) throw new IOException("the voice file has a bad path in it");
+                if (e.isDirectory()) continue;
+                File parent = f.getParentFile();
+                if (parent != null && !parent.isDirectory() && !parent.mkdirs()) throw new IOException("could not make " + parent);
+                try (OutputStream out = new FileOutputStream(f)) {
+                    int n;
+                    while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+                }
+            }
+        }
+        Files.write(new File(fresh, "READY").toPath(), VOICE_SHA256.getBytes(StandardCharsets.UTF_8));
+        deleteTree(voiceDir());
+        if (!fresh.renameTo(voiceDir())) throw new IOException("could not put the voice in place");
+    }
+
+    private static String sha256(File file) throws Exception {
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        try (InputStream in = new FileInputStream(file)) {
+            byte[] buf = new byte[1 << 20];
             int n;
-            while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
-        } catch (FileNotFoundException e) {
-            // an empty folder
-            to.mkdirs();
+            while ((n = in.read(buf)) > 0) digest.update(buf, 0, n);
         }
+        StringBuilder hex = new StringBuilder();
+        for (byte b : digest.digest()) hex.append(Integer.toHexString((b & 0xff) | 0x100).substring(1));
+        return hex.toString();
+    }
+
+    private static void deleteTree(File file) {
+        File[] kids = file.listFiles();
+        if (kids != null) for (File kid : kids) deleteTree(kid);
+        file.delete();
     }
 
     /** 16-bit mono PCM WAV, read back on the web side by decodeWav. */
@@ -176,6 +314,8 @@ public class ReadAloudTtsPlugin extends Plugin {
 
     @Override
     protected void handleOnDestroy() {
+        cancelled = true;
+        downloader.shutdown();
         worker.execute(() -> {
             if (tts != null) tts.release();
             tts = null;

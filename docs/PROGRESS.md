@@ -34,11 +34,12 @@ One line per step. Keep it short. Newest at the bottom of each section.
 | 34 Go to page, find | done | S1 + browser pane at desktop and phone width | 2026-10-21 | ADR-34 |
 | 35 Page by page, two pages side by side | done | U11c + S2 + browser pane at 1400 px and phone width | 2026-10-21 | ADR-35; the stop at a page end not yet heard with Kokoro on the phone |
 | 36 Add-ons | decided, none built | | 2026-10-21 | ADR-36: curated, off by default; Rockson picks the first |
+| 37 Standalone Android voice | done | android tests + S21+ (see the phone check below) | 2026-10-22 | ADR-37; voice zip on release kokoro-voice-1 (SHA-256 738b47b7…) |
 | Phase 1 gate | waiting on Rockson | | | see below |
 
 ## Phase 1 gate
 
-- [x] Unit tests green: 166 tests in 20 files on 2026-10-21, with the
+- [x] Unit tests green: 168 tests in 20 files on 2026-10-22, with the
       git-ignored book check, covering the Kokoro work (ADR-22),
       the second-review fixes (ADR-23), reloading on update (ADR-25),
       large EPUBs (ADR-26), the Android app's voice (ADR-27), the wider
@@ -127,6 +128,20 @@ every "by ear" item is still Rockson's.
   runs Kokoro made speech at 0.63x to 0.75x, with the fast cores capped at
   1.35 GHz (charging over USB, battery 31.5 °C rising to 37.8 °C; battery
   saver off). Not heard by Rockson yet.
+- **Android app, its own voice (ADR-37, M17)**: debug build installed over
+  the earlier one by adb on 2026-10-22; at start it deleted the old
+  `files/espeak-ng-data` copy. Settings offered "Download natural voice"
+  (about 338 MB). From release `kokoro-voice-1` over the phone's Wi-Fi it
+  took about 12 s, then was checked (`voice/READY` holds SHA-256
+  `738b47b7…`) and unpacked (362 MB); the part file was deleted. Resume:
+  removed in Settings, downloaded again and stopped with `am force-stop` at
+  107 MB; after reopening, Settings said "107 MB came last time", the
+  download went on from 111 MB (32%), not from zero, and ended checked. A
+  test text (written for the test) was read with George after each
+  download, one sentence after another. The engine app is still installed
+  on this phone, but ReadAloud no longer looks for it (no `<queries>`
+  entry) and loads the voice from its own files. Still to check: a phone
+  that never had the engine app, and listening (Rockson).
 - **Phone voice**: downloaded in about 10 s. Settings, "Read 3 sentences",
   on the final build: ready "on this device's processor" after 13 s; the
   three sentences finished 26.0 s, 20.2 s and 21.6 s after each started;
@@ -143,9 +158,9 @@ every "by ear" item is still Rockson's.
 2. **Phone app (ADR-27).** ReadAloud is now an app on the test phone (icon
    "ReadAloud"). Open it, add your book's EPUB with Add files, pick a voice
    (all 11 are there, women and men), press Play, and say whether it flows.
-   Try it once unplugged: the phone slowed down while charging. Keep the
-   Kokoro engine app installed: ReadAloud uses its voice files. It no longer
-   needs to be the phone's preferred engine.
+   Try it once unplugged: the phone slowed down while charging. From 0.3.0
+   ReadAloud downloads its own voice (ADR-37); after that the Kokoro engine
+   app can be uninstalled.
 3. **Custom voices (ADR-24).** SAPI 5 voices cannot appear in this app.
    Choose: more Kokoro voices inside ReadAloud, a separate SAPI 5 adapter so
    Kokoro works in other Windows programs, or both.

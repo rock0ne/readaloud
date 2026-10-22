@@ -837,3 +837,45 @@ internet". Asked how, he chose curated add-ons that are off by default.
 **Consequences.** Slower to grow than an open plugin store, but nothing
 reaches the book or the keys without review, and the app works the same
 with every add-on off.
+
+## ADR-37 · 2026-10-22 · The Android app downloads its own voice
+
+**Context.** Installed on a second phone, ReadAloud 0.2.0 said the voice
+engine was missing. The app read the Kokoro model from the sherpa-onnx engine
+app (ADR-27), a second 367 MB install that the README asked for but that is
+easy to miss. Rockson expected one standalone app, and chose: ReadAloud
+downloads the voice itself on first use, from a pinned, checksum-checked copy
+on our own GitHub release, as the PC does.
+
+**Decision.**
+- The voice is one zip on the release `kokoro-voice-1` of
+  github.com/rock0ne/readaloud: `readaloud-kokoro-voice-1.zip`, 337,939,917
+  bytes, SHA-256 `738b47b717d888468379bd44803df4089677a8b38908b0c63b1b301fd3deefdc`. It holds only what the app uses: `model.onnx`,
+  `voices.bin`, `tokens.txt` and `lexicon-gb-en.txt` of
+  `kokoro-multi-lang-v1_0` with its LICENSE and README, eSpeak NG's data and a
+  NOTICE (378 MB unpacked). `app/android/make-voice-zip.py` makes it from the
+  official engine APK (SHA-256 `402c3628…`); the same APK always gives the
+  same bytes, so anyone can check it. That release is not marked latest and is
+  never changed: a new voice gets a new release and new pins.
+- The plugin pins the address, size and SHA-256. "Download natural voice",
+  the same button as on the PC, downloads to `voice.zip.part` in the app's
+  no-backup files folder, going on from a part left by an earlier try (HTTP
+  Range), and reports progress. It checks the size and SHA-256 and deletes a
+  file that fails; unpacks into a new folder, refusing any path outside it;
+  writes the SHA-256 as `READY`; and swaps the folder in, so a half-unpacked
+  voice is never used. It needs about 800 MB free while unpacking and 380 MB
+  after. The screen stays on during the download, because a locked phone may
+  stop it.
+- sherpa-onnx loads the model from those files (`newFromFile`). The engine app
+  is no longer needed or looked for: its `<queries>` entry is gone, and the
+  copy of eSpeak's data that 0.2.0 made from it is deleted. Settings can
+  remove the voice, as on the PC.
+- The two native libraries still come from the engine APK when the app is
+  built (ADR-27).
+
+**Consequences.** One app to install. The first use downloads 338 MB (Wi-Fi
+is best), then the voice works offline. A phone updated from 0.2.0 downloads
+it once, after which the engine app can be uninstalled. The Android app now
+talks to github.com and its download host, from the native side only; the
+Content Security Policy is unchanged. The PC still downloads its own copy
+from Hugging Face (ADR-22).

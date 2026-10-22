@@ -1,10 +1,16 @@
-// ReadAloud's own Android plugin: Kokoro made in the app from the Kokoro engine app's model files,
-// and the screen-on flag (ADR-27, docs/05-ANDROID-KOKORO.md). The Java side is in
+// ReadAloud's own Android plugin: Kokoro made in the app from voice files it downloads once,
+// and the screen-on flag (ADR-27, ADR-37, docs/05-ANDROID-KOKORO.md). The Java side is in
 // android/app/src/main/java/uk/rocksonarthur/readaloud/.
 import { Capacitor, registerPlugin } from '@capacitor/core';
+import type { PluginListenerHandle } from '@capacitor/core';
 
 export interface ReadAloudTts {
-  engine(): Promise<{ installed: boolean; label?: string }>;
+  /** Whether the voice files are on the phone; the download's size; what an earlier try left. */
+  voice(): Promise<{ installed: boolean; bytes: number; downloaded: number }>;
+  /** Downloads, checks and unpacks the voice files, going on from an earlier try (ADR-37). */
+  downloadVoice(): Promise<void>;
+  removeVoice(): Promise<void>;
+  addListener(event: 'download', fn: (p: { loaded: number; total: number }) => void): Promise<PluginListenerHandle>;
   /** Loads the model, once. */
   init(): Promise<void>;
   /** One clip as a WAV file from a piece of text's phonemes; `sid` is the speaker number in the model. */

@@ -130,6 +130,10 @@ ever committed; real chapters live in `app/test/fixtures/private/` (git-ignored)
   sentence of a page, also inside a paragraph read in one go; Play goes on
   with the next page; a jump forgets the stop; with no page ends it reads
   straight on. **S2** (`search.test.ts`): each page knows its last sentence.
+- **Android voice** (`android.test.ts`, ADR-37): the phone's voice is not
+  available until downloaded; the first load downloads it with progress and
+  the screen kept on, then loads it; a failed download shows its reason and
+  the next try downloads again; removing it offers the download again.
 
 ## Manual checks (record results in `PROGRESS.md`)
 
@@ -169,6 +173,10 @@ ever committed; real chapters live in `app/test/fixtures/private/` (git-ignored)
 - **M15 Copy for Claude (ADR-32)**: with a real Claude account, copy a chapter
   summary, paste it in claude.ai, paste the reply back as a note; its page
   links go to the right sentences. On the phone: does claude.ai open?
+- **M17 the phone's own voice (ADR-37)**: on a phone without the engine app,
+  install ReadAloud, press Download natural voice, read a page. Stop the app
+  part way through a download: the next try goes on from there. Remove the
+  voice in Settings and download it again.
 - **M16 fonts, find and pages (ADR-33, ADR-34, ADR-35)**: each font on
   Windows and on the phone; find and go to a page in a long book; page by page
   on the phone and on a wide PC screen (two pages), stopping at each page end

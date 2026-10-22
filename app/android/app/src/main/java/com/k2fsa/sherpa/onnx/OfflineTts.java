@@ -1,10 +1,8 @@
 package com.k2fsa.sherpa.onnx;
 
-import android.content.res.AssetManager;
-
 /**
  * Java side of sherpa-onnx's offline TTS library (libsherpa-onnx-jni.so, 1.13.8, Apache-2.0),
- * taken from the Kokoro engine app's APK (ADR-27). The library reads these classes and their
+ * taken from the Kokoro engine app's APK when ReadAloud is built (ADR-27). The library reads these classes and their
  * fields by name, so the names and types follow sherpa-onnx's own Kotlin API exactly; ReadAloud
  * only fills the Kokoro part.
  */
@@ -16,18 +14,19 @@ public final class OfflineTts {
 
     private long ptr;
 
-    private OfflineTts(AssetManager assets, OfflineTtsConfig config) {
-        ptr = newFromAsset(assets, config);
+    private OfflineTts(OfflineTtsConfig config) {
+        ptr = newFromFile(config);
         if (ptr == 0) throw new IllegalStateException("sherpa-onnx could not load the Kokoro model.");
     }
 
     /**
-     * Kokoro from another app's assets (the model files) plus a folder on disk (eSpeak's data).
+     * Kokoro from files on disk: the model folder and eSpeak's data, which ReadAloud downloads (ADR-37).
      *
-     * @param lexicon comma-separated lexicon files inside the assets (sherpa-onnx needs one)
+     * @param modelDir the folder with model.onnx, voices.bin and tokens.txt
+     * @param lexicon comma-separated lexicon files (sherpa-onnx needs one)
      * @param lang eSpeak language, e.g. "en-gb"
      */
-    public static OfflineTts kokoro(AssetManager assets, String modelDir, String lexicon, String lang, String dataDir, int numThreads) {
+    public static OfflineTts kokoro(String modelDir, String lexicon, String lang, String dataDir, int numThreads) {
         OfflineTtsKokoroModelConfig kokoro = new OfflineTtsKokoroModelConfig();
         kokoro.model = modelDir + "/model.onnx";
         kokoro.voices = modelDir + "/voices.bin";
@@ -40,7 +39,7 @@ public final class OfflineTts {
         model.numThreads = numThreads;
         OfflineTtsConfig config = new OfflineTtsConfig();
         config.model = model;
-        return new OfflineTts(assets, config);
+        return new OfflineTts(config);
     }
 
     public int sampleRate() {
@@ -74,7 +73,7 @@ public final class OfflineTts {
         ptr = 0;
     }
 
-    private native long newFromAsset(AssetManager assets, OfflineTtsConfig config);
+    private native long newFromFile(OfflineTtsConfig config);
 
     private native void delete(long ptr);
 

@@ -1,4 +1,5 @@
-// The Android app's voice: Kokoro clips made in the app by sherpa-onnx (ADR-27).
+// The Android app's voice: Kokoro clips made in the app by sherpa-onnx (ADR-27), from voice
+// files the app downloads once (ADR-37).
 import { describe, expect, it } from 'vitest';
 import { decodeWav, encodeWav } from '../src/core/audio/wav';
 import { KOKORO_VOICES, KokoroEngine } from '../src/core/engines/kokoro';
@@ -28,27 +29,42 @@ describe('decodeWav', () => {
   });
 });
 
-/** A plugin whose clips finish only when the test says so. */
-function fakePlugin(installed = true) {
+/** A plugin whose clips finish only when the test says so; `download` stands in for the network. */
+function fakePlugin(installed = true, download: (report: (loaded: number) => void) => Promise<void> = async () => undefined) {
   const calls: string[] = [];
   const pending: Array<{ done: () => void }> = [];
+  const listeners = new Set<(p: { loaded: number; total: number }) => void>();
+  const state = { installed, downloads: 0, inits: 0, removed: 0, screenOn: [] as boolean[] };
   const tts: ReadAloudTts = {
-    engine: async () => ({ installed }),
-    init: async () => undefined,
+    voice: async () => ({ installed: state.installed, bytes: 1000, downloaded: state.installed ? 0 : 200 }),
+    downloadVoice: async () => {
+      state.downloads++;
+      await download((loaded) => listeners.forEach((fn) => fn({ loaded, total: 1000 })));
+      state.installed = true;
+    },
+    removeVoice: async () => {
+      state.removed++;
+      state.installed = false;
+    },
+    addListener: async (_event, fn) => {
+      listeners.add(fn);
+      return { remove: async () => void listeners.delete(fn) };
+    },
+    init: async () => void state.inits++,
     synthesize: ({ phonemes, sid }) =>
       new Promise((resolve) => {
         calls.push(`${sid}|${phonemes}`);
         pending.push({ done: () => resolve({ path: `/cache/${calls.length}.wav` }) });
       }),
     stop: async () => undefined,
-    keepScreenOn: async () => undefined,
+    keepScreenOn: async ({ on }) => void state.screenOn.push(on),
   };
   const finishNext = async () => {
     await flush();
     pending.shift()?.done();
     await flush();
   };
-  return { tts, calls, finishNext };
+  return { tts, calls, finishNext, state, listeners };
 }
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
@@ -67,11 +83,47 @@ describe('PhoneKokoro', () => {
     expect(accentOf('af_heart')).toBe('a');
   });
 
-  it('is not available when the engine app is missing', async () => {
-    const kokoro = new PhoneKokoro(fakePlugin(false).tts, readFile, phonemize);
+  it('is not available until the voice is downloaded, then downloads it on first load (ADR-37)', async () => {
+    const seen: string[] = [];
+    const p = fakePlugin(false, async (report) => {
+      report(400);
+      report(1000);
+    });
+    const kokoro = new PhoneKokoro(p.tts, readFile, phonemize);
+    kokoro.subscribe((s) => seen.push(`${s.phase}${s.loaded !== undefined ? ` ${s.loaded}/${s.total}` : ''}`));
     expect((await new KokoroEngine(kokoro).isAvailable()).ok).toBe(false);
-    await expect(kokoro.load()).rejects.toThrow('not on this phone');
-    expect(kokoro.status.phase).toBe('error');
+    expect(kokoro.status).toMatchObject({ phase: 'absent', installed: false, loaded: 200, total: 1000, source: 'phone' });
+    await kokoro.load();
+    expect(seen).toEqual(['absent 200/1000', 'downloading 200/1000', 'downloading 400/1000', 'downloading 1000/1000', 'installed 1000/1000', 'loading 1000/1000', 'ready 1000/1000']);
+    expect(p.state).toMatchObject({ downloads: 1, inits: 1, screenOn: [true, false] });
+    expect(p.listeners.size).toBe(0);
+    expect(await kokoro.installed()).toBe(true);
+  });
+
+  it('shows a failed download, and the next try downloads again', async () => {
+    let fail = true;
+    const p = fakePlugin(false, async () => {
+      if (fail) throw new Error('the download server answered 503');
+    });
+    const kokoro = new PhoneKokoro(p.tts, readFile, phonemize);
+    await expect(kokoro.load()).rejects.toThrow('503');
+    expect(kokoro.status).toMatchObject({ phase: 'error', installed: false, error: 'the download server answered 503' });
+    expect(p.state.screenOn).toEqual([true, false]);
+    fail = false;
+    await kokoro.load();
+    expect(kokoro.status.phase).toBe('ready');
+    expect(p.state.downloads).toBe(2);
+  });
+
+  it('removes the voice and offers the download again', async () => {
+    const p = fakePlugin();
+    const kokoro = new PhoneKokoro(p.tts, readFile, phonemize);
+    await kokoro.load();
+    expect(p.state.downloads).toBe(0);
+    await kokoro.remove();
+    expect(p.state.removed).toBe(1);
+    expect(kokoro.status).toMatchObject({ phase: 'absent', installed: false });
+    expect(await kokoro.installed()).toBe(false);
   });
 
   it('sends one clip at a time, as phonemes in the voice accent, and returns its samples', async () => {

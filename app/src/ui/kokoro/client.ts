@@ -19,8 +19,8 @@ export interface KokoroStatus {
   error?: string;
   /** seconds of speech made per second, from recent sentences */
   speed?: number;
-  /** set in the Android app, where the model comes from the Kokoro engine app, not a download (ADR-27) */
-  source?: 'phone-engine';
+  /** set in the Android app, where sherpa-onnx makes the speech from voice files the app downloads (ADR-27, ADR-37) */
+  source?: 'phone';
 }
 
 /** What the app uses of the Kokoro voice: the download in a browser, sherpa-onnx in the Android app. */

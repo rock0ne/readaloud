@@ -43,7 +43,7 @@ interface Job {
 const aborted = (signal: AbortSignal) => (signal.reason instanceof Error ? signal.reason : new DOMException('Aborted', 'AbortError'));
 
 export class PhoneKokoro implements KokoroBackend, KokoroService {
-  private _status: KokoroStatus = { phase: 'absent', installed: false, source: 'phone-engine' };
+  private _status: KokoroStatus = { phase: 'absent', installed: false, source: 'phone' };
   private readonly listeners = new Set<(s: KokoroStatus) => void>();
   private readonly queue: Job[] = [];
   private busy = false;
@@ -73,11 +73,11 @@ export class PhoneKokoro implements KokoroBackend, KokoroService {
     for (const fn of this.listeners) fn(s);
   }
 
-  /** The model files come from the Kokoro engine app, so it must be installed. */
+  /** The voice files are downloaded once, from ReadAloud's own release (ADR-37). */
   installed(): Promise<boolean> {
-    this.checked ??= this.tts.engine().then(
-      ({ installed }) => {
-        if (this._status.phase === 'absent' && installed) this.emit({ ...this._status, phase: 'installed', installed: true });
+    this.checked ??= this.tts.voice().then(
+      ({ installed, bytes, downloaded }) => {
+        if (this._status.phase === 'absent') this.emit({ ...this._status, phase: installed ? 'installed' : 'absent', installed, loaded: downloaded, total: bytes });
         return installed;
       },
       () => false,
@@ -85,9 +85,10 @@ export class PhoneKokoro implements KokoroBackend, KokoroService {
     return this.checked;
   }
 
+  /** Downloads the voice the first time, as the PC does, then loads it. */
   load(): Promise<void> {
     this.loading ??= (async () => {
-      if (!(await this.installed())) throw new Error('the Kokoro voice engine app is not on this phone. Install it (see the Android section at github.com/rock0ne/readaloud), then close ReadAloud fully and open it again.');
+      if (!(await this.installed())) await this.download();
       this.emit({ ...this._status, phase: 'loading' });
       await this.tts.init();
       this.emit({ ...this._status, phase: 'ready' });
@@ -127,6 +128,21 @@ export class PhoneKokoro implements KokoroBackend, KokoroService {
     });
   }
 
+  private async download(): Promise<void> {
+    this.emit({ ...this._status, phase: 'downloading' });
+    const progress = await this.tts.addListener('download', ({ loaded, total }) => this.emit({ ...this._status, phase: 'downloading', loaded, total }));
+    // A phone that locks can stop the download; a later try goes on from where it stopped.
+    await this.tts.keepScreenOn({ on: true }).catch(() => undefined);
+    try {
+      await this.tts.downloadVoice();
+    } finally {
+      await progress.remove();
+      await this.tts.keepScreenOn({ on: false }).catch(() => undefined);
+    }
+    this.checked = Promise.resolve(true);
+    this.emit({ ...this._status, phase: 'installed', installed: true });
+  }
+
   /** One request at a time: the plugin makes clips one after another anyway. */
   private next(): void {
     if (this.busy) return;
@@ -156,6 +172,10 @@ export class PhoneKokoro implements KokoroBackend, KokoroService {
     })();
   }
 
-  /** Nothing to remove: the model belongs to the Kokoro engine app. */
-  async remove(): Promise<void> {}
+  async remove(): Promise<void> {
+    await this.tts.removeVoice();
+    this.loading = null;
+    this.checked = Promise.resolve(false);
+    this.emit({ phase: 'absent', installed: false, source: 'phone', loaded: 0, ...(this._status.total ? { total: this._status.total } : {}) });
+  }
 }

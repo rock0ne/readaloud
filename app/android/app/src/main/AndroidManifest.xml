@@ -35,11 +35,6 @@
         </provider>
     </application>
 
-    <!-- Lets ReadAloud find the Kokoro engine app, whose model files it reads (ADR-27). -->
-    <queries>
-        <package android:name="com.k2fsa.sherpa.onnx.tts.engine" />
-    </queries>
-
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
