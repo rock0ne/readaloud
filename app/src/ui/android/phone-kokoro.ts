@@ -87,7 +87,7 @@ export class PhoneKokoro implements KokoroBackend, KokoroService {
 
   load(): Promise<void> {
     this.loading ??= (async () => {
-      if (!(await this.installed())) throw new Error('The Kokoro engine app, which holds the voice files, is not on this phone.');
+      if (!(await this.installed())) throw new Error('the Kokoro voice engine app is not on this phone. Install it (see the Android section at github.com/rock0ne/readaloud), then close ReadAloud fully and open it again.');
       this.emit({ ...this._status, phase: 'loading' });
       await this.tts.init();
       this.emit({ ...this._status, phase: 'ready' });

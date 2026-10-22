@@ -58,13 +58,19 @@ library between them with **Export JSON** and **Import JSON**.
 Needs a 64-bit ARM phone (almost all phones from the last few years) with
 Android 7.0 or later.
 
+**The Android app needs two apps on the phone:** the voice engine (step 1),
+which holds the voice, and ReadAloud (step 2). Without the engine there is no
+natural voice, and ReadAloud says the voice engine app is not on this phone.
+
 1. Install the **sherpa-onnx Kokoro voice engine** from the
    [k2-fsa project](https://k2-fsa.github.io/sherpa/onnx/tts/apk-engine.html):
    [`sherpa-onnx-1.13.8-arm64-v8a-eng-tts-engine-kokoro-multi-lang-v1_0.apk`](https://huggingface.co/csukuangfj2/sherpa-onnx-apk/resolve/main/tts-engine-new/1.13.8/sherpa-onnx-1.13.8-arm64-v8a-eng-tts-engine-kokoro-multi-lang-v1_0.apk)
    (367 MB, SHA-256
    `402c3628712668fb5eb8cc838add6a8f62caffd69ccc53af75384dde1e2142ec`).
    ReadAloud reads the voice model from it. You do not have to make it your
-   phone's default text-to-speech engine.
+   phone's default text-to-speech engine. If you install it after ReadAloud,
+   close ReadAloud fully (swipe it away from the recent apps) and open it
+   again.
 2. Install `ReadAloud-<version>.apk` from
    [Releases](https://github.com/rock0ne/readaloud/releases). Your phone asks
    you to allow installing apps from your browser or file manager the first

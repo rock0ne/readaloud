@@ -17,7 +17,7 @@ const STAGE_TEXT: Record<KokoroStage, string> = {
 function describePhone(s: KokoroStatus): string {
   switch (s.phase) {
     case 'absent':
-      return 'The natural voice uses the files of the Kokoro engine app, which is not on this phone.';
+      return 'The natural voice needs a second app on this phone: the free sherpa-onnx Kokoro voice engine (367 MB). Install it, then close ReadAloud fully and open it again. Where to get it: the Android section at github.com/rock0ne/readaloud.';
     case 'downloading':
     case 'installed':
       return 'The natural voice is on this phone. It loads when you press Play.';
