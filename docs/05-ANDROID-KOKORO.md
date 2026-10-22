@@ -11,12 +11,16 @@ backend and the screen-on call are Android code.
   into `app/android/app/src/main/jniLibs/arm64-v8a/`,
   which is git-ignored.
 - The voice files are downloaded by the app once (ADR-37), from
-  `readaloud-kokoro-voice-1.zip` on the release `kokoro-voice-1` of
+  `readaloud-kokoro-voice-2.zip` on the release `kokoro-voice-2` of
   github.com/rock0ne/readaloud, pinned in the plugin by size and SHA-256. They
   are unpacked into `voice/` in the app's no-backup files folder:
-  `kokoro-multi-lang-v1_0/model.onnx`, `voices.bin`, `tokens.txt`,
-  `lexicon-gb-en.txt` and `espeak-ng-data/`, with `READY` holding the zip's
-  SHA-256. `app/android/make-voice-zip.py` makes the zip from the engine APK.
+  `kokoro-multi-lang-v1_0/model.onnx`, `voices.bin`, `tokens.txt` and
+  `lexicon-gb-en.txt`, with `READY` holding the zip's SHA-256. There is no
+  eSpeak NG data: this sherpa-onnx build ignores Kokoro's `data_dir` and
+  `lang`, and the app passes phoneme codepoints. `app/android/make-voice-zip.py`
+  makes the zip from the engine APK.
+- The licence texts of the native code and the Android libraries are in
+  `licences/android.txt` inside the APK (ADR-38), made from `app/licences/`.
 - Until 0.2.0 the model was read from the Kokoro engine app's assets
   (`com.k2fsa.sherpa.onnx.tts.engine`), which had to be installed. That app is
   no longer needed.

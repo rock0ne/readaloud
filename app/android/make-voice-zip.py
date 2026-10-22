@@ -1,7 +1,8 @@
 """Makes the voice download of ReadAloud's Android app (ADR-37) from the sherpa-onnx Kokoro engine APK.
 
 The zip holds only what the app uses: the Kokoro model with its voices, tokens and British
-lexicon, eSpeak's data, and the licences. The same APK always gives the same bytes, so anyone
+lexicon, and its licence. No eSpeak NG data: the app makes the phonemes itself, and the
+sherpa-onnx build it uses ignores Kokoro's data_dir (kokoro-voice-1 carried that data for nothing). The same APK always gives the same bytes, so anyone
 can check the published zip against the official engine APK.
 
 Usage: python -I app/android/make-voice-zip.py ENGINE_APK OUT_ZIP
@@ -20,10 +21,8 @@ sherpa-onnx-1.13.8-arm64-v8a-eng-tts-engine-kokoro-multi-lang-v1_0.apk
 (SHA-256 402c3628712668fb5eb8cc838add6a8f62caffd69ccc53af75384dde1e2142ec)
 by app/android/make-voice-zip.py.
 
-- kokoro-multi-lang-v1_0/: the Kokoro-82M v1.0 model by hexgrad (Apache-2.0), in the form
-  made by the k2-fsa sherpa-onnx project (Apache-2.0); see its LICENSE and README.md.
-- espeak-ng-data/: data of eSpeak NG (GPL-3.0-or-later). Source:
-  https://github.com/espeak-ng/espeak-ng
+kokoro-multi-lang-v1_0/ holds the Kokoro-82M v1.0 model by hexgrad (Apache-2.0), in the
+form made by the k2-fsa sherpa-onnx project (Apache-2.0); see its LICENSE and README.md.
 """
 DATE = (1980, 1, 1, 0, 0, 0)
 
@@ -38,7 +37,6 @@ def entry(name: str) -> zipfile.ZipInfo:
 def main(apk: str, out: str) -> None:
     with zipfile.ZipFile(apk) as src:
         names = [f'assets/{MODEL}/{n}' for n in KEEP]
-        names += sorted(n for n in src.namelist() if n.startswith('assets/espeak-ng-data/') and not n.endswith('/'))
         with zipfile.ZipFile(out, 'w') as dst:
             dst.writestr(entry('NOTICE.txt'), NOTICE)
             for name in names:

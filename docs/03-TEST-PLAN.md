@@ -134,6 +134,10 @@ ever committed; real chapters live in `app/test/fixtures/private/` (git-ignored)
   available until downloaded; the first load downloads it with progress and
   the screen kept on, then loads it; a failed download shows its reason and
   the next try downloads again; removing it offers the download again.
+- **Labels and routes** (`labels.test.ts`, ADR-38): voices not made on the
+  device are marked "online" in the picker; `#/licences` opens the Licences
+  page. The build itself checks that every bundled package has a licence
+  text (`app/licences.ts`), and `package.ps1` checks the zip's entry names.
 
 ## Manual checks (record results in `PROGRESS.md`)
 
@@ -177,6 +181,9 @@ ever committed; real chapters live in `app/test/fixtures/private/` (git-ignored)
   install ReadAloud, press Download natural voice, read a page. Stop the app
   part way through a download: the next try goes on from there. Remove the
   voice in Settings and download it again.
+- **M18 licences (ADR-38)**: Settings, About, Licences shows the notices and
+  opens each text, in Edge, from the zip and on the phone (with
+  `android.txt`); the zip opens in another unzip tool with `/` folders.
 - **M16 fonts, find and pages (ADR-33, ADR-34, ADR-35)**: each font on
   Windows and on the phone; find and go to a page in a long book; page by page
   on the phone and on a wide PC screen (two pages), stopping at each page end

@@ -20,20 +20,18 @@ public final class OfflineTts {
     }
 
     /**
-     * Kokoro from files on disk: the model folder and eSpeak's data, which ReadAloud downloads (ADR-37).
+     * Kokoro from the model folder ReadAloud downloads (ADR-37). No eSpeak data or language: this
+     * build of sherpa-onnx ignores both, and ReadAloud passes phoneme codepoints instead.
      *
      * @param modelDir the folder with model.onnx, voices.bin and tokens.txt
      * @param lexicon comma-separated lexicon files (sherpa-onnx needs one)
-     * @param lang eSpeak language, e.g. "en-gb"
      */
-    public static OfflineTts kokoro(String modelDir, String lexicon, String lang, String dataDir, int numThreads) {
+    public static OfflineTts kokoro(String modelDir, String lexicon, int numThreads) {
         OfflineTtsKokoroModelConfig kokoro = new OfflineTtsKokoroModelConfig();
         kokoro.model = modelDir + "/model.onnx";
         kokoro.voices = modelDir + "/voices.bin";
         kokoro.tokens = modelDir + "/tokens.txt";
         kokoro.lexicon = lexicon;
-        kokoro.lang = lang;
-        kokoro.dataDir = dataDir;
         OfflineTtsModelConfig model = new OfflineTtsModelConfig();
         model.kokoro = kokoro;
         model.numThreads = numThreads;

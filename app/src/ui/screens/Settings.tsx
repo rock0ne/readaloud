@@ -267,6 +267,13 @@ export function SettingsScreen() {
           </tbody>
         </table>
       </section>
+
+      <section>
+        <h2>About</h2>
+        <p>
+          ReadAloud {__APP_VERSION__}. Free software under the GNU General Public License, version 3 or later. <a href="#/licences">Licences</a>
+        </p>
+      </section>
     </main>
   );
 }

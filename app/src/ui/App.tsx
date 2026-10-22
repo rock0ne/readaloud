@@ -5,6 +5,7 @@ import { useRoute } from './routes';
 import { Library } from './screens/Library';
 import { Reader } from './screens/Reader';
 import { SettingsScreen } from './screens/Settings';
+import { Licences } from './screens/Licences';
 import { Toasts } from './components/Toast';
 import { READER_FONTS } from './components/TextControls';
 
@@ -60,6 +61,8 @@ export function App() {
         <Reader key={route.docId} docId={route.docId} />
       ) : route.name === 'settings' ? (
         <SettingsScreen />
+      ) : route.name === 'licences' ? (
+        <Licences />
       ) : (
         <Library />
       )}

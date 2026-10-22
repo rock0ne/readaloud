@@ -37,15 +37,21 @@ Runs on **Windows** (in Microsoft Edge) and on **Android** phones.
 ### Option 2: the download (runs from your own PC)
 
 1. From [Releases](https://github.com/rock0ne/readaloud/releases), download
-   `ReadAloud-windows-<version>.zip` and unzip it anywhere.
-2. Double-click `ReadAloud.cmd`. If Windows asks whether to run it, choose
-   **Run** (or **More info**, then **Run anyway**). ReadAloud opens in Edge.
+   `ReadAloud-windows-<version>.zip`. Check that its SHA-256 matches the one
+   on the release page (`Get-FileHash <zip> -Algorithm SHA256` in
+   PowerShell), then unzip it anywhere.
+2. Double-click `ReadAloud.cmd`. ReadAloud opens in Edge. The script is not
+   code-signed, so Windows may ask whether to run it: run it only if the
+   SHA-256 matched. If Windows says it protected your PC, or your
+   organisation blocks it, use the web version instead.
 3. Keep the small window open while you use it, or install the app from Edge as
    above and it opens from its icon without the window.
 
 It needs nothing installed: a small script in Windows PowerShell, which every
 Windows 10 and 11 PC has, serves the app at `http://127.0.0.1:4173/` on this
-PC only. On a PC without WebGPU the voice is faster this way than in the web
+PC only. `ReadAloud.cmd` starts it with `-ExecutionPolicy Bypass`, which
+applies to that one PowerShell window only and does not override your
+organisation's rules. On a PC without WebGPU the voice is faster this way than in the web
 version, because it can use several processor threads. If your organisation
 blocks PowerShell scripts, use the web version.
 
@@ -65,8 +71,8 @@ Android 7.0 or later.
    SHA-256 `c5f96167fa4b6633523624bd275745a088d48ed875ff13e5104c6050475dbc0f`),
    so new versions install over the old one and keep your library.
 2. Open ReadAloud and press **Download natural voice**. The voice downloads
-   once, about 340 MB (Wi-Fi is best), from this project's own release
-   [`kokoro-voice-1`](https://github.com/rock0ne/readaloud/releases/tag/kokoro-voice-1).
+   once, about 330 MB (Wi-Fi is best), from this project's own release
+   [`kokoro-voice-2`](https://github.com/rock0ne/readaloud/releases/tag/kokoro-voice-2).
    ReadAloud checks it against its SHA-256 and unpacks it; after that it works
    offline. Keep the app open while it downloads: if it stops, the next try
    goes on from where it stopped.
@@ -80,7 +86,7 @@ Or install it from a computer with [adb](https://developer.android.com/tools/adb
 with the phone connected by USB and USB debugging on:
 
 ```bash
-adb install -r ReadAloud-0.2.0.apk
+adb install -r ReadAloud-0.3.0.apk
 ```
 
 The first sentence takes about 12 seconds after you press Play while the model
@@ -145,8 +151,9 @@ Documents, flags, notes and settings are stored in the browser on your device
 (IndexedDB) and nowhere else. There is no account, server or analytics. The
 only downloads are the app itself and, once, the Kokoro voice: on Windows from
 Hugging Face, in the Android app from this project's own release.
-If you choose one of Edge's online Microsoft voices instead of Kokoro, Edge
-sends each sentence to Microsoft to be spoken.
+If you choose one of Edge's online Microsoft voices instead of Kokoro (they
+are marked "online" in the voice list), Edge sends each sentence to Microsoft
+to be spoken.
 
 The AI assistant is off until you add a key. Then, only when you press one of
 its buttons, the text of that part of the document (never your notes) goes
@@ -210,7 +217,9 @@ pnpm build
 GNU General Public License version 3 or later: see [`LICENSE`](LICENSE).
 ReadAloud includes eSpeak NG, which is under the same licence. The other
 parts and their licences are in
-[`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md).
+[`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md), which also says what is
+not known about them. Every download carries the full licence texts in its
+`licences/` folder; in the app, open Settings, About, Licences.
 
 Thanks to hexgrad for Kokoro, to the k2-fsa project for sherpa-onnx and its
 Kokoro engine, to Xenova and Hugging Face for kokoro-js, phonemizer and

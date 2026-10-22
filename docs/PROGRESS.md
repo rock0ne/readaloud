@@ -34,18 +34,20 @@ One line per step. Keep it short. Newest at the bottom of each section.
 | 34 Go to page, find | done | S1 + browser pane at desktop and phone width | 2026-10-21 | ADR-34 |
 | 35 Page by page, two pages side by side | done | U11c + S2 + browser pane at 1400 px and phone width | 2026-10-21 | ADR-35; the stop at a page end not yet heard with Kokoro on the phone |
 | 36 Add-ons | decided, none built | | 2026-10-21 | ADR-36: curated, off by default; Rockson picks the first |
-| 37 Standalone Android voice | done | android tests + S21+ (see the phone check below) | 2026-10-22 | ADR-37; voice zip on release kokoro-voice-1 (SHA-256 738b47b7…) |
+| 37 Standalone Android voice | done | android tests + S21+ (see the phone check below) | 2026-10-22 | ADR-37; voice zip on release kokoro-voice-2 (SHA-256 207abec0…), without eSpeak data |
+| 38 Licence texts inside every download | done | build check + labels.test + pane + S21+ | 2026-10-22 | ADR-38: `licences/` in the zip, Pages and APK; notices corrected; zip `/` names; online voices marked. Open: eSpeak NG revision inside phonemizer 1.2.1 |
 | Phase 1 gate | waiting on Rockson | | | see below |
 
 ## Phase 1 gate
 
-- [x] Unit tests green: 168 tests in 20 files on 2026-10-22, with the
+- [x] Unit tests green: 170 tests in 21 files on 2026-10-22, with the
       git-ignored book check, covering the Kokoro work (ADR-22),
       the second-review fixes (ADR-23), reloading on update (ADR-25),
       large EPUBs (ADR-26), the Android app's voice (ADR-27), the wider
       lead and the clip order (ADR-28), the AI assistant and notes (ADR-30),
       the reading flow (ADR-31), Copy for Claude (ADR-32), reading fonts
-      (ADR-33), find (ADR-34) and page by page (ADR-35). `pnpm build` clean,
+      (ADR-33), find (ADR-34), page by page (ADR-35), the phone's own voice
+      (ADR-37) and the licence texts (ADR-38). `pnpm build` clean,
       bundle budget met.
 - [ ] M1–M8 done in Edge. Done or partly done: M2 (sample PDF), M3, M4, M5,
       M6. Waiting on Rockson: M1 and M2 with his chapter, M8 install, and
@@ -140,8 +142,23 @@ every "by ear" item is still Rockson's.
   test text (written for the test) was read with George after each
   download, one sentence after another. The engine app is still installed
   on this phone, but ReadAloud no longer looks for it (no `<queries>`
-  entry) and loads the voice from its own files. Still to check: a phone
-  that never had the engine app, and listening (Rockson).
+  entry) and loads the voice from its own files.
+  Then 0.3.0 with `kokoro-voice-2` (no eSpeak data), installed over that:
+  it did not take voice 1's folder as installed (its `READY` held voice 1's
+  hash) and offered 329 MB; downloaded in about 13 s, checked (`READY` =
+  `207abec0…`), unpacked to 344 MB with no `espeak-ng-data`, replacing the
+  old folder. With the Fable voice, never used on the test text, so no clip
+  came from the cache, the first sound came 3.6 s after Play and it read on
+  sentence after sentence; nothing from sherpa-onnx in the log. Settings,
+  About, Licences showed the notices and opened all three texts (GPL,
+  `web.txt`, `android.txt`). Still to check: a phone that never had the
+  engine app, and listening (Rockson).
+- **Licences page (ADR-38)**: built app in the browser pane: About shows
+  0.3.0; the page shows the notices and opens the GPL and `web.txt`
+  (22 packages and pako); no sideways scroll at 375 px. The first try listed
+  `android.txt` on the web too, because vite preview answers a missing file
+  with the app's page: fixed (only the Android build lists it, and an HTML
+  answer never counts).
 - **Phone voice**: downloaded in about 10 s. Settings, "Read 3 sentences",
   on the final build: ready "on this device's processor" after 13 s; the
   three sentences finished 26.0 s, 20.2 s and 21.6 s after each started;

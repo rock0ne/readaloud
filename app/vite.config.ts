@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path';
 import preact from '@preact/preset-vite';
 import { defaultClientConditions, defineConfig, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import { licences } from './licences.ts';
 
 // Content Security Policy (spec 15). Added to production builds only, because the
 // dev server injects inline scripts for hot reload. 'wasm-unsafe-eval' lets the Kokoro voice
@@ -77,68 +78,77 @@ function cspMeta(): Plugin {
 
 // `vite build --mode android` makes the web files for the Android app (ADR-27): they come from the
 // APK, so there is no service worker to install or update.
-export default defineConfig(({ mode }) => ({
-  plugins: [
-    preact(),
-    cspMeta(),
-    // The app does not use the browser Kokoro, so it does not need onnxruntime's 22 MB runtime.
-    mode !== 'android' && ortWasm(),
-    VitePWA({
-      disable: mode === 'android',
-      registerType: 'autoUpdate',
-      injectRegister: 'auto',
-      includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
-      manifest: {
-        name: 'ReadAloud',
-        short_name: 'ReadAloud',
-        description: 'Listen to documents with natural voices and flag mistakes while you listen.',
-        lang: 'en-GB',
-        display: 'standalone',
-        start_url: '.',
-        scope: '.',
-        background_color: '#f7f5f0',
-        theme_color: '#1f5f8b',
-        icons: [
-          { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },
-          { src: 'icon-512.png', sizes: '512x512', type: 'image/png' },
-          { src: 'icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
-        ],
-        file_handlers: [
-          {
-            action: '.',
-            accept: {
-              'text/plain': ['.txt'],
-              'text/markdown': ['.md', '.markdown'],
-              'application/pdf': ['.pdf'],
-              'application/epub+zip': ['.epub'],
-              'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
+export default defineConfig(({ mode }) => {
+  const notices = licences(mode);
+  return {
+    define: {
+      __APP_VERSION__: JSON.stringify((JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string }).version),
+    },
+    plugins: [
+      preact(),
+      cspMeta(),
+      // Every package's licence text goes into the download, in licences/ (ADR-38).
+      notices.plugin,
+      // The app does not use the browser Kokoro, so it does not need onnxruntime's 22 MB runtime.
+      mode !== 'android' && ortWasm(),
+      VitePWA({
+        disable: mode === 'android',
+        registerType: 'autoUpdate',
+        injectRegister: 'auto',
+        includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
+        manifest: {
+          name: 'ReadAloud',
+          short_name: 'ReadAloud',
+          description: 'Listen to documents with natural voices and flag mistakes while you listen.',
+          lang: 'en-GB',
+          display: 'standalone',
+          start_url: '.',
+          scope: '.',
+          background_color: '#f7f5f0',
+          theme_color: '#1f5f8b',
+          icons: [
+            { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },
+            { src: 'icon-512.png', sizes: '512x512', type: 'image/png' },
+            { src: 'icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          ],
+          file_handlers: [
+            {
+              action: '.',
+              accept: {
+                'text/plain': ['.txt'],
+                'text/markdown': ['.md', '.markdown'],
+                'application/pdf': ['.pdf'],
+                'application/epub+zip': ['.epub'],
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
+              },
             },
-          },
-        ],
-      },
-      workbox: {
-        // The onnxruntime .wasm (about 22 MB) is precached so Kokoro starts offline.
-        globPatterns: ['**/*.{js,mjs,css,html,svg,png,wasm}'],
-        maximumFileSizeToCacheInBytes: 32 * 1024 * 1024,
-        // eSpeak for the Android app's phonemes (ADR-27); browsers never load it.
-        globIgnores: ['**/phonemes-*.js'],
-        navigateFallback: 'index.html',
-      },
-    }),
-  ],
-  build: {
-    outDir: mode === 'android' ? 'dist-android' : 'dist',
-    target: 'es2022',
-    chunkSizeWarningLimit: 1500,
-  },
-  resolve: {
-    // onnxruntime-web's build that loads its runtime from wasmPaths (/ort/) rather than a second,
-    // hashed copy of the 22 MB .wasm in assets/.
-    conditions: ['onnxruntime-web-use-extern-wasm', ...defaultClientConditions],
-  },
-  server: { headers: ISOLATION_HEADERS },
-  preview: { headers: ISOLATION_HEADERS },
-  worker: {
-    format: 'es',
-  },
-}));
+          ],
+        },
+        workbox: {
+          // The onnxruntime .wasm (about 22 MB) is precached so Kokoro starts offline.
+          globPatterns: ['**/*.{js,mjs,css,html,svg,png,wasm}'],
+          maximumFileSizeToCacheInBytes: 32 * 1024 * 1024,
+          // eSpeak for the Android app's phonemes (ADR-27); browsers never load it.
+          globIgnores: ['**/phonemes-*.js'],
+          navigateFallback: 'index.html',
+        },
+      }),
+    ],
+    build: {
+      outDir: mode === 'android' ? 'dist-android' : 'dist',
+      target: 'es2022',
+      chunkSizeWarningLimit: 1500,
+    },
+    resolve: {
+      // onnxruntime-web's build that loads its runtime from wasmPaths (/ort/) rather than a second,
+      // hashed copy of the 22 MB .wasm in assets/.
+      conditions: ['onnxruntime-web-use-extern-wasm', ...defaultClientConditions],
+    },
+    server: { headers: ISOLATION_HEADERS },
+    preview: { headers: ISOLATION_HEADERS },
+    worker: {
+      format: 'es',
+      plugins: () => [notices.worker()],
+    },
+  };
+});

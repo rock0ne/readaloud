@@ -15,6 +15,11 @@ export function shortVoiceName(v: Voice): string {
   return m ? `${m[1]} (${m[2]})` : v.name;
 }
 
+/** The picker's name for a voice: one that is not made on this device says so, as it sends the text away. */
+export function pickerLabel(v: Voice): string {
+  return v.engineId !== 'kokoro' && !v.offline ? `${shortVoiceName(v)} · online` : shortVoiceName(v);
+}
+
 export function VoicePicker({ voices, value, onPick, locale }: Props) {
   const lang = locale.split('-')[0] ?? 'en';
   const relevant = voices.filter((v) => v.lang.toLowerCase().startsWith(lang));
@@ -43,7 +48,7 @@ export function VoicePicker({ voices, value, onPick, locale }: Props) {
         <optgroup key={label} label={label}>
           {vs.map((v) => (
             <option key={v.id} value={`${v.engineId}|${v.id}`}>
-              {shortVoiceName(v)}
+              {pickerLabel(v)}
             </option>
           ))}
         </optgroup>

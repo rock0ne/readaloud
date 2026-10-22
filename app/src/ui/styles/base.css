@@ -395,6 +395,21 @@ textarea {
   border-bottom: 1px solid var(--border);
 }
 
+/* Licences (ADR-38): long texts scroll inside their box; wide tables scroll sideways. */
+.licences details {
+  margin: 8px 0;
+}
+.licence-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.8rem;
+  max-height: 60vh;
+  overflow: auto;
+}
+.licences .notices {
+  overflow-x: auto;
+}
+
 .row-field {
   display: flex;
   flex-wrap: wrap;

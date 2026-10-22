@@ -40,10 +40,10 @@ public class ReadAloudTtsPlugin extends Plugin {
      * The voice files: a zip on ReadAloud's own GitHub release, pinned by size and SHA-256 and made
      * from the sherpa-onnx Kokoro engine APK by app/android/make-voice-zip.py (ADR-37).
      */
-    static final String VOICE_URL = "https://github.com/rock0ne/readaloud/releases/download/kokoro-voice-1/readaloud-kokoro-voice-1.zip";
-    static final long VOICE_BYTES = 337_939_917L;
-    static final String VOICE_SHA256 = "738b47b717d888468379bd44803df4089677a8b38908b0c63b1b301fd3deefdc";
-    /** Room for the zip and the 378 MB unpacked from it, with some to spare. */
+    static final String VOICE_URL = "https://github.com/rock0ne/readaloud/releases/download/kokoro-voice-2/readaloud-kokoro-voice-2.zip";
+    static final long VOICE_BYTES = 328_761_892L;
+    static final String VOICE_SHA256 = "207abec0ca2ac0288df2a3b4796fbb2531ab851e3890fd960917d94ab2513eca";
+    /** Room for the zip and the 360 MB unpacked from it, with some to spare. */
     static final long SPACE_NEEDED = 800L * 1024 * 1024;
     static final String MODEL_DIR = "kokoro-multi-lang-v1_0";
     static final int THREADS = 4;
@@ -194,8 +194,7 @@ public class ReadAloudTtsPlugin extends Plugin {
         if (tts != null) return;
         if (!voiceInstalled()) throw new IllegalStateException("the natural voice is not on this phone yet");
         File model = new File(voiceDir(), MODEL_DIR);
-        File data = new File(voiceDir(), "espeak-ng-data");
-        tts = OfflineTts.kokoro(model.getAbsolutePath(), new File(model, "lexicon-gb-en.txt").getAbsolutePath(), "en-gb", data.getAbsolutePath(), THREADS);
+        tts = OfflineTts.kokoro(model.getAbsolutePath(), new File(model, "lexicon-gb-en.txt").getAbsolutePath(), THREADS);
     }
 
     /** Downloads the zip, going on from what an earlier try left; checks it; unpacks it. Downloader thread. */

@@ -6,7 +6,7 @@ import { useKokoro, useServices } from '../services';
 
 const mb = (bytes: number) => Math.round(bytes / 1e6);
 /** The phone's voice download (ADR-37), until the app has asked the phone for its exact size. */
-const PHONE_VOICE_BYTES = 338e6;
+const PHONE_VOICE_BYTES = 329e6;
 
 const STAGE_TEXT: Record<KokoroStage, string> = {
   'gpu-check': 'looking for a graphics chip',

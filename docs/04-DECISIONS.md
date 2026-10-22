@@ -848,12 +848,16 @@ downloads the voice itself on first use, from a pinned, checksum-checked copy
 on our own GitHub release, as the PC does.
 
 **Decision.**
-- The voice is one zip on the release `kokoro-voice-1` of
-  github.com/rock0ne/readaloud: `readaloud-kokoro-voice-1.zip`, 337,939,917
-  bytes, SHA-256 `738b47b717d888468379bd44803df4089677a8b38908b0c63b1b301fd3deefdc`. It holds only what the app uses: `model.onnx`,
+- The voice is one zip on the release `kokoro-voice-2` of
+  github.com/rock0ne/readaloud: `readaloud-kokoro-voice-2.zip`, 328,761,892
+  bytes, SHA-256 `207abec0ca2ac0288df2a3b4796fbb2531ab851e3890fd960917d94ab2513eca`. It holds only what the app uses: `model.onnx`,
   `voices.bin`, `tokens.txt` and `lexicon-gb-en.txt` of
-  `kokoro-multi-lang-v1_0` with its LICENSE and README, eSpeak NG's data and a
-  NOTICE (378 MB unpacked). `app/android/make-voice-zip.py` makes it from the
+  `kokoro-multi-lang-v1_0` with its LICENSE and README, and a NOTICE (360 MB
+  unpacked). No eSpeak NG data: sherpa-onnx at 9ac4cd24 documents Kokoro's
+  `data_dir` and `lang` as ignored, and ReadAloud passes phoneme codepoints.
+  The first zip, `kokoro-voice-1` (with that unused data, whose source
+  revision is not known), was replaced the same day and deleted before any
+  release used it. `app/android/make-voice-zip.py` makes it from the
   official engine APK (SHA-256 `402c3628…`); the same APK always gives the
   same bytes, so anyone can check it. That release is not marked latest and is
   never changed: a new voice gets a new release and new pins.
@@ -864,7 +868,7 @@ on our own GitHub release, as the PC does.
   file that fails; unpacks into a new folder, refusing any path outside it;
   writes the SHA-256 as `READY`; and swaps the folder in, so a half-unpacked
   voice is never used. It needs about 800 MB free while unpacking and 380 MB
-  after. The screen stays on during the download, because a locked phone may
+  after (360 MB). The screen stays on during the download, because a locked phone may
   stop it.
 - sherpa-onnx loads the model from those files (`newFromFile`). The engine app
   is no longer needed or looked for: its `<queries>` entry is gone, and the
@@ -873,9 +877,65 @@ on our own GitHub release, as the PC does.
 - The two native libraries still come from the engine APK when the app is
   built (ADR-27).
 
-**Consequences.** One app to install. The first use downloads 338 MB (Wi-Fi
+**Consequences.** One app to install. The first use downloads 329 MB (Wi-Fi
 is best), then the voice works offline. A phone updated from 0.2.0 downloads
 it once, after which the engine app can be uninstalled. The Android app now
 talks to github.com and its download host, from the native side only; the
 Content Security Policy is unchanged. The PC still downloads its own copy
 from Hugging Face (ADR-22).
+
+## ADR-38 · 2026-10-22 · Licence texts inside every download
+
+**Context.** A review of ReadAloud 0.2.0 for Vidatta's Downloads (Astra,
+RA-1 to RA-3, with the evidence in Opus's return of 22 October) found:
+- the APK carried no licence texts;
+- `THIRD-PARTY-NOTICES.md` had three errors: eSpeak NG "in"
+  `libsherpa-onnx-jni.so`, sherpa-onnx "v1.13.8", and pako "1.0.11";
+- the zip's README asked for "More info, Run anyway" and said the app "sends
+  nothing anywhere";
+- the zip's entry names used `\`;
+- the voice picker hid which voices are online.
+
+Rockson chose to fix the public copy before releasing 0.3.0.
+
+**Decision.**
+- The build writes `licences/` into every download (`app/licences.ts`):
+  - `web.txt`: the licence files of every package whose code is in the
+    bundle, listed from the bundle's own module ids, the workers' included,
+    plus onnxruntime-web's runtime in `ort/`, Workbox in the service worker,
+    and pako inside JSZip's ready-built file. The build fails if a package
+    has no licence text;
+  - `LICENSE.txt` and `NOTICES.md` (copies of the repository's files);
+  - for the Android app, `android.txt`: sherpa-onnx and the eight projects
+    linked into it, ONNX Runtime with its third-party notices, Capacitor, and
+    the 50 Android libraries Gradle resolves (all Apache-2.0; none has a
+    NOTICE file).
+- Texts that are not in `node_modules` live in `app/licences/`, unchanged
+  apart from line endings. `index.json` gives each one's source and SHA-256:
+  - the native ones come from the archives fetched and hash-checked for the
+    0.2.0 source bundle;
+  - ONNX Runtime's `LICENSE` (the same bytes at v1.21.0, 89f8206b and
+    33ca9628) and the web build's `ThirdPartyNotices.txt` were fetched from
+    microsoft/onnxruntime at those commits.
+- Settings has an About section, linking to a Licences page that shows these
+  files.
+- `THIRD-PARTY-NOTICES.md` is corrected:
+  - it gives each part's real version;
+  - it says what is not known: the eSpeak NG revision inside phonemizer
+    1.2.1, and the native libraries' build settings;
+  - it lists the three errors of the earlier versions.
+- The zip:
+  - entry names use `/`, in a fixed order with one date; `package.ps1`
+    checks them;
+  - the README asks for the SHA-256 check first and drops "Run anyway";
+  - it says that `-ExecutionPolicy Bypass` applies to that one PowerShell
+    window, and lists what goes online and when.
+- The voice picker marks every voice not made on the device as "online".
+
+**Consequences.**
+- Each download now carries its notices.
+- One gap stays open: the eSpeak NG revision inside phonemizer 1.2.1 cannot
+  be named. Closing it means building eSpeak NG from source, the larger work
+  proposed for Vidatta's 0.2.1.
+- The 0.2.1 proposal planned to use versionCode 4 and the number ADR-37.
+  Both are now taken by 0.3.0, so that proposal needs new numbers.
