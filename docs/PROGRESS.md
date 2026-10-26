@@ -36,6 +36,7 @@ One line per step. Keep it short. Newest at the bottom of each section.
 | 36 Add-ons | decided, none built | | 2026-10-21 | ADR-36: curated, off by default; Rockson picks the first |
 | 37 Standalone Android voice | done | android tests + S21+ (see the phone check below) | 2026-10-22 | ADR-37; voice zip on release kokoro-voice-2 (SHA-256 207abec0…), without eSpeak data |
 | 38 Licence texts inside every download | done | build check + labels.test + pane + S21+ | 2026-10-22 | ADR-38: `licences/` in the zip, Pages and APK; notices corrected; zip `/` names; online voices marked. Open: eSpeak NG revision inside phonemizer 1.2.1 |
+| 39 Screen-off reading on Android | done, not yet driven | tsc + 179 tests + WSL release and debug builds + S21+ (screen off 2 min 26 s, media keys, focus against another player) | 2026-10-26 | ADR-39: foreground media service, wake lock, lock-screen and car controls, full audio focus at Play; the first build paused itself (fixed); 0.4.0, versionCode 5. Needs Rockson: a drive with Spotify and the car |
 | Phase 1 gate | waiting on Rockson | | | see below |
 
 ## Phase 1 gate

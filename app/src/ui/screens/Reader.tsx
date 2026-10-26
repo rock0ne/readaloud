@@ -23,7 +23,7 @@ import { KokoroDownload } from '../components/KokoroDownload';
 import { VoicePicker, shortVoiceName } from '../components/VoicePicker';
 import { usePlayer } from '../hooks/usePlayer';
 import { useKeys } from '../hooks/useKeys';
-import { useMediaSession, useOnline, useWakeLock } from '../hooks/useDevice';
+import { useMediaSession, useOnline, usePhoneSession, useWakeLock } from '../hooks/useDevice';
 import { toast, useKokoro, useServices, useSettings } from '../services';
 
 type Panel = 'toc' | 'flags' | 'notes' | 'ai' | 'text' | null;
@@ -188,6 +188,7 @@ export function Reader({ docId }: { docId: string }) {
   const audioEngine = (player.currentVoice ?? auto?.voice)?.engineId === 'kokoro';
   const isPlaying = view.status === 'playing' || view.status === 'buffering';
   useMediaSession(audioEngine, doc?.title ?? 'ReadAloud', index?.chapter(chapterIndex)?.title ?? '', isPlaying, player);
+  usePhoneSession(services.phoneSession, audioEngine, doc?.title ?? 'ReadAloud', index?.chapter(chapterIndex)?.title ?? '', isPlaying, player);
 
   const saveFlag = async (f: Flag) => {
     await repo.putFlag(f);

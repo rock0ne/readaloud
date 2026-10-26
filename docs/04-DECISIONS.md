@@ -939,3 +939,89 @@ Rockson chose to fix the public copy before releasing 0.3.0.
   proposed for Vidatta's 0.2.1.
 - The 0.2.1 proposal planned to use versionCode 4 and the number ADR-37.
   Both are now taken by 0.3.0, so that proposal needs new numbers.
+
+## ADR-39 · 2026-10-26 · The Android app reads on with the screen off
+
+**Context.** Rockson, 26 October: the app "will not let me use it with screen
+off whilst driving and listening". ADR-27 had kept the screen on and said
+"Reading with the screen off is not attempted yet". The whole reading chain
+(phonemes, asking sherpa-onnx for each clip, playing it, asking for the next)
+runs on the web side. Capacitor does not pause the WebView (`KeepRunning` is
+on by default), but with the screen off Android demotes an app that has no
+foreground service and, on the S21+ (Android 15), freezes it: the same
+freezing ADR-27 saw in the engine app's process. Nothing kept the CPU awake
+between clips either.
+
+**Decision.**
+- `PlaybackService`, a foreground service of type `mediaPlayback`, runs from
+  the first Play until the reader closes, or until 30 minutes after a pause.
+  It holds a partial wake lock while reading (renewed with each update,
+  three-hour safety limit), so the next clips are still made with the screen
+  off. It plays no sound: the web side still plays each clip.
+- The service owns a platform `MediaSession` and a media-style notification
+  with the title and chapter, Previous sentence, Play/Pause and Next
+  sentence. So the lock screen, the notification, a car and a headset can
+  work the player. Their presses come back to the web side as `media` events
+  (`PhoneSession`, `usePhoneSession`). Only Android framework classes are
+  used, so no dependency is added (spec 13).
+- Audio focus. Rockson, same day: Spotify had to be stopped by hand, and the
+  car screen still showed Spotify while ReadAloud played. The phone's log
+  shows why: the WebView asks for the focus itself for each clip, only as
+  "transient, others may duck" (gain 3), and lets it go when the clip ends.
+  So Spotify got quieter under each sentence and came back between them.
+  Before a clip that does not follow straight on from the last one (the
+  first after Play, after a pause, or after a wait of more than 1.5 s), the
+  web side calls the plugin's `takeAudioFocus`. It takes the full focus
+  (gain 1, speech) and lets it go at once, so another player loses the focus
+  for good and stops. The reading waits at most 0.3 s for it.
+- The service does not hold the focus. In the first build it did, and the
+  WebView's request for the first clip took that focus away; the service
+  took the loss for another player and paused the reading 0.2 s into the
+  first clip (phone check below).
+- While a clip plays, the WebView handles focus changes itself. If another
+  player starts, the voice stops and the reader waits, with no stall error,
+  until Pause and then Play (`HtmlAudioOutput` stops its stall timer while
+  the clip is paused). Calls and sat-nav announcements are left to the
+  WebView and Android: a call is expected to pause the clip until it ends,
+  and an announcement to lower the voice. Neither has been tried.
+- With the media session active and playing, the car shows ReadAloud's title
+  and chapter, and its buttons work ReadAloud.
+- The WebView's renderer keeps the app's priority when the page cannot be
+  seen (`setRendererPriorityPolicy(RENDERER_PRIORITY_IMPORTANT, false)`).
+- Opening a document does not start the service; Play does. The plugin
+  starts it with `startForegroundService` once, and only updates it after
+  that, so it never has to come to the foreground again with the screen off.
+- Android 13 and later ask, at the first Play, whether ReadAloud may post
+  notifications. Refused, reading with the screen off still works; only the
+  notification and lock-screen controls are hidden.
+- "Keep the screen awake while reading" now also governs the Android app's
+  screen flag (ADR-27 kept it on whatever the setting). The screen can be
+  turned off either way.
+- Manifest: `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MEDIA_PLAYBACK`,
+  `WAKE_LOCK`, `POST_NOTIFICATIONS`. Version 0.4.0, versionCode 5.
+
+**Consequences.**
+- Reading goes on with the screen off and can be paused or skipped from the
+  car or headset.
+- Phone check on the S21+ (Android 15), 26 October, with a debug build of
+  this version:
+  - The first build paused itself 0.2 s into the first clip, as described
+    above.
+  - With the fix, the screen was off for 2 min 26 s and 30 clips started in
+    that time, until the test text ended. The app was not frozen, the wake
+    lock was held and the session stayed PLAYING.
+  - The media keys play, pause, next, previous and play-pause reached the
+    reader.
+  - ReadAloud's focus took the other player's focus (Samsung's Sound Player)
+    for good.
+  - When that player started in the middle of a sentence, the voice stopped
+    with no stall error, and Pause then Play read on.
+  - The device policy had already granted the notification permission, so
+    no question appeared.
+  - Not tried: Spotify, the car, a call or a sat-nav announcement.
+- The held Vidatta build (0.3.0-vidatta.2) also uses versionCode 5 and the
+  numbers ADR-39 and ADR-40 on its own branch. If that work resumes, it
+  needs new numbers.
+- Battery use set to Unrestricted was not enough on 0.3.0 (Rockson's phone,
+  26 October): without a foreground service the app is still frozen.
+  Unrestricted stays advisable.

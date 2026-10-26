@@ -11,6 +11,7 @@ import { Repo } from '../core/store/repo';
 import type { AiProviderId, EngineId, Settings } from '../core/types';
 import { PhoneKokoro } from './android/phone-kokoro';
 import { IN_ANDROID_APP, readAloudTts, readAppFile } from './android/plugin';
+import { PhoneSession } from './android/phone-session';
 import { HtmlAudioOutput } from './audio';
 import { KokoroClient, type KokoroService, type KokoroStatus } from './kokoro/client';
 
@@ -27,6 +28,8 @@ export interface Services {
   updateSettings(patch: Partial<Settings>): Promise<Settings>;
   subscribeSettings(fn: (s: Settings) => void): () => void;
   isTouch: boolean;
+  /** The Android app's screen-off reading and lock-screen controls (ADR-39); null in a browser. */
+  phoneSession: PhoneSession | null;
 }
 
 export async function createServices(): Promise<Services> {
@@ -37,7 +40,8 @@ export async function createServices(): Promise<Services> {
   // In the Android app sherpa-onnx makes the voice from the Kokoro engine app's files; in a browser
   // the model is downloaded (ADR-27).
   const kokoro: KokoroService = IN_ANDROID_APP ? new PhoneKokoro(readAloudTts, readAppFile) : new KokoroClient();
-  const audio = new HtmlAudioOutput();
+  // In the Android app, starting or going on stops another player such as Spotify (ADR-39).
+  const audio = new HtmlAudioOutput(IN_ANDROID_APP ? { beforeStart: () => readAloudTts.takeAudioFocus() } : {});
   // Kokoro is the main voice (ADR-22); browser voices stay as the fallback until it is downloaded.
   const registry = new EngineRegistry([new KokoroEngine(kokoro), new WebSpeechEngine()]);
   let kokoroInstalled = false;
@@ -62,7 +66,7 @@ export async function createServices(): Promise<Services> {
 
   const player = new Player({ positions: repo, registry, settings: () => settings, saveVoiceChoice, audio, audioCache: repo });
   player.setRate(settings.rate);
-  if (IN_ANDROID_APP) keepScreenOnWhileReading(player);
+  if (IN_ANDROID_APP) keepScreenOnWhileReading(player, () => settings, listeners);
 
   try {
     await navigator.storage?.persist?.();
@@ -79,6 +83,7 @@ export async function createServices(): Promise<Services> {
     ai: makeProviders(),
     sessionKeys: new Map(),
     isTouch,
+    phoneSession: IN_ANDROID_APP ? new PhoneSession(readAloudTts) : null,
     getSettings: () => settings,
     updateSettings,
     subscribeSettings: (fn) => {
@@ -88,16 +93,25 @@ export async function createServices(): Promise<Services> {
   };
 }
 
-/** The phone's screen stays on while it reads; it may turn off when paused or stopped (ADR-27). */
-function keepScreenOnWhileReading(player: Player): void {
+/**
+ * The phone's screen stays on while it reads if "Keep the screen awake" is ticked (ADR-27). The
+ * screen can be turned off at any time either way: reading goes on (ADR-39).
+ */
+function keepScreenOnWhileReading(player: Player, settings: () => Settings, settingsListeners: Set<(s: Settings) => void>): void {
   let on = false;
+  let reading = false;
+  const apply = () => {
+    const want = reading && settings().keepAwake;
+    if (want === on) return;
+    on = want;
+    void readAloudTts.keepScreenOn({ on }).catch(() => undefined);
+  };
   player.subscribe((e) => {
     if (e.type !== 'state') return;
-    const reading = e.state.status === 'playing' || e.state.status === 'buffering';
-    if (reading === on) return;
-    on = reading;
-    void readAloudTts.keepScreenOn({ on }).catch(() => undefined);
+    reading = e.state.status === 'playing' || e.state.status === 'buffering';
+    apply();
   });
+  settingsListeners.add(apply);
 }
 
 export const ServicesContext = createContext<Services | null>(null);

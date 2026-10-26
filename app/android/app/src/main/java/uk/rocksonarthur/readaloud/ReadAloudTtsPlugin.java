@@ -1,5 +1,14 @@
 package uk.rocksonarthur.readaloud;
 
+import android.Manifest;
+import android.app.Activity;
+import android.content.Context;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.media.AudioAttributes;
+import android.media.AudioFocusRequest;
+import android.media.AudioManager;
+import android.os.Build;
 import android.view.WindowManager;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -31,7 +40,9 @@ import java.util.zip.ZipInputStream;
  * Kokoro made inside ReadAloud with sherpa-onnx, one WAV file per piece of text, from voice files
  * the app downloads once (ADR-27, ADR-37, docs/05-ANDROID-KOKORO.md); and the screen-on flag
  * while reading. The web side turns the text into phonemes as the PC does, so every word is
- * spoken: sherpa-onnx's own lexicon skips each word it does not list.
+ * spoken: sherpa-onnx's own lexicon skips each word it does not list. It also tells
+ * {@link PlaybackService} what the reader is doing, so reading goes on with the screen off and
+ * the lock screen, notification, car and headset buttons reach the player (ADR-39).
  */
 @CapacitorPlugin(name = "ReadAloudTts")
 public class ReadAloudTtsPlugin extends Plugin {
@@ -56,9 +67,16 @@ public class ReadAloudTtsPlugin extends Plugin {
     private volatile boolean cancelled;
     private OfflineTts tts;
     private int nextId;
+    private boolean askedForNotifications;
 
     @Override
     public void load() {
+        // Lock-screen, notification, car and headset buttons go to the web side's player (ADR-39).
+        PlaybackService.listener = action -> {
+            JSObject data = new JSObject();
+            data.put("action", action);
+            notifyListeners("media", data);
+        };
         // The eSpeak data copied from the Kokoro engine app by ReadAloud 0.2 and earlier (ADR-27).
         worker.execute(() -> {
             deleteTree(new File(getContext().getFilesDir(), "espeak-ng-data"));
@@ -174,6 +192,84 @@ public class ReadAloudTtsPlugin extends Plugin {
     @PluginMethod
     public void stop(PluginCall call) {
         call.resolve();
+    }
+
+    /**
+     * What the reader is doing: "playing", "paused" or "stopped", with the document's title and
+     * chapter for the lock screen. Starts the foreground service on the first play, updates it
+     * after that, and ends it on "stopped" (ADR-39).
+     */
+    @PluginMethod
+    public void playback(PluginCall call) {
+        String state = call.getString("state", "stopped");
+        Context ctx = getContext();
+        // Only Play starts the service; opening a document or stopping when it is not running does nothing.
+        boolean live = PlaybackService.running || PlaybackService.starting;
+        if (!live && !"playing".equals(state)) {
+            call.resolve();
+            return;
+        }
+        if ("playing".equals(state)) askForNotificationsOnce();
+        Intent intent = new Intent(ctx, PlaybackService.class)
+                .setAction(PlaybackService.ACTION_UPDATE)
+                .putExtra(PlaybackService.EXTRA_STATE, state)
+                .putExtra(PlaybackService.EXTRA_TITLE, call.getString("title", "ReadAloud"))
+                .putExtra(PlaybackService.EXTRA_CHAPTER, call.getString("chapter", ""));
+        try {
+            if (live || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+                ctx.startService(intent);
+            } else {
+                PlaybackService.starting = true;
+                ctx.startForegroundService(intent);
+            }
+            call.resolve();
+        } catch (RuntimeException e) {
+            PlaybackService.starting = false;
+            call.reject("Reading with the screen off could not start: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Takes the audio focus for good and lets it go at once, just before the reader starts or goes
+     * on, so another player such as Spotify stops and stays stopped (ADR-39). The WebView asks for
+     * the focus itself while each clip plays, and for a clip shorter than a few seconds it asks
+     * only to lower other players, so they played on under the voice and came back between clips.
+     * A focus held here would be taken by that request, so it is not kept.
+     */
+    @PluginMethod
+    public void takeAudioFocus(PluginCall call) {
+        AudioManager audio = (AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
+        int result;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            AudioFocusRequest request = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                    .setAudioAttributes(new AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_MEDIA)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .build())
+                    .build();
+            result = audio.requestAudioFocus(request);
+            audio.abandonAudioFocusRequest(request);
+        } else {
+            AudioManager.OnAudioFocusChangeListener none = change -> {};
+            result = audio.requestAudioFocus(none, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
+            audio.abandonAudioFocus(none);
+        }
+        JSObject out = new JSObject();
+        out.put("granted", result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED);
+        call.resolve(out);
+    }
+
+    /**
+     * Android 13 and later hide the reading notification, and with it the lock-screen controls,
+     * until the app may post notifications. Reading with the screen off works either way. Asked
+     * once per launch, at the first Play; Android itself stops asking after two refusals.
+     */
+    private void askForNotificationsOnce() {
+        if (askedForNotifications || Build.VERSION.SDK_INT < 33) return;
+        askedForNotifications = true;
+        Activity activity = getActivity();
+        if (activity == null || activity.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return;
+        activity.runOnUiThread(() -> activity.requestPermissions(new String[] {Manifest.permission.POST_NOTIFICATIONS}, 39));
     }
 
     @PluginMethod
@@ -313,6 +409,16 @@ public class ReadAloudTtsPlugin extends Plugin {
 
     @Override
     protected void handleOnDestroy() {
+        PlaybackService.listener = null;
+        if (PlaybackService.running) {
+            try {
+                getContext().startService(new Intent(getContext(), PlaybackService.class)
+                        .setAction(PlaybackService.ACTION_UPDATE)
+                        .putExtra(PlaybackService.EXTRA_STATE, "stopped"));
+            } catch (RuntimeException e) {
+                // The service ends by itself after 30 minutes paused.
+            }
+        }
         cancelled = true;
         downloader.shutdown();
         worker.execute(() -> {

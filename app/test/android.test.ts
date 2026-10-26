@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { decodeWav, encodeWav } from '../src/core/audio/wav';
 import { KOKORO_VOICES, KokoroEngine } from '../src/core/engines/kokoro';
 import { accentOf, PhoneKokoro, SHERPA_SPEAKERS } from '../src/ui/android/phone-kokoro';
-import type { ReadAloudTts } from '../src/ui/android/plugin';
+import type { ReadAloudTts, TtsEvents } from '../src/ui/android/plugin';
 
 const wavOf = async (samples: number[], rate = 24000) => (await encodeWav(new Float32Array(samples), rate).arrayBuffer()) as ArrayBuffer;
 
@@ -46,10 +46,12 @@ function fakePlugin(installed = true, download: (report: (loaded: number) => voi
       state.removed++;
       state.installed = false;
     },
-    addListener: async (_event, fn) => {
-      listeners.add(fn);
-      return { remove: async () => void listeners.delete(fn) };
-    },
+    addListener: (async (event: keyof TtsEvents, fn: (p: never) => void) => {
+      if (event !== 'download') return { remove: async () => undefined };
+      const set = listeners as Set<(p: never) => void>;
+      set.add(fn);
+      return { remove: async () => void set.delete(fn) };
+    }) as ReadAloudTts['addListener'],
     init: async () => void state.inits++,
     synthesize: ({ phonemes, sid }) =>
       new Promise((resolve) => {
@@ -58,6 +60,8 @@ function fakePlugin(installed = true, download: (report: (loaded: number) => voi
       }),
     stop: async () => undefined,
     keepScreenOn: async ({ on }) => void state.screenOn.push(on),
+    playback: async () => undefined,
+    takeAudioFocus: async () => ({ granted: true }),
   };
   const finishNext = async () => {
     await flush();

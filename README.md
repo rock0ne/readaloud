@@ -94,6 +94,17 @@ loads. After that, ReadAloud prepares about 40 seconds of speech ahead. A
 phone that is warm (for example while charging) slows down, and then the voice
 can pause for a few seconds between some sentences.
 
+From 0.4.0 it reads on with the screen off, for example in the car. While it
+reads, a notification shows the document and chapter with Previous, Play or
+Pause and Next, and the same buttons work on the lock screen, in the car and
+on a headset, and the car's screen shows the document and chapter. Pressing
+Play stops another player such as Spotify. If another player starts while
+ReadAloud reads, the voice stops: press Pause, then Play, to go on. The first time you
+press Play, Android asks whether ReadAloud
+may show notifications: allow it to get those controls (reading with the
+screen off works either way). If reading still stops with the screen off, open
+the phone's Settings, Apps, ReadAloud, Battery, and choose Unrestricted.
+
 ## Proofreading with it
 
 1. **Add files** or **Paste text** in the library.
