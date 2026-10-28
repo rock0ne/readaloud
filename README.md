@@ -22,6 +22,14 @@ anything you would rather hear than read.
 
 Runs on **Windows** (in Microsoft Edge) and on **Android** phones.
 
+Android 0.4.1: when the natural voice is made slower than your chosen listening
+speed, the app prepares the remaining chapter before continuing. This can take
+minutes initially; progress is shown and **Pause** cancels the wait. Prepared
+audio then plays without waiting for each sentence to be generated. Page-by-page
+reading prepares one page; very long undivided documents use bounded sections.
+The voice and listening speed stay the same. Idle voice workers also sleep to
+reduce unnecessary CPU work; generating new speech still uses the processor.
+
 ## Windows
 
 ### Option 1: the web version (easiest)

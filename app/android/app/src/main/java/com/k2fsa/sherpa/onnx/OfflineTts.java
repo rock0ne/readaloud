@@ -27,6 +27,11 @@ public final class OfflineTts {
      * @param lexicon comma-separated lexicon files (sherpa-onnx needs one)
      */
     public static OfflineTts kokoro(String modelDir, String lexicon, int numThreads) {
+        return kokoro(modelDir, lexicon, numThreads, "cpu");
+    }
+
+    /** Optional sherpa provider settings file, for the phone's power policy (ADR-40). */
+    public static OfflineTts kokoro(String modelDir, String lexicon, int numThreads, String provider) {
         OfflineTtsKokoroModelConfig kokoro = new OfflineTtsKokoroModelConfig();
         kokoro.model = modelDir + "/model.onnx";
         kokoro.voices = modelDir + "/voices.bin";
@@ -35,6 +40,7 @@ public final class OfflineTts {
         OfflineTtsModelConfig model = new OfflineTtsModelConfig();
         model.kokoro = kokoro;
         model.numThreads = numThreads;
+        model.provider = provider;
         OfflineTtsConfig config = new OfflineTtsConfig();
         config.model = model;
         return new OfflineTts(config);

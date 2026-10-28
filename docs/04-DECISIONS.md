@@ -1025,3 +1025,45 @@ between clips either.
 - Battery use set to Unrestricted was not enough on 0.3.0 (Rockson's phone,
   26 October): without a foreground service the app is still frozen.
   Unrestricted stays advisable.
+
+## ADR-40 · 2026-10-28 · Prepare audio on devices that cannot keep ahead; reduce idle CPU work
+
+**Context.** Rockson's Lenovo TB372FC repeatedly waits for audio; his Samsung
+phones stream more smoothly. Installing the separate Sherpa engine does not
+alter ReadAloud's embedded engine. The supplied engine APK and ReadAloud 0.4.0
+contain identical native libraries. An isolated Lenovo test with the same model
+and George generated about 5.15 seconds of speech in 6.3–7.4 seconds. At 1.3×,
+that audio plays in about 4 seconds. More queued requests cannot resolve a
+sustained generation deficit. Rockson also reported warmth while listening on
+his S26; that device's temperature has not been measured here.
+
+**Decision.**
+- On Android, measure actual generation including phonemisation and reading the
+  WAV. Ignore clips shorter than three seconds when deciding sustained speed.
+- When sustained generation is below the chosen playback rate, prepare the
+  remaining chapter before playing its body. Retain its ready clips despite
+  the small streaming window or persistent-cache eviction. Page-by-page mode
+  prepares only to the next intentional stop. Undivided long documents prepare
+  sections of at most 30,000 characters to bound retained PCM audio.
+- Show completed/total progress. Pause cancels the preparation wait without
+  advancing the saved reading position; already completed clips remain reusable.
+  Faster devices retain normal streaming. Voices, playback speed and stored
+  document/settings schemas are unchanged. Preparation can take minutes on a
+  slow device; this fixes repeated waits within a prepared section, not the
+  device's underlying synthesis speed.
+- Disable ONNX Runtime intra/inter-op worker spinning through the pinned
+  Sherpa runtime's provider configuration file. This lets idle workers sleep.
+  In the isolated Lenovo comparison, process CPU time per synthetic clip fell
+  from about 28.5 CPU-seconds to 23.6–24.3 CPU-seconds, with finite, non-silent
+  output. These are CPU-work measurements, not battery or temperature results.
+  The model, native libraries, four-thread count and voice mapping are unchanged.
+- Version 0.4.1, Android versionCode 6. No runtime dependency is added.
+
+**Evidence and limits.** All 186 automated tests and TypeScript checking pass.
+Both final APK builds and the Lenovo live playback, cancellation, cached replay
+and background checks passed; production was updated in place (PROGRESS.md).
+Quantised/float16 models and alternative acceleration runtimes
+were investigated only in separate diagnostic files and are not shipped.
+The S26 still needs an actual listening/temperature comparison after installation.
+ONNX Runtime documents worker spinning and its power cost:
+https://onnxruntime.ai/docs/performance/tune-performance/threading.html

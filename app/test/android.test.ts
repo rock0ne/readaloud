@@ -1,12 +1,41 @@
 // The Android app's voice: Kokoro clips made in the app by sherpa-onnx (ADR-27), from voice
 // files the app downloads once (ADR-37).
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { decodeWav, encodeWav } from '../src/core/audio/wav';
 import { KOKORO_VOICES, KokoroEngine } from '../src/core/engines/kokoro';
 import { accentOf, PhoneKokoro, SHERPA_SPEAKERS } from '../src/ui/android/phone-kokoro';
 import type { ReadAloudTts, TtsEvents } from '../src/ui/android/plugin';
 
 const wavOf = async (samples: number[], rate = 24000) => (await encodeWav(new Float32Array(samples), rate).arrayBuffer()) as ArrayBuffer;
+
+it('prepares ahead only when a sustained phone sample is slower than the chosen playback speed', async () => {
+  const clock = vi.spyOn(performance, 'now').mockReturnValue(0);
+  try {
+    const { tts, finishNext } = fakePlugin();
+    const bytes = await wavOf(Array.from({ length: 72000 }, () => 0.25));
+    const phone = new PhoneKokoro(tts, async () => bytes, async (text) => text);
+    const making = phone.generate('A full sentence used to measure speech generation.', 'bm_george', new AbortController().signal);
+    await flush();
+    clock.mockReturnValue(6000);
+    await finishNext();
+    await making;
+    expect(phone.needsAudioPreparation(1.3)).toBe(true);
+    expect(phone.needsAudioPreparation(0.4)).toBe(false);
+    await phone.remove();
+    expect(phone.needsAudioPreparation(1.3)).toBe(false);
+  } finally {
+    clock.mockRestore();
+  }
+});
+
+it('does not classify tiny headings as sustained slow speech', async () => {
+  const { tts, finishNext } = fakePlugin();
+  const phone = new PhoneKokoro(tts, async () => wavOf([0.25, 0.25]), async (text) => text);
+  const making = phone.generate('One.', 'bm_george', new AbortController().signal);
+  await finishNext();
+  await making;
+  expect(phone.needsAudioPreparation(1.3)).toBe(false);
+});
 
 describe('decodeWav', () => {
   it('reads back what encodeWav wrote', async () => {

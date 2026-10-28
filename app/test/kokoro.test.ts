@@ -194,7 +194,7 @@ class ReorderingCache extends MemoryCache {
   }
 }
 
-function setupAudio(over: Partial<Settings> = {}, cache: MemoryCache = new MemoryCache()) {
+function setupAudio(over: Partial<Settings> = {}, cache: MemoryCache = new MemoryCache(), needsAudioPreparation?: (rate: number) => boolean) {
   const engine = new FakeAudioEngine();
   const audio = new FakeOutput();
   const settings: Settings = { ...defaultSettings(), pauseAfterHeadingMs: 0, pauseBetweenSentencesMs: 0, pauseBetweenParagraphsMs: 0, ...over };
@@ -204,11 +204,97 @@ function setupAudio(over: Partial<Settings> = {}, cache: MemoryCache = new Memor
     settings: () => settings,
     audio,
     audioCache: cache,
+    needsAudioPreparation,
   });
   return { engine, audio, cache, player };
 }
 
 describe('player with an audio engine (spec 8.3, 8.4)', () => {
+  it('starts a prepared chapter without waiting for the following chapter', async () => {
+    const { engine, audio, player } = setupAudio({}, undefined, () => true);
+    engine.hold = true;
+    audio.hold = true;
+    await player.load(makeDoc([
+      { type: 'heading', level: 1, text: 'Chapter One' },
+      { type: 'paragraph', text: 'The first chapter is ready for listening.' },
+      { type: 'heading', level: 1, text: 'Chapter Two' },
+      { type: 'paragraph', text: 'The next chapter has not been prepared.' },
+    ]));
+    await player.play();
+    await vi.waitFor(() => expect(engine.made).toHaveLength(4));
+    engine.release('Chapter One');
+    engine.release('The first chapter is ready for listening.');
+    await vi.waitFor(() => expect(audio.played).toEqual(['Chapter One']));
+    player.stop();
+  });
+
+  it('bounds preparation for a long document with no chapter divisions', async () => {
+    const { engine, audio, player } = setupAudio({}, undefined, () => true);
+    audio.hold = true;
+    const blocks = Array.from({ length: 600 }, (_, i) => ({ type: 'paragraph' as const, text: `Paragraph number ${i + 1} has a complete sentence for listening and continues with plenty of text to prepare.` }));
+    await player.load(makeDoc(blocks));
+    await player.play();
+    await vi.waitFor(() => expect(audio.played).toHaveLength(1));
+    expect(engine.made.length).toBeLessThan(blocks.length);
+    player.stop();
+  });
+
+  it('prepares a slow device chapter before playback, retains more than the streaming window and keeps position', async () => {
+    const { engine, audio, player } = setupAudio({ rate: 1.3 }, undefined, () => true);
+    player.setRate(1.3);
+    engine.hold = true;
+    const texts = Array.from({ length: 24 }, (_, i) => `This is paragraph number ${i + 1} with enough words for a full sentence.`);
+    await player.load(makeDoc(texts.map((text) => ({ type: 'paragraph', text }))));
+    await player.play();
+    for (let i = 0; i < texts.length; i++) {
+      await vi.waitFor(() => expect(engine.made).toContain(texts[i]));
+      expect(audio.played).toEqual([]);
+      expect(player.currentSentenceId).toBe('b0.s0');
+      engine.release(texts[i]!);
+    }
+    await vi.waitFor(() => expect(player.state.status).toBe('ended'));
+    expect(audio.played).toEqual(texts);
+    expect(engine.made).toEqual(texts);
+    expect(audio.rates.every((r) => r === 1.3)).toBe(true);
+    expect(player.audioPreparation).toBeNull();
+  });
+
+  it('can pause preparation without playing or advancing, then resume using completed clips', async () => {
+    const { engine, audio, player } = setupAudio({}, undefined, () => true);
+    engine.hold = true;
+    await player.load(makeDoc(sampleBlocks));
+    await player.play();
+    await vi.waitFor(() => expect(engine.made).toHaveLength(4));
+    engine.release('Chapter One');
+    await vi.waitFor(() => expect(player.audioPreparation?.completed).toBe(1));
+    player.pause();
+    await player.settled;
+    expect(player.state.status).toBe('paused');
+    expect(player.currentSentenceId).toBe('b0.s0');
+    expect(audio.played).toEqual([]);
+    engine.hold = false;
+    for (const text of engine.made) engine.release(text);
+    await player.play();
+    await vi.waitFor(() => expect(player.state.status).toBe('ended'));
+    expect(engine.made.filter((text) => text === 'Chapter One')).toHaveLength(1);
+    expect(audio.played).toEqual(['Chapter One', 'First sentence here.', 'Second sentence here.', 'Final paragraph.']);
+  });
+
+  it('prepares only to the next intentional page stop', async () => {
+    const { engine, audio, player } = setupAudio({}, undefined, () => true);
+    engine.hold = true;
+    await player.load(makeDoc(sampleBlocks));
+    player.setPageEnds(new Set(['b1.s0']));
+    await player.play();
+    await vi.waitFor(() => expect(engine.made).toHaveLength(4));
+    engine.release('Chapter One');
+    engine.release('First sentence here.');
+    await vi.waitFor(() => expect(player.state.status).toBe('paused'));
+    expect(audio.played).toEqual(['Chapter One', 'First sentence here.']);
+    expect(player.audioPreparation).toBeNull();
+    player.stop();
+  });
+
   it('reads through the audio output at the user speed, skipping code', async () => {
     const { engine, audio, player } = setupAudio({ rate: 2.5 });
     player.setRate(2.5);

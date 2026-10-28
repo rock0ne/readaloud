@@ -337,7 +337,9 @@ export function Reader({ docId }: { docId: string }) {
     view.status === 'buffering'
       ? activeVoice?.engineId === 'kokoro' && kokoroStatus.phase === 'loading'
         ? 'Loading the natural voice…'
-        : 'Preparing audio…'
+        : view.audioPreparation
+          ? `Preparing ${view.audioPreparation.scope} audio: ${view.audioPreparation.completed} of ${view.audioPreparation.total}. Reading starts when ready. Pause cancels preparation.`
+          : 'Preparing audio…'
       : view.status === 'error'
         ? 'Stopped'
         : view.status === 'ended'

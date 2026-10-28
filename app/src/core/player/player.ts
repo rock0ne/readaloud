@@ -36,6 +36,8 @@ export interface PlayerDeps {
   saveVoiceChoice?: (engineId: EngineId, voiceId: string) => Promise<void>;
   audio?: AudioOutput;
   audioCache?: AudioCache;
+  /** A measured device throughput below playback speed needs preparation before reading. */
+  needsAudioPreparation?: (rate: number) => boolean;
   now?: () => number;
 }
 
@@ -54,6 +56,8 @@ export const PREFETCH_CHARS = 600;
 export const PREFETCH_MAX_CHUNKS = 12;
 /** Finished clips kept in memory for replay and previous. */
 export const KEEP_CLIPS = 8;
+/** Bound retained PCM audio for files with no chapter divisions. */
+export const PREPARATION_MAX_CHARS = 30_000;
 const PRUNE_EVERY_PUTS = 50;
 /** Audio engines: sentences of this many words or fewer are made together with a neighbour. */
 export const SHORT_SENTENCE_WORDS = 2;
@@ -76,6 +80,12 @@ interface Clip {
   promise: Promise<Blob>;
   controller: AbortController;
   ready: boolean;
+}
+
+export interface AudioPreparation {
+  completed: number;
+  total: number;
+  scope: 'chapter' | 'page' | 'section';
 }
 
 function abortableSleep(ms: number, signal: AbortSignal): Promise<void> {
@@ -130,6 +140,9 @@ export class Player {
   private cachePuts = 0;
   /** Settles once the newest clip, and every clip started before it, has asked its engine or needed not to. */
   private lastAsk: Promise<void> = Promise.resolve();
+  private preparedTexts = new Set<string>();
+  private preparedChapter: number | null = null;
+  private preparation: AudioPreparation | null = null;
   /** Page by page (ADR-35): the last sentence of each page, where reading stops. */
   private pageEnds: ReadonlySet<string> | null = null;
   /** Stopped at the end of a page: the next Play starts the next page. */
@@ -154,6 +167,11 @@ export class Player {
 
   get currentVoice(): Voice | null {
     return this.voice;
+  }
+
+  /** Transient progress only; no document or storage schema changes. */
+  get audioPreparation(): AudioPreparation | null {
+    return this.preparation;
   }
 
   /** Resolves when the current reading loop has exited (tests). */
@@ -352,6 +370,10 @@ export class Player {
       }
       const settings = this.deps.settings();
       const { sentence, block } = item;
+      if (this.preparedChapter !== block.chapterIndex) {
+        this.preparedTexts.clear();
+        this.preparedChapter = null;
+      }
       this.sentenceStartedAt = this.deps.now?.() ?? Date.now();
       this.setState({ sentenceId: sentence.id });
       this.emit({ type: 'sentence', sentenceId: sentence.id });
@@ -479,8 +501,69 @@ export class Player {
     // Pausing stops the wait, not the clip, so Play reuses it.
     const blob = await untilAborted(clip.promise, signal);
     if (!blob || signal.aborted) return;
+    // A longer queue alone cannot keep up with a voice generated slower than playback.
+    // Keep this chapter's clips ready before its body starts, using the same voice and rate.
+    if (engine.id === 'kokoro' && !this.preparedTexts.has(text) && this.deps.needsAudioPreparation?.(this._state.rate)) {
+      await this.prepareAudio(engine, voice, signal);
+      if (signal.aborted) return;
+    }
     this.setState({ status: 'playing' });
     await this.deps.audio.play(blob, this._state.rate, signal, follow);
+  }
+
+  private async prepareAudio(engine: VoiceEngine, voice: Voice, signal: AbortSignal): Promise<void> {
+    const index = this.index;
+    const chapter = index?.order[this.pos]?.block.chapterIndex;
+    if (!index || chapter === undefined) return;
+    const texts: string[] = [];
+    let chars = 0;
+    let limited = false;
+    const skipCode = this.deps.settings().skipCodeBlocks;
+    for (let p = this.pos; p < index.order.length; ) {
+      const item = index.order[p]!;
+      if (item.block.chapterIndex !== chapter) break;
+      const after = this.after(p);
+      if (!(skipCode && item.block.type === 'code')) {
+        const pieces = this.pieces(p);
+        const length = pieces.reduce((sum, text) => sum + text.length, 0);
+        if (texts.length && chars + length > PREPARATION_MAX_CHARS) {
+          limited = true;
+          break;
+        }
+        texts.push(...pieces);
+        chars += length;
+      }
+      // Page-by-page reading prepares only as far as the next intentional stop.
+      if (this.pageEnds?.has(index.order[after - 1]!.sentence.id)) break;
+      p = after;
+    }
+    const progress: AudioPreparation = { completed: 0, total: texts.length, scope: limited ? 'section' : this.pageEnds ? 'page' : 'chapter' };
+    this.preparation = progress;
+    this.preparedChapter = chapter;
+    // Protect completed clips from the small streaming window and persistent-cache pruning.
+    // This also makes a cache-write failure harmless for the chapter being listened to now.
+    this.preparedTexts = new Set(texts);
+    this.setState({ status: 'buffering' });
+    let complete = false;
+    try {
+      for (const text of texts) {
+        if (signal.aborted) return;
+        const made = await untilAborted(this.clip(engine, voice, text).promise, signal);
+        if (!made || signal.aborted) return;
+        progress.completed++;
+        this.setState({});
+      }
+      complete = true;
+    } finally {
+      if (this.preparation === progress) {
+        this.preparation = null;
+        if (!complete) {
+          this.preparedTexts.clear();
+          this.preparedChapter = null;
+        }
+        this.setState({});
+      }
+    }
   }
 
   /**
@@ -629,7 +712,7 @@ export class Player {
     const wanted = new Set(window);
     let kept = 0;
     for (const [text, c] of [...this.clips].reverse()) {
-      if (wanted.has(text)) continue;
+      if (wanted.has(text) || this.preparedTexts.has(text)) continue;
       if (!c.ready) {
         c.controller.abort();
         this.clips.delete(text);
@@ -640,6 +723,8 @@ export class Player {
   private dropClips(): void {
     for (const c of this.clips.values()) c.controller.abort();
     this.clips.clear();
+    this.preparedTexts.clear();
+    this.preparedChapter = null;
   }
 
   /**

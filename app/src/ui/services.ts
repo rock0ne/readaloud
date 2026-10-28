@@ -64,7 +64,10 @@ export async function createServices(): Promise<Services> {
     await updateSettings({ voiceByEngine: { ...settings.voiceByEngine, [engineId]: voiceId }, enginePreference: pref });
   };
 
-  const player = new Player({ positions: repo, registry, settings: () => settings, saveVoiceChoice, audio, audioCache: repo });
+  const player = new Player({
+    positions: repo, registry, settings: () => settings, saveVoiceChoice, audio, audioCache: repo,
+    needsAudioPreparation: (rate) => kokoro instanceof PhoneKokoro && kokoro.needsAudioPreparation(rate),
+  });
   player.setRate(settings.rate);
   if (IN_ANDROID_APP) keepScreenOnWhileReading(player, () => settings, listeners);
 

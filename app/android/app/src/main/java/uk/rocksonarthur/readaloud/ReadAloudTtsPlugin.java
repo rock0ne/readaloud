@@ -290,7 +290,14 @@ public class ReadAloudTtsPlugin extends Plugin {
         if (tts != null) return;
         if (!voiceInstalled()) throw new IllegalStateException("the natural voice is not on this phone yet");
         File model = new File(voiceDir(), MODEL_DIR);
-        tts = OfflineTts.kokoro(model.getAbsolutePath(), new File(model, "lexicon-gb-en.txt").getAbsolutePath(), THREADS);
+        // Sleep idle ONNX workers instead of burning CPU cycles while waiting for work.
+        // These session options are supported by the pinned runtime in the engine APK (ADR-40).
+        File policy = new File(getContext().getCacheDir(), "kokoro-cpu.conf");
+        try (FileOutputStream out = new FileOutputStream(policy)) {
+            out.write(("SessionConfig.session.intra_op.allow_spinning=0\n"
+                + "SessionConfig.session.inter_op.allow_spinning=0\n").getBytes(StandardCharsets.UTF_8));
+        }
+        tts = OfflineTts.kokoro(model.getAbsolutePath(), new File(model, "lexicon-gb-en.txt").getAbsolutePath(), THREADS, "cpu:" + policy.getAbsolutePath());
     }
 
     /** Downloads the zip, going on from what an earlier try left; checks it; unpacks it. Downloader thread. */
