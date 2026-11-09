@@ -50,7 +50,15 @@ Kokoro engine APK
 (SHA-256 `402c3628712668fb5eb8cc838add6a8f62caffd69ccc53af75384dde1e2142ec`).
 They contain no eSpeak NG.
 
-## Downloaded once, at first use, not in the downloads
+## Kokoro voice model (included in 0.5.0 offline editions)
+
+The 0.5.0 offline Windows ZIP and Android APK include the model rather than
+requiring an additional network download. Apache-2.0 model/voice notices and
+provenance accompany the Windows pack and the Android voice-2 archive. Five
+studio narrators share that model; the legacy eleven reader choices remain.
+The ordinary hosted web/PWA edition still uses first-use downloads. All other
+licence obligations and the unresolved source-build information below remain;
+this change does not certify audiobook distribution rights or platform acceptance.
 
 - **Kokoro-82M**, the voice model, by hexgrad, Apache-2.0
   (https://huggingface.co/hexgrad/Kokoro-82M).
@@ -63,6 +71,28 @@ They contain no eSpeak NG.
     above. It holds no eSpeak NG data.
 
 ## What is not known
+
+### ReadAloud 0.6.0 private audio-export candidate
+
+The offline export increment vendors unchanged npm archives for Mediabunny,
+@mediabunny/mp3-encoder and @mediabunny/aac-encoder, all version 1.62.1.
+They are MPL-2.0; the MP3 extension embeds LAME 3.100 (LGPL) and the AAC extension
+embeds FFmpeg's AAC encoder (LGPL-2.1-or-later). Exact archive origins, npm SHA512
+integrity pins and SHA256 hashes are in app/vendor/media/PROVENANCE.json. Full
+package archives, wrapper source/C bridges, upstream build instructions and
+licence texts are included in the source candidate. Generated licence notices
+also include the vendor and embedded-encoder licence texts. Upstream:
+https://github.com/Vanilagy/mediabunny/tree/v1.62.1/packages.
+
+The AAC package does not identify the exact FFmpeg revision used for its
+precompiled WASM, and the full corresponding LAME/FFmpeg library source/toolchain
+has not been reconstructed or certified in this increment. This is a private
+local-use candidate, not clearance for public app/binary redistribution.
+Resolve corresponding-source/relinking obligations and any applicable codec
+patent questions before public app distribution. Users are not prevented from
+replacing vendor encoders/building modified ReadAloud; no DRM/signature lock was
+introduced for that purpose. This does not claim legal clearance for audiobook
+content or distributor acceptance of exported files.
 
 - **eSpeak NG inside `phonemizer` 1.2.1.** The package ships eSpeak NG
   already compiled to JavaScript. The eSpeak NG revision and the build

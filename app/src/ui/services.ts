@@ -53,6 +53,10 @@ export async function createServices(): Promise<Services> {
   void kokoro.installed();
 
   const updateSettings = async (patch: Partial<Settings>) => {
+    if (patch.pronunciation || (patch.locale && patch.locale !== settings.locale)) {
+      player.pause();
+      player.resetVoice();
+    }
     settings = { ...settings, ...patch };
     await repo.saveSettings(settings);
     for (const fn of listeners) fn(settings);

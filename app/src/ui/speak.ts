@@ -2,6 +2,7 @@
 import { chunk, toSpeakText } from '../core/text/normalize';
 import { segmentSentences } from '../core/text/segment';
 import type { Services } from './services';
+import { pronunciationText } from '../core/text/pronunciation';
 
 /** Resolves when the text has been read or `signal` aborts. The document's reading pauses first. */
 export async function speakAloud(s: Services, text: string, signal: AbortSignal): Promise<void> {
@@ -15,7 +16,7 @@ export async function speakAloud(s: Services, text: string, signal: AbortSignal)
     .split('\n')
     .flatMap((line) => segmentSentences(line, settings.locale).map((seg) => toSpeakText(seg.text, 'paragraph')))
     .filter((t) => t.trim())
-    .flatMap((t) => chunk(t));
+    .flatMap((t) => chunk(t)).map((t) => pronunciationText(t, settings.pronunciation, settings.locale));
 
   if (engine.speak) {
     for (const piece of pieces) {

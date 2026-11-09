@@ -5,6 +5,7 @@
 #>
 param(
   [string]$Dist = (Join-Path $PSScriptRoot '..\dist'),
+  [string]$VoicePack = (Join-Path $PSScriptRoot '..\voice-pack'),
   [string]$Out = (Join-Path $PSScriptRoot '..\release')
 )
 
@@ -29,9 +30,16 @@ foreach ($old in @($stage, $zip)) {
 
 New-Item -ItemType Directory -Path $stage | Out-Null
 Copy-Item -LiteralPath $Dist -Destination (Join-Path $stage 'app') -Recurse
+if (-not (Test-Path -LiteralPath (Join-Path $VoicePack 'manifest.json'))) {
+  throw 'Offline Windows package needs the voice pack. Run node windows/stage-voices.mjs first.'
+}
+if (-not (Test-Path -LiteralPath (Join-Path $stage 'app\voice-pack\manifest.json'))) {
+  Copy-Item -LiteralPath $VoicePack -Destination (Join-Path $stage 'app\voice-pack') -Recurse
+}
 foreach ($file in @('ReadAloud.cmd', 'serve.ps1', 'README.txt')) {
   Copy-Item -LiteralPath (Join-Path $PSScriptRoot $file) -Destination $stage
 }
+Set-Content -LiteralPath (Join-Path $stage 'VERSION.txt') -Value "ReadAloud $version - private local Windows candidate" -Encoding ASCII
 Copy-Item -LiteralPath (Join-Path $repo 'LICENSE') -Destination (Join-Path $stage 'LICENSE.txt')
 Copy-Item -LiteralPath (Join-Path $repo 'THIRD-PARTY-NOTICES.md') -Destination (Join-Path $stage 'THIRD-PARTY-NOTICES.txt')
 

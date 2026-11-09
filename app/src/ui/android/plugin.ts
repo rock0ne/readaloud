@@ -17,6 +17,10 @@ export interface TtsEvents {
 }
 
 export interface ReadAloudTts {
+  beginAudioExport(opts: { name: string; expectedBytes?: number; maxBytes?: number }): Promise<{ token: string }>;
+  appendAudioExport(opts: { token: string; data: string; position?: number }): Promise<void>;
+  finishAudioExport(opts: { token: string; name: string; mime?: string }): Promise<void>;
+  cancelAudioExport(opts: { token: string }): Promise<void>;
   /** Whether the voice files are on the phone; the download's size; what an earlier try left. */
   voice(): Promise<{ installed: boolean; bytes: number; downloaded: number }>;
   /** Downloads, checks and unpacks the voice files, going on from an earlier try (ADR-37). */

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import preact from '@preact/preset-vite';
 import { defaultClientConditions, defineConfig, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
@@ -140,6 +141,11 @@ export default defineConfig(({ mode }) => {
       chunkSizeWarningLimit: 1500,
     },
     resolve: {
+      alias: {
+        'mediabunny': fileURLToPath(new URL('./vendor/media/mediabunny/dist/bundles/mediabunny.mjs', import.meta.url)),
+        '@mediabunny/mp3-encoder': fileURLToPath(new URL('./vendor/media/mp3-encoder/dist/bundles/mediabunny-mp3-encoder.mjs', import.meta.url)),
+        '@mediabunny/aac-encoder': fileURLToPath(new URL('./vendor/media/aac-encoder/dist/bundles/mediabunny-aac-encoder.mjs', import.meta.url)),
+      },
       // onnxruntime-web's build that loads its runtime from wasmPaths (/ort/) rather than a second,
       // hashed copy of the 22 MB .wasm in assets/.
       conditions: ['onnxruntime-web-use-extern-wasm', ...defaultClientConditions],

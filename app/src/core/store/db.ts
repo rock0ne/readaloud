@@ -1,5 +1,6 @@
 // IndexedDB schema (spec 9.1, ADR-19). Only this module and repo.ts touch IndexedDB.
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
+import type { NarrationRecord, NarrationAudioRecord } from '../types';
 import type { AiKeyRecord, AiProviderId, AiResult, AudioCacheRecord, DocRecord, DocSummary, Flag, Note, PositionRecord, Settings } from '../types';
 
 export interface ReadAloudSchema extends DBSchema {
@@ -14,10 +15,12 @@ export interface ReadAloudSchema extends DBSchema {
   notes: { key: string; value: Note; indexes: { byDoc: string } };
   ai: { key: string; value: AiResult; indexes: { byDoc: string } };
   keys: { key: AiProviderId; value: AiKeyRecord };
+  narrations: { key: string; value: NarrationRecord; indexes: { byDoc: string } };
+  narrationAudio: { key: string; value: NarrationAudioRecord; indexes: { byDoc: string } };
 }
 
 export const DB_NAME = 'readaloud';
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 
 export type ReadAloudDb = IDBPDatabase<ReadAloudSchema>;
 
@@ -48,6 +51,10 @@ export function openReadAloudDb(name = DB_NAME): Promise<ReadAloudDb> {
         const ai = db.createObjectStore('ai', { keyPath: 'key' });
         ai.createIndex('byDoc', 'docId');
         db.createObjectStore('keys', { keyPath: 'provider' });
+      }
+      if (oldVersion < 3) {
+        db.createObjectStore('narrations', { keyPath: 'key' }).createIndex('byDoc', 'docId');
+        db.createObjectStore('narrationAudio', { keyPath: 'key' }).createIndex('byDoc', 'docId');
       }
     },
   });

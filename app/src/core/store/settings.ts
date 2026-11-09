@@ -1,5 +1,6 @@
 // Settings defaults (spec 4) and migration (spec 9). `touch` decides pauseOnFlag's default.
 import type { EngineId, Settings } from '../types';
+import { DEFAULT_PRONUNCIATION, validPronunciation } from '../text/pronunciation';
 
 export function defaultSettings(touch = false): Settings {
   return {
@@ -10,6 +11,8 @@ export function defaultSettings(touch = false): Settings {
     locale: 'en-GB',
     azure: null,
     skipCodeBlocks: true,
+    preparedAudioOnly: false,
+    pronunciation: { ...DEFAULT_PRONUNCIATION },
     announceHeadings: true,
     pauseAfterHeadingMs: 600,
     pauseBetweenSentencesMs: 0,
@@ -61,6 +64,9 @@ export function withDefaults(saved: StoredSettings | undefined, touch = false): 
     ...m,
     schemaVersion: d.schemaVersion,
     voiceByEngine: { ...d.voiceByEngine, ...(m.voiceByEngine ?? {}) },
+    // Preserve pre-0.5.1 prepared clips on upgrade. New installations still default to hints on.
+    pronunciation: validPronunciation(m.pronunciation) ? { ...m.pronunciation }
+      : m.pronunciation === undefined ? { enabled: false, list: '' } : { ...DEFAULT_PRONUNCIATION },
     ai: { ...d.ai, ...(m.ai ?? {}), models: { ...(m.ai?.models ?? {}) } },
   };
 }

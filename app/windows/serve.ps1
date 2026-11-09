@@ -133,22 +133,32 @@ namespace ReadAloud {
           !full.StartsWith(rootWithSlash, StringComparison.OrdinalIgnoreCase)) return null;
       if (Directory.Exists(full)) full = Path.Combine(full, "index.html");
       if (File.Exists(full)) return full;
+      // An older cached HTML shell can request its now-removed entry after an upgrade.
+      // Only repair the known Vite entry shape, not arbitrary missing lazy assets.
+      string relative = path.Replace(Path.DirectorySeparatorChar, '/');
+      var staleEntry = System.Text.RegularExpressions.Regex.Match(relative, @"^assets/index-[A-Za-z0-9_-]+\.(js|css)$");
+      if (staleEntry.Success) {
+        string shell = Path.Combine(root, "index.html");
+        if (File.Exists(shell)) {
+          string extension = staleEntry.Groups[1].Value;
+          var current = System.Text.RegularExpressions.Regex.Match(File.ReadAllText(shell), @"assets/index-[A-Za-z0-9_-]+\." + extension);
+          if (current.Success) {
+            string entry = Path.Combine(root, current.Value.Replace('/', Path.DirectorySeparatorChar));
+            if (File.Exists(entry)) return entry;
+          }
+        }
+      }
       return Path.HasExtension(full) ? null : Path.Combine(root, "index.html");
     }
 
     static void SendFile(NetworkStream stream, string file, Dictionary<string, string> headers, bool headOnly) {
       FileInfo info = new FileInfo(file);
-      DateTime modified = info.LastWriteTimeUtc;
-      modified = new DateTime(modified.Year, modified.Month, modified.Day, modified.Hour, modified.Minute, modified.Second, DateTimeKind.Utc);
-      string lastModified = modified.ToString("r", CultureInfo.InvariantCulture);
-      string since;
-      if (headers.TryGetValue("If-Modified-Since", out since) && since == lastModified) {
-        Send(stream, 304, "Not Modified", null, lastModified, true);
-        return;
-      }
+      // Reproducible ZIPs intentionally give different releases the same timestamp.
+      // That timestamp is NOT a content validator. Always send current bytes, including
+      // sw.js/index.html, rather than a false 304 that can strand an old browser shell.
       string type;
       if (!Types.TryGetValue(info.Extension, out type)) type = "application/octet-stream";
-      StringBuilder head = Head(200, "OK", type, info.Length, lastModified);
+      StringBuilder head = Head(200, "OK", type, info.Length, null);
       byte[] bytes = Encoding.ASCII.GetBytes(head.ToString());
       stream.Write(bytes, 0, bytes.Length);
       if (headOnly) return;
@@ -175,7 +185,7 @@ namespace ReadAloud {
       if (code != 304) head.Append("Content-Type: ").Append(type).Append("\r\n");
       if (length >= 0) head.Append("Content-Length: ").Append(length).Append("\r\n");
       if (lastModified != null) head.Append("Last-Modified: ").Append(lastModified).Append("\r\n");
-      head.Append("Cache-Control: no-cache\r\n");
+      head.Append("Cache-Control: no-store\r\n");
       head.Append("Cross-Origin-Opener-Policy: same-origin\r\n");
       head.Append("Cross-Origin-Embedder-Policy: credentialless\r\n");
       head.Append("X-Content-Type-Options: nosniff\r\n");
@@ -189,16 +199,16 @@ namespace ReadAloud {
 try {
   $listener = [ReadAloud.StaticServer]::Start($Root, $Port)
 } catch {
-  # Another window may already be serving ReadAloud on this port: then just open it.
+  # Never silently open another server and claim this version has started.
   $running = $false
   try {
     $page = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 3
     $running = $page.Content -match 'ReadAloud'
   } catch { }
   if ($running) {
-    Write-Host "ReadAloud is already running at $url"
-    if ($Open) { Open-App }
-    exit 0
+    Write-Host "Another ReadAloud server is already running at $url"
+    Write-Host 'This copy was NOT started. Close the previous server window when idle, then run this copy again.'
+    exit 1
   }
   Write-Host "Port $Port is in use by another program, so ReadAloud cannot start."
   exit 1

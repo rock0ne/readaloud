@@ -38,6 +38,14 @@ interface Job {
 
 async function modelCached(): Promise<boolean> {
   try {
+    // The Windows offline ZIP serves its included voice pack on localhost.
+    const local = await fetch(new URL(`${import.meta.env.BASE_URL}voice-pack/manifest.json`, location.href));
+    if (local.ok) {
+      const manifest = await local.json() as { model?: string; files?: unknown[] };
+      if (manifest.model === KOKORO_MODEL && Array.isArray(manifest.files)) return true;
+    }
+  } catch { /* Hosted/PWA editions may not carry an embedded model. */ }
+  try {
     if (typeof caches === 'undefined') return false;
     const cache = await caches.open(MODEL_CACHE);
     return (await cache.match(MODEL_URL)) !== undefined;

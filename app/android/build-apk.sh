@@ -27,9 +27,23 @@ command -v pnpm >/dev/null || PNPM="corepack pnpm"
 APP=$(cd "$(dirname "$0")/.." && pwd)
 cd "$APP"
 [ -d node_modules ] || $PNPM install --frozen-lockfile
-$PNPM build:android
+node node_modules/typescript/bin/tsc -b
+node node_modules/vite/bin/vite.js build --mode android
 # sync, not copy: it also makes the git-ignored capacitor-cordova-android-plugins folder.
-$PNPM exec cap sync android
+node node_modules/@capacitor/cli/bin/capacitor sync android
+
+# Offline edition: carry the existing pinned model/voice archive in the APK itself.
+# All speakers share one model; choosing five narrators does not need five models.
+VOICE_ZIP=${READALOUD_VOICE_ZIP:-"$APP/release/readaloud-kokoro-voice-2.zip"}
+python3 -I - "$VOICE_ZIP" "$APP/android/app/src/main/assets/readaloud-kokoro-voice-2.zip" <<'PY'
+import hashlib, pathlib, shutil, sys
+source, target = map(pathlib.Path, sys.argv[1:])
+digest = hashlib.file_digest(source.open('rb'), 'sha256').hexdigest()
+if source.stat().st_size != 328761892 or digest != '207abec0ca2ac0288df2a3b4796fbb2531ab851e3890fd960917d94ab2513eca':
+    raise SystemExit('The bundled voice archive is not the pinned ReadAloud voice-2 asset')
+target.parent.mkdir(parents=True, exist_ok=True)
+shutil.copyfile(source, target)
+PY
 
 # sherpa-onnx's native libraries, unchanged from the engine APK (git-ignored here).
 JNI=android/app/src/main/jniLibs/arm64-v8a

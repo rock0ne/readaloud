@@ -5,6 +5,7 @@ import { newId, nowIso } from '../util/ids';
 import { openReadAloudDb, type ReadAloudDb } from './db';
 import { withDefaults } from './settings';
 import { isExpired } from '../ai/keys';
+import type { NarrationRecord } from '../types';
 
 export class DuplicateDocumentError extends Error {
   readonly existingId: string;
@@ -199,6 +200,7 @@ export class Repo {
   }
 
   async deleteDocument(id: string): Promise<void> {
+    await this.deleteNarration(id);
     const flagKeys = await this.db.getAllKeysFromIndex('flags', 'byDoc', id);
     const noteKeys = await this.db.getAllKeysFromIndex('notes', 'byDoc', id);
     const aiKeys = await this.db.getAllKeysFromIndex('ai', 'byDoc', id);
@@ -309,6 +311,32 @@ export class Repo {
   }
 
   // ----- audio cache (Phase 2) -----
+
+  getNarration(key: string): Promise<NarrationRecord | undefined> {
+    return this.db.get('narrations', key);
+  }
+
+  async putNarration(value: NarrationRecord): Promise<void> {
+    await this.db.put('narrations', value);
+  }
+
+  async getPreparedAudio(docId: string, audioKey: string): Promise<Blob | undefined> {
+    return (await this.db.get('narrationAudio', `${docId}|${audioKey}`))?.blob;
+  }
+
+  async putPreparedAudio(docId: string, audioKey: string, blob: Blob): Promise<void> {
+    // Never swallow quota/write errors: a book is ready only after every clip is committed.
+    await this.db.put('narrationAudio', { key: `${docId}|${audioKey}`, docId, blob });
+  }
+
+  async deleteNarration(docId: string): Promise<void> {
+    const tx = this.db.transaction(['narrations', 'narrationAudio'], 'readwrite');
+    for (const name of ['narrations', 'narrationAudio'] as const) {
+      let cursor = await tx.objectStore(name).index('byDoc').openCursor(docId);
+      while (cursor) { await cursor.delete(); cursor = await cursor.continue(); }
+    }
+    await tx.done;
+  }
 
   async getAudio(key: string): Promise<Blob | undefined> {
     const rec = await this.db.get('audio', key);

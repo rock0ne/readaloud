@@ -27,6 +27,8 @@ interface Package {
 /** The folder of the npm package a bundled module comes from, or null for ReadAloud's own code. */
 export function packageRoot(id: string): string | null {
   const path = id.replace(/^\0/, '').split('?')[0]!.replace(/\\/g, '/');
+  const vendor = path.indexOf('/vendor/media/');
+  if (vendor >= 0) return path.slice(0, vendor + '/vendor/media/'.length) + path.slice(vendor + '/vendor/media/'.length).split('/')[0];
   const marker = '/node_modules/';
   const at = path.lastIndexOf(marker);
   if (at < 0) return null;

@@ -5,7 +5,8 @@ import { expectedSpeechMs } from '../engines/webspeech';
 import { DocIndex } from '../model';
 import type { DocRecord } from '../types';
 import { clampRate } from '../store/settings';
-import { sha256Hex } from '../util/hash';
+import { audioKey, type NarrationPlan, type NarrationUnit } from '../audio/narration';
+import { pronunciationText } from '../text/pronunciation';
 
 export interface PositionStore {
   savePosition(pos: PositionRecord): Promise<void>;
@@ -23,6 +24,7 @@ export interface AudioOutput {
 
 /** Stored clips for audio engines (spec 8.4). The Repo implements it. */
 export interface AudioCache {
+  getPreparedAudio?(docId: string, key: string): Promise<Blob | undefined>;
   getAudio(key: string): Promise<Blob | undefined>;
   putAudio(key: string, blob: Blob): Promise<void>;
   pruneAudio(): Promise<number>;
@@ -147,6 +149,8 @@ export class Player {
   private pageEnds: ReadonlySet<string> | null = null;
   /** Stopped at the end of a page: the next Play starts the next page. */
   private atPageEnd = false;
+  private chapterOnly: number | null = null;
+  private atChapterEnd = false;
   private _state: PlayerState;
   basicFallback = false;
   private readonly deps: PlayerDeps;
@@ -202,6 +206,8 @@ export class Player {
     this.doc = doc;
     this.index = new DocIndex(doc);
     this.atPageEnd = false;
+    this.chapterOnly = null;
+    this.atChapterEnd = false;
     const at = startAt ? this.index.get(startAt) : undefined;
     this.pos = at ? at.ordinal : 0;
     this.setState({ status: 'idle', docId: doc.id, ...(this.currentSentenceId ? { sentenceId: this.currentSentenceId } : {}) });
@@ -218,11 +224,45 @@ export class Player {
     return this.starting;
   }
 
+  /** Navigate existing narration; never prepares/synthesises by itself. */
+  async playChapter(chapter: number, continueBook = false): Promise<void> {
+    if (!Number.isInteger(chapter) || !this.index) throw new Error('Choose a valid chapter.');
+    const at = this.index.order.find((item) => item.block.chapterIndex === chapter && item.sentence.chunks.length > 0
+      && !(item.block.type === 'code' && this.deps.settings().skipCodeBlocks));
+    if (!at) throw new Error('This chapter has no readable passages.');
+    await this.halt('paused');
+    this.chapterOnly = continueBook ? null : chapter;
+    this.atChapterEnd = false;
+    this.seek(at.sentence.id);
+    await this.play();
+  }
+
+  clearChapterPlayback(): void { this.chapterOnly = null; this.atChapterEnd = false; }
+
+  get chapterPlayback(): { chapter: number; finished: boolean } | null {
+    return this.chapterOnly === null ? null : { chapter: this.chapterOnly, finished: this.atChapterEnd };
+  }
+
   private async start(): Promise<void> {
     const gen = ++this.startGen;
     if (!this.index) return;
+    if (this.atChapterEnd && this.chapterOnly !== null) {
+      const first = this.index.order.find((item) => item.block.chapterIndex === this.chapterOnly);
+      if (first) this.pos = first.ordinal;
+      this.atChapterEnd = false;
+    }
     if (this.atPageEnd) this.pos = Math.min(this.pos + 1, this.index.order.length - 1);
     this.atPageEnd = false;
+    if (this.deps.settings().preparedAudioOnly) {
+      // Cached audio can play even without loading the speech model. No browser/online fallback.
+      const engine = this.deps.registry.get('kokoro');
+      const id = this.deps.settings().voiceByEngine.kokoro;
+      const voice = (await engine?.listVoices())?.find((v) => v.id === id)
+        ?? (await engine?.listVoices())?.[0];
+      if (!engine || !voice || gen !== this.startGen) return;
+      this.engine = engine; this.voice = voice; this.basicFallback = false;
+      this.setState({ engineId: engine.id, voiceId: voice.id });
+    }
     if (this._state.status === 'ended' || this.pos >= this.index.order.length) this.pos = 0;
     if (!this.engine || !this.voice) {
       const pick = await this.deps.registry.pick(this.deps.settings());
@@ -328,6 +368,8 @@ export class Player {
     const clamped = Math.max(0, Math.min(this.index.order.length - 1, target));
     this.atPageEnd = false;
     const wasPlaying = this._state.status === 'playing' || this._state.status === 'buffering';
+    if (this.chapterOnly !== null && this.index.order[clamped]?.block.chapterIndex !== this.chapterOnly) this.clearChapterPlayback();
+    this.atChapterEnd = false;
     if (wasPlaying) this.controller?.abort();
     this.pos = clamped;
     const id = this.currentSentenceId;
@@ -417,6 +459,13 @@ export class Player {
         await abortableSleep(pause / speed, signal);
         if (signal.aborted) return;
       }
+      // A chapter-only session stops BEFORE entering the next chapter, including at book end.
+      if (this.chapterOnly !== null && index.order[this.pos + 1]?.block.chapterIndex !== this.chapterOnly) {
+        this.atChapterEnd = true;
+        this.setState({ status: 'paused' });
+        this.flushPosition();
+        return;
+      }
       // Page by page (ADR-35): stop after the last sentence of a page; Play goes on with the next.
       if (this.pageEnds?.has(index.order[this.pos]!.sentence.id) && this.pos < index.order.length - 1) {
         this.atPageEnd = true;
@@ -444,10 +493,13 @@ export class Player {
     }, 250);
     try {
       const onBoundary = (charIndex: number) => {
+        // Speech-only hints change offsets: use the existing estimated highlighting instead.
+        if (spoken !== unit.text) return;
         reported = true;
         this.follow(unit, charIndex / unit.text.length);
       };
-      await engine.speak(unit.text, { voice, rate, onBoundary }, signal);
+      const spoken = this.spoken(unit.text);
+      await engine.speak(spoken, { voice, rate, onBoundary }, signal);
       return true;
     } catch (e) {
       if (signal.aborted) return true;
@@ -473,6 +525,7 @@ export class Player {
         return true;
       } catch (e) {
         if (signal.aborted) return true;
+        if (this.deps.settings().preparedAudioOnly) throw e;
         console.warn('[player] chunk failed', attempt + 1, e);
         if (attempt === 0) await abortableSleep(RETRY_DELAY_MS, signal);
       }
@@ -491,7 +544,7 @@ export class Player {
     const rate = this._state.rate;
     if (engine.kind === 'direct') {
       if (!engine.speak) throw new Error(`${engine.label} cannot speak directly.`);
-      await engine.speak(text, { voice, rate: Math.min(rate, engine.maxEngineRate) }, signal);
+      await engine.speak(this.spoken(text), { voice, rate: Math.min(rate, engine.maxEngineRate) }, signal);
       return;
     }
     if (!engine.synthesize || !this.deps.audio) throw new Error(`${engine.label} needs an audio output.`);
@@ -503,7 +556,7 @@ export class Player {
     if (!blob || signal.aborted) return;
     // A longer queue alone cannot keep up with a voice generated slower than playback.
     // Keep this chapter's clips ready before its body starts, using the same voice and rate.
-    if (engine.id === 'kokoro' && !this.preparedTexts.has(text) && this.deps.needsAudioPreparation?.(this._state.rate)) {
+    if (!this.deps.settings().preparedAudioOnly && engine.id === 'kokoro' && !this.preparedTexts.has(text) && this.deps.needsAudioPreparation?.(this._state.rate)) {
       await this.prepareAudio(engine, voice, signal);
       if (signal.aborted) return;
     }
@@ -734,13 +787,20 @@ export class Player {
    */
   private async fetchClip(engine: VoiceEngine, voice: Voice, text: string, signal: AbortSignal): Promise<Blob> {
     if (!engine.synthesize) throw new Error(`${engine.label} cannot make audio.`);
+    text = this.spoken(text);
     const earlier = this.lastAsk;
     let asked = (): void => undefined;
     this.lastAsk = new Promise<void>((resolve) => (asked = resolve));
     try {
       const cache = this.deps.audioCache;
       // 'v2': clips with their quiet start and end trimmed (ADR-31); older clips are pruned in time.
-      const key = `${engine.id}|${voice.id}|1.0|v2|${await sha256Hex(new TextEncoder().encode(text))}`;
+      const key = await audioKey(engine.id, voice.id, text);
+      const saved = this.doc && cache?.getPreparedAudio
+        ? await cache.getPreparedAudio(this.doc.id, key) : undefined;
+      if (saved) return saved;
+      if (this.deps.settings().preparedAudioOnly) {
+        throw new Error('This passage is not prepared for this voice. Open Audiobook and prepare the whole book before travelling.');
+      }
       const hit = cache ? await cache.getAudio(key).catch(() => undefined) : undefined;
       if (hit) return hit;
       await earlier;
@@ -759,6 +819,37 @@ export class Player {
       // A cached, failed or cancelled clip passes its turn on only after the earlier ones.
       void earlier.then(asked);
     }
+  }
+
+  /** Exact streaming units plus individual sentence chunks for arbitrary saved positions/seeks. */
+  private spoken(text: string): string {
+    const s = this.deps.settings();
+    return pronunciationText(text, s.pronunciation, s.locale);
+  }
+
+  narrationPlan(chapter?: number): NarrationPlan {
+    if (!this.index || !this.doc) throw new Error('Open a document first.');
+    const units: NarrationUnit[] = [];
+    const extra = new Set<string>();
+    const settings = this.deps.settings();
+    for (let p = 0; p < this.index.order.length;) {
+      const item = this.index.order[p]!;
+      const next = this.after(p);
+      if (!(item.block.type === 'code' && settings.skipCodeBlocks) && (chapter === undefined || item.block.chapterIndex === chapter)) {
+        const last = this.index.order[next - 1]!;
+        const heading = item.block.type === 'heading' && settings.announceHeadings;
+        const end = last.sentence.index === last.block.sentences.length - 1;
+        units.push({ chapter: item.block.chapterIndex, texts: this.pieces(p).map((t) => this.spoken(t)),
+          beforeMs: heading && item.sentence.index === 0 ? settings.pauseAfterHeadingMs / 2 : 0,
+          afterMs: heading && end ? settings.pauseAfterHeadingMs : end ? settings.pauseBetweenParagraphsMs : settings.pauseBetweenSentencesMs });
+        // A seek or paused highlight can start in the middle of a joined short-sentence unit.
+        for (let q = p; q < next; q++) {
+          for (const text of this.pieces(q)) extra.add(this.spoken(text));
+        }
+      }
+      p = next;
+    }
+    return { docId: this.doc.id, sourceHash: this.doc.sourceHash, units, texts: [...new Set([...units.flatMap((u) => u.texts), ...extra])] };
   }
 
   private positionRecord(): PositionRecord | null {

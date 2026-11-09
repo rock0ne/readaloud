@@ -1,0 +1,23 @@
+[
+  {
+    "name": "mediabunny",
+    "version": "1.62.1",
+    "url": "https://registry.npmjs.org/mediabunny/-/mediabunny-1.62.1.tgz",
+    "integrity": "sha512-lYzeerDwo9QLhBCipqQDXOSV7InvaIFplllZQviPO5rPwH+IUr8M1uvumk1olIUgMRGkPiInRriv25WFErUgMw==",
+    "sha256": "bf97e177e9a86a115f04cd92af4255617e8b73e33628d98594c372235ab61e53"
+  },
+  {
+    "name": "@mediabunny/mp3-encoder",
+    "version": "1.62.1",
+    "url": "https://registry.npmjs.org/@mediabunny/mp3-encoder/-/mp3-encoder-1.62.1.tgz",
+    "integrity": "sha512-v5L8Z9T298IcSWGvWPlGGNhoM2YzY+fOVAtdkwc6Leh8c1HXl5ivJVBKCcRZeCbp4LDJOSuwdu2SE/V67SZo7w==",
+    "sha256": "8d0dc00e5bd3c2f8dd10a61eae6818cf6083229e66f72a90372b40984242dd0a"
+  },
+  {
+    "name": "@mediabunny/aac-encoder",
+    "version": "1.62.1",
+    "url": "https://registry.npmjs.org/@mediabunny/aac-encoder/-/aac-encoder-1.62.1.tgz",
+    "integrity": "sha512-3fiZYAX95d+TDp2vu0sXMYputLm2+W21fZQMUWTf9awKhsRC/wko9OXj4GLLmGKMRryvI9Ocv9HzhhHVRYWopQ==",
+    "sha256": "bba953a86c78a64d46cfd7dbc0d7b826d9feaa2e22cb2469f1ad8b43f9030266"
+  }
+]

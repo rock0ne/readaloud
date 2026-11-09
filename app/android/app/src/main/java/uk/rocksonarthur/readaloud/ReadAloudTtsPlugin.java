@@ -8,6 +8,8 @@ import android.content.pm.PackageManager;
 import android.media.AudioAttributes;
 import android.media.AudioFocusRequest;
 import android.media.AudioManager;
+import android.util.Base64;
+import androidx.activity.result.ActivityResult;
 import android.os.Build;
 import android.view.WindowManager;
 import com.getcapacitor.JSObject;
@@ -15,6 +17,7 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.getcapacitor.annotation.ActivityCallback;
 import com.k2fsa.sherpa.onnx.GeneratedAudio;
 import com.k2fsa.sherpa.onnx.OfflineTts;
 import java.io.BufferedInputStream;
@@ -33,6 +36,7 @@ import java.nio.file.Files;
 import java.security.MessageDigest;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.UUID;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -64,6 +68,8 @@ public class ReadAloudTtsPlugin extends Plugin {
     /** The download runs on its own thread, so nothing waits behind it. */
     private final ExecutorService downloader = Executors.newSingleThreadExecutor();
     private volatile boolean downloading;
+    private final java.util.concurrent.ConcurrentHashMap<String, Long> exportSizes = new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.concurrent.ConcurrentHashMap<String, Long> exportLimits = new java.util.concurrent.ConcurrentHashMap<>();
     private volatile boolean cancelled;
     private OfflineTts tts;
     private int nextId;
@@ -79,6 +85,9 @@ public class ReadAloudTtsPlugin extends Plugin {
         };
         // The eSpeak data copied from the Kokoro engine app by ReadAloud 0.2 and earlier (ADR-27).
         worker.execute(() -> {
+            // Recover disk space from an interrupted export after a process restart.
+            // Only this plugin's temporary files; never the user's saved WAVs/library.
+            deleteTree(new File(getContext().getCacheDir(), "audio-exports"));
             deleteTree(new File(getContext().getFilesDir(), "espeak-ng-data"));
             new File(getContext().getFilesDir(), "espeak-ng-data.version").delete();
         });
@@ -105,12 +114,126 @@ public class ReadAloudTtsPlugin extends Plugin {
 
     @PluginMethod
     public void voice(PluginCall call) {
+        // The offline distribution includes the pinned archive. Unpack it locally once;
+        // there is no HTTP request and no model initialization on this status call.
+        if (!voiceInstalled() && bundledVoice()) {
+            downloader.execute(() -> {
+                try { fetchVoice(); resolveVoice(call); }
+                catch (Throwable e) { call.reject("Could not install the included voice: " + e.getMessage()); }
+            });
+            return;
+        }
+        resolveVoice(call);
+    }
+
+    private void resolveVoice(PluginCall call) {
         JSObject out = new JSObject();
         out.put("installed", voiceInstalled());
         out.put("bytes", VOICE_BYTES);
         File part = partFile();
         out.put("downloaded", part.exists() ? part.length() : 0);
         call.resolve(out);
+    }
+
+    private boolean bundledVoice() {
+        try (InputStream in = getContext().getAssets().open("readaloud-kokoro-voice-2.zip")) { return true; }
+        catch (IOException e) { return false; }
+    }
+
+    // Chunked transfer avoids a whole chapter's base64 occupying the Capacitor bridge.
+    private File exportFile(String token) throws IOException {
+        if (token == null || !token.matches("[0-9a-f-]{36}")) throw new IOException("Invalid export token");
+        File dir = new File(getContext().getCacheDir(), "audio-exports");
+        if (!dir.isDirectory() && !dir.mkdirs()) throw new IOException("Cannot create audio export folder");
+        return new File(dir, token + ".wav");
+    }
+
+    @PluginMethod
+    public void beginAudioExport(PluginCall call) {
+        worker.execute(() -> {
+            try {
+                String token = UUID.randomUUID().toString();
+                Long expected = call.getLong("expectedBytes");
+                Long maximum = call.getLong("maxBytes");
+                if (maximum != null && (maximum < 44 || maximum > 4_294_967_294L || expected != null)) throw new IOException("Invalid compressed audio limit");
+                if (maximum != null && getContext().getCacheDir().getUsableSpace() < maximum * 2 + 64L * 1024 * 1024)
+                    throw new IOException("Not enough temporary storage. Export on Windows instead.");
+                if (expected != null) {
+                    if (expected < 44 || expected > 4_294_967_294L) throw new IOException("Invalid whole-book WAV size");
+                    if (getContext().getCacheDir().getUsableSpace() < expected * 2 + 64L * 1024 * 1024)
+                        throw new IOException("Not enough free storage. Whole-book saving needs temporary and destination space; export on Windows instead.");
+                }
+                if (!exportFile(token).createNewFile()) throw new IOException("Cannot create audio export");
+                if (expected != null) exportSizes.put(token, expected);
+                if (maximum != null) exportLimits.put(token, maximum);
+                JSObject out = new JSObject(); out.put("token", token); call.resolve(out);
+            } catch (Throwable e) { call.reject(e.getMessage()); }
+        });
+    }
+
+    @PluginMethod
+    public void appendAudioExport(PluginCall call) {
+        worker.execute(() -> {
+            try {
+                String data = call.getString("data");
+                if (data == null || data.length() > 90_000) throw new IOException("Invalid export chunk");
+                File file = exportFile(call.getString("token"));
+                if (!file.isFile()) throw new IOException("Export no longer exists");
+                byte[] bytes = Base64.decode(data, Base64.NO_WRAP);
+                long limit = exportSizes.getOrDefault(call.getString("token"), exportLimits.getOrDefault(call.getString("token"), 257L * 1024 * 1024));
+                long position = call.getLong("position", file.length());
+                if (bytes.length > 65536 || position < 0 || position > limit || bytes.length > limit - position) throw new IOException("Audio export too large");
+                try (java.io.RandomAccessFile out = new java.io.RandomAccessFile(file, "rw")) { out.seek(position); out.write(bytes); }
+                call.resolve();
+            } catch (Throwable e) { call.reject(e.getMessage()); }
+        });
+    }
+
+    @PluginMethod
+    public void finishAudioExport(PluginCall call) {
+        try {
+            File file = exportFile(call.getString("token"));
+            if (!file.isFile() || file.length() < 44) throw new IOException("Audio export is incomplete");
+            Long expected = exportSizes.get(call.getString("token"));
+            if (expected != null && file.length() != expected) throw new IOException("Whole-book export is incomplete");
+            String name = call.getString("name", "chapter.wav").replaceAll("[\\\\/:*?\"<>|]", "_");
+            String mime = call.getString("mime", "audio/wav");
+            if (!mime.equals("audio/wav") && !mime.equals("audio/mpeg") && !mime.equals("audio/mp4") && !mime.equals("application/json") && !mime.equals("application/zip")) throw new IOException("Unsupported export format");
+            Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+                .setType(mime).putExtra(Intent.EXTRA_TITLE, name);
+            startActivityForResult(call, intent, "audioExportSelected");
+        } catch (Throwable e) { call.reject(e.getMessage()); }
+    }
+
+    @ActivityCallback
+    private void audioExportSelected(PluginCall call, ActivityResult result) {
+        if (call == null) return;
+        worker.execute(() -> {
+            File file = null;
+            try {
+                file = exportFile(call.getString("token"));
+                Intent data = result.getData();
+                if (result.getResultCode() != Activity.RESULT_OK || data == null || data.getData() == null) {
+                    call.reject("Saving the audio was cancelled"); return;
+                }
+                try (InputStream in = new FileInputStream(file);
+                     OutputStream out = getContext().getContentResolver().openOutputStream(data.getData(), "w")) {
+                    if (out == null) throw new IOException("Cannot open the selected file");
+                    byte[] buf = new byte[65536]; int n;
+                    while ((n = in.read(buf)) != -1) out.write(buf, 0, n);
+                }
+                call.resolve();
+            } catch (Throwable e) { call.reject("Could not save audio: " + e.getMessage()); }
+            finally { if (file != null) file.delete(); if (call.getString("token") != null) { exportSizes.remove(call.getString("token")); exportLimits.remove(call.getString("token")); } }
+        });
+    }
+
+    @PluginMethod
+    public void cancelAudioExport(PluginCall call) {
+        worker.execute(() -> {
+            try { exportFile(call.getString("token")).delete(); exportSizes.remove(call.getString("token")); exportLimits.remove(call.getString("token")); call.resolve(); }
+            catch (Throwable e) { call.reject(e.getMessage()); }
+        });
     }
 
     /** Downloads, checks and unpacks the voice; "download" events report the bytes so far. */
@@ -312,7 +435,17 @@ public class ReadAloudTtsPlugin extends Plugin {
         if (getContext().getNoBackupFilesDir().getUsableSpace() + have < SPACE_NEEDED) {
             throw new IOException("there is not enough free space on this phone: the voice needs about 800 MB while it unpacks, and 380 MB after that");
         }
-        if (have < VOICE_BYTES) {
+        if (have < VOICE_BYTES && bundledVoice()) {
+            try (InputStream in = getContext().getAssets().open("readaloud-kokoro-voice-2.zip");
+                 OutputStream out = new FileOutputStream(part)) {
+                byte[] buf = new byte[256 * 1024]; int n; have = 0;
+                while ((n = in.read(buf)) != -1) {
+                    if (cancelled) throw new IOException("Voice installation stopped");
+                    out.write(buf, 0, n); have += n;
+                }
+            }
+            progress(have);
+        } else if (have < VOICE_BYTES) {
             HttpURLConnection http = (HttpURLConnection) new URL(VOICE_URL).openConnection();
             http.setConnectTimeout(20_000);
             http.setReadTimeout(30_000);
