@@ -4,11 +4,11 @@ Read, listen, proofread and prepare audiobooks on Windows and Android. Import do
 
 ## Version and availability
 
-This branch contains the **0.7.1 source candidate**, not a new GitHub Release or an update to the hosted website. Existing public downloads/site may be older and lack the controls below.
+The source version is **0.7.2**. GitHub Pages uses the public build: reading, preparation, WAV export, audio import/playback, chapter navigation and older-file timing recovery. **Creating MP3/M4A/M4B is disabled on the hosted site** while encoder redistribution remains held. Existing compressed audio still imports and plays. The private 0.7.1 packages retain all four export formats; this workflow repair does not replace those installed packages or publish a new APK/Windows download.
 
 The candidate passed 272 automated tests and bounded developer playback checks, including a Samsung S21+ / Android 15. On 9 November 2026, the owner separately confirmed chapter playback on their **Samsung S26 after importing matching timing JSON files**. This is owner feedback, not independent certification of all S26 scenarios.
 
-**Public binary distribution remains held** for the encoder corresponding-source/build-provenance issues in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). This source branch excludes downloaded codec bundles, model/voice archives, APKs, personal books/audio, credentials and signing keys. A source push does not clear a binary release.
+**Public redistribution of the added encoder bundles remains held** for the corresponding-source/build-provenance issues in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). The hosted build excludes those packages entirely and fails if their modules enter its output. Source control excludes downloaded codec bundles, model/voice archives, APKs, personal books/audio, credentials and signing keys. A source push does not clear a downloadable binary release.
 
 ## Install or update
 
@@ -71,7 +71,7 @@ These are playback choices, not preparation/export operations:
 
 ## Export audio
 
-Choose **Export format**, then **Save whole book …** or **Save chapter …**. Exporting reuses saved speech. Compressed encoding takes time, but does not make the voice narrate again.
+Choose **Export format**, then **Save whole book …** or **Save chapter …**. Exporting reuses saved speech. The hosted edition offers WAV only; the following full-format table describes the private offline package. Compressed encoding takes time, but does not make the voice narrate again.
 
 | Whole-book format | Use | Chapters in ReadAloud 0.7.1+ |
 | --- | --- | --- |
@@ -199,12 +199,26 @@ Other limits: English Kokoro voices; scanned PDFs need OCR elsewhere; DRM EPUBs 
 
 ## Build from source
 
-Use Node.js 22, pinned pnpm 11 and the lockfile. Downloaded codec bundles are deliberately excluded from this source branch. Stage pinned dependencies locally:
+Use Node.js 22, pinned pnpm 11 and the lockfile. For the public build, **no vendor staging is needed**:
 
 ```powershell
 cd app
 corepack enable
 pnpm install --frozen-lockfile
+$env:READALOUD_PUBLIC_BUILD = '1'
+pnpm test
+pnpm build:public --base /readaloud/
+```
+
+The public build maps the encoder implementation to an explicit unavailable-feature stub, hides unavailable export choices and rejects held encoder modules in the output. It never fetches them at runtime. Existing audio decoding uses the device's normal media support.
+
+For the private full-export build only, stage pinned dependencies locally and do not carry the public-build environment flag into it:
+
+```powershell
+cd app
+corepack enable
+pnpm install --frozen-lockfile
+Remove-Item Env:READALOUD_PUBLIC_BUILD -ErrorAction SilentlyContinue
 powershell -ExecutionPolicy Bypass -File windows/stage-media.ps1
 pnpm test
 pnpm build
@@ -218,7 +232,16 @@ Inspect the staging script first. It requires build-host network access, verifie
 - `app/android/make-voice-zip.py` and the third-party notices describe voice provenance. Don't silently substitute assets.
 - Tests cover narration, chapter metadata/maps, export bridges, transfer integrity and reader behaviour; they do not certify every device, background scenario or publication quality.
 
-Pushing to `main` triggers GitHub Pages. This update is a source branch only: no automatic site deployment or new binary release.
+### Safe future updates
+
+1. Work on an update branch and open a pull request to `main`, rather than editing/merging directly on the repository homepage.
+2. Wait for **Public build (clean checkout)** to be green. It installs from the lockfile, runs tests and builds the actual public site from tracked source without private vendor folders. Pull requests cannot deploy.
+3. Review the README/feature differences and merge only after that check passes. A green local build using extra files is not enough.
+4. Open Actions and wait for the post-merge **Web app on GitHub Pages** run to finish successfully. A merged commit alone is not a deployed website.
+5. Verify the live app's version and a small reading/audio smoke. Keep the previous downloaded app until the new one is verified; never clear saved library data as an update step.
+6. GitHub **Releases** is separate. Its Latest label changes only when a signed/checksummed downloadable release is deliberately published, not when source is pushed or merged. Do not upload an unsigned APK or held encoder binary.
+
+Recommended owner setting: **Settings → Rules → Rulesets** (or Branches → branch protection), protect `main`, require a pull request and the **Public build (clean checkout)** status check before merging, and disallow force pushes. This repository setting is not automatically enabled by adding a workflow; until the owner enables it, GitHub can still allow a failed check to be bypassed. Repository administrator settings have not been changed by this fix.
 
 ## Licence and design
 

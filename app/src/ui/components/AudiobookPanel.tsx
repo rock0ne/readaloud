@@ -179,14 +179,15 @@ export function AudiobookPanel({ doc }: { doc: DocRecord }) {
     <p><button class="primary" disabled={busy} onClick={() => void prepare(false)}>Prepare whole audiobook</button>{' '}
       <button disabled={busy} onClick={() => void prepare(true)}>Prepare selected chapter</button></p>
     <label>Export format <select aria-label="Export format" value={format} disabled={busy} onChange={(e) => setFormat(e.currentTarget.value as AudioExportFormat)}>
-      {Object.entries(AUDIO_FORMATS).map(([id, value]) => <option key={id} value={id}>{value.label}</option>)}
+      {Object.entries(AUDIO_FORMATS).filter(([id]) => __COMPRESSED_EXPORTS__ || id === 'wav').map(([id, value]) => <option key={id} value={id}>{value.label}</option>)}
     </select></label>
     {format !== 'wav' && <label>Audio quality <select aria-label="Audio quality" value={bitrate} disabled={busy} onChange={(e) => setBitrate(Number(e.currentTarget.value))}>
       <option value={96000}>96 kb/s — smaller speech files</option><option value={128000}>128 kb/s — higher quality</option>
     </select></label>}
     <p><button disabled={busy || !record?.ready} onClick={() => void saveWholeBook()}>Save whole book {format.toUpperCase()}</button>{' '}
       <button disabled={busy || !chapterRecord?.ready} onClick={() => void save()}>Save chapter {format.toUpperCase()}</button></p>
-    <p>Every whole-book export (WAV, MP3, M4A and M4B) now carries chapter timings inside the audio file. Import that one file in ReadAloud 0.7.1 or later for chapter selection: no separate map or ZIP. MP3 uses a ReadAloud ID3 text field, WAV a ReadAloud RIFF chunk; M4A/M4B use Nero markers (up to 255). Other players may play the audio without showing chapters. Encoding uses saved speech locally, not a paid service.</p>
+    {__COMPRESSED_EXPORTS__ ? <p>Every whole-book export (WAV, MP3, M4A and M4B) carries chapter timings inside the audio file. Import that one file in ReadAloud 0.7.1 or later for chapter selection: no separate map or ZIP. MP3 uses a ReadAloud ID3 text field, WAV a ReadAloud RIFF chunk; M4A/M4B use Nero markers (up to 255). Other players may play the audio without showing chapters. Encoding uses saved speech locally, not a paid service.</p>
+      : <p>This hosted edition exports WAV with chapters. Creating MP3/M4A/M4B is unavailable here while encoder redistribution is held; their private-package export paths are unchanged. Importing and playing your existing compressed audio, chapter-map recovery, and saved narration still work.</p>}
     <button disabled={busy || !record?.ready} onClick={() => void saveTimings()}>Save chapter timings for older audio</button>
     <p>Already downloaded an older unmarked audio file? Save only these small timings, then use Import chapter-time map for that audio on your phone. Keep the same book, narrator, pronunciation and pause settings as the original export. Duration must match; no speech is generated and no new WAV download is needed.</p>
     <p>Both preparation options resume saved passages rather than starting again. Chapter preparation makes only the chapter selected above; whole-book preparation reuses any chapters already prepared.</p>
