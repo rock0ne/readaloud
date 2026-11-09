@@ -4,11 +4,11 @@ Read, listen, proofread and prepare audiobooks on Windows and Android. Import do
 
 ## Version and availability
 
-The public WAV edition is **0.7.3**. [Open its download page](https://github.com/rock0ne/readaloud/releases/tag/v0.7.3) and read the listed assets/platform status before downloading. The Windows ZIP is labelled **public-wav**. Android must have an owner release-key signature before an APK is listed as installable; an unsigned or development-key test APK is not a public update.
+The current release is **ReadAloud 0.7.3**. [Open its download page](https://github.com/rock0ne/readaloud/releases/tag/v0.7.3): download **ReadAloud-windows-0.7.3.zip** for Windows or **ReadAloud-0.7.3.apk** for Android. Capabilities and export limitations are described below rather than added to the app's filename. The Android download uses the owner's established release signature; an unsigned or development-key test APK is not a public update.
 
 GitHub Pages and public downloads provide reading, preparation, WAV export, audio import/playback, chapter navigation and older-file timing recovery. **Creating MP3/M4A/M4B is disabled in the public WAV edition** while encoder redistribution remains held. Existing compressed audio still imports and plays. Private 0.7.1 full-export packages retain their formats; you do not have to replace a working full-export installation with this restricted edition.
 
-The candidate passed 272 automated tests and bounded developer playback checks, including a Samsung S21+ / Android 15. On 9 November 2026, the owner separately confirmed chapter playback on their **Samsung S26 after importing matching timing JSON files**. This is owner feedback, not independent certification of all S26 scenarios.
+Release checks passed 273 automated tests, and the extracted Windows download passed offline preparation/export/playback checks. Earlier candidates also had bounded developer checks on a Samsung S21+ / Android 15. On 9 November 2026, the owner separately confirmed chapter playback on their **Samsung S26 after importing matching timing JSON files** in the 0.7.1 candidate. This is owner feedback, not independent certification of all S26 scenarios or the 0.7.3 APK.
 
 **Public redistribution of the added encoder bundles remains held** for the corresponding-source/build-provenance issues in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). The hosted build excludes those packages entirely and fails if their modules enter its output. Source control excludes downloaded codec bundles, model/voice archives, APKs, personal books/audio, credentials and signing keys. A source push does not clear a downloadable binary release.
 
@@ -16,7 +16,7 @@ The candidate passed 272 automated tests and bounded developer playback checks, 
 
 ### Windows
 
-1. Download `ReadAloud-windows-0.7.3-public-wav.zip` from the release page and verify its supplied SHA256 with `Get-FileHash <zip> -Algorithm SHA256`. Avoid GitHub's automatically generated **Source code ZIP** if you want a ready-to-run app.
+1. Download `ReadAloud-windows-0.7.3.zip` from the release page and verify its supplied SHA256 with `Get-FileHash <zip> -Algorithm SHA256`. Avoid GitHub's automatically generated **Source code ZIP** if you want a ready-to-run app.
 2. Extract to a new folder. Close the older ReadAloud server window before starting this copy.
 3. Double-click **ReadAloud.cmd**. It serves the app locally in Edge at `http://127.0.0.1:4173/`. Keep its server window open.
 4. Use the same browser/profile/address to retain the library. Do not clear browser data to update. InPrivate uses separate temporary storage.

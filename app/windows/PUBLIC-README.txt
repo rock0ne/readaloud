@@ -1,8 +1,8 @@
-ReadAloud public WAV edition
-===========================
+ReadAloud for Windows
+====================
 
 1. Check the ZIP's SHA256 against SHA256SUMS.txt on the release page:
-       Get-FileHash .\ReadAloud-windows-<version>-public-wav.zip -Algorithm SHA256
+       Get-FileHash .\ReadAloud-windows-<version>.zip -Algorithm SHA256
 2. Extract the whole ZIP to a new folder. Close any older ReadAloud server window.
 3. Double-click ReadAloud.cmd and keep its window open. It opens Microsoft Edge
    at http://127.0.0.1:4173/ and serves only this PC. No Node.js installation needed.

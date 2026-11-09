@@ -27,7 +27,7 @@ if ($buildInfo.version -ne $version -or $buildInfo.edition -ne $expectedEdition 
     ($Edition -eq 'PublicWav' -and $buildInfo.compressedExports -ne $false)) {
   throw 'Build version/edition does not match the requested package. Rebuild the correct edition.'
 }
-$name = "ReadAloud-windows-$version" + $(if ($Edition -eq 'PublicWav') { '-public-wav' } else { '' })
+$name = "ReadAloud-windows-$version"
 New-Item -ItemType Directory -Force -Path $Out | Out-Null
 $Out = (Resolve-Path -LiteralPath $Out).Path
 $stage = Join-Path $Out $name
@@ -61,7 +61,7 @@ if ($Edition -eq 'PublicWav') {
   Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'PUBLIC-README.txt') -Destination (Join-Path $stage 'README.txt')
 }
 Copy-Item -LiteralPath (Join-Path $repo 'README.md') -Destination (Join-Path $stage 'USER-GUIDE.md')
-Set-Content -LiteralPath (Join-Path $stage 'VERSION.txt') -Value "ReadAloud $version - $expectedEdition edition" -Encoding ASCII
+Set-Content -LiteralPath (Join-Path $stage 'VERSION.txt') -Value "ReadAloud $version" -Encoding ASCII
 Copy-Item -LiteralPath (Join-Path $repo 'LICENSE') -Destination (Join-Path $stage 'LICENSE.txt')
 Copy-Item -LiteralPath (Join-Path $repo 'THIRD-PARTY-NOTICES.md') -Destination (Join-Path $stage 'THIRD-PARTY-NOTICES.txt')
 
