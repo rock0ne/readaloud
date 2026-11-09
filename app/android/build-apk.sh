@@ -27,7 +27,11 @@ command -v pnpm >/dev/null || PNPM="corepack pnpm"
 APP=$(cd "$(dirname "$0")/.." && pwd)
 cd "$APP"
 [ -d node_modules ] || $PNPM install --frozen-lockfile
-node node_modules/typescript/bin/tsc -b
+if [ "${READALOUD_PUBLIC_BUILD:-0}" = "1" ]; then
+  node node_modules/typescript/bin/tsc -p tsconfig.public.json
+else
+  node node_modules/typescript/bin/tsc -b
+fi
 node node_modules/vite/bin/vite.js build --mode android
 # sync, not copy: it also makes the git-ignored capacitor-cordova-android-plugins folder.
 node node_modules/@capacitor/cli/bin/capacitor sync android

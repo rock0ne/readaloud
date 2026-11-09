@@ -4,7 +4,9 @@ Read, listen, proofread and prepare audiobooks on Windows and Android. Import do
 
 ## Version and availability
 
-The source version is **0.7.2**. GitHub Pages uses the public build: reading, preparation, WAV export, audio import/playback, chapter navigation and older-file timing recovery. **Creating MP3/M4A/M4B is disabled on the hosted site** while encoder redistribution remains held. Existing compressed audio still imports and plays. The private 0.7.1 packages retain all four export formats; this workflow repair does not replace those installed packages or publish a new APK/Windows download.
+The public WAV edition is **0.7.3**. [Open its download page](https://github.com/rock0ne/readaloud/releases/tag/v0.7.3) and read the listed assets/platform status before downloading. The Windows ZIP is labelled **public-wav**. Android must have an owner release-key signature before an APK is listed as installable; an unsigned or development-key test APK is not a public update.
+
+GitHub Pages and public downloads provide reading, preparation, WAV export, audio import/playback, chapter navigation and older-file timing recovery. **Creating MP3/M4A/M4B is disabled in the public WAV edition** while encoder redistribution remains held. Existing compressed audio still imports and plays. Private 0.7.1 full-export packages retain their formats; you do not have to replace a working full-export installation with this restricted edition.
 
 The candidate passed 272 automated tests and bounded developer playback checks, including a Samsung S21+ / Android 15. On 9 November 2026, the owner separately confirmed chapter playback on their **Samsung S26 after importing matching timing JSON files**. This is owner feedback, not independent certification of all S26 scenarios.
 
@@ -14,7 +16,7 @@ The candidate passed 272 automated tests and bounded developer playback checks, 
 
 ### Windows
 
-1. Obtain a trusted Windows ZIP for your intended version and verify its supplied SHA256 with `Get-FileHash <zip> -Algorithm SHA256`. The 0.7.1 candidate is not yet a public release.
+1. Download `ReadAloud-windows-0.7.3-public-wav.zip` from the release page and verify its supplied SHA256 with `Get-FileHash <zip> -Algorithm SHA256`. Avoid GitHub's automatically generated **Source code ZIP** if you want a ready-to-run app.
 2. Extract to a new folder. Close the older ReadAloud server window before starting this copy.
 3. Double-click **ReadAloud.cmd**. It serves the app locally in Edge at `http://127.0.0.1:4173/`. Keep its server window open.
 4. Use the same browser/profile/address to retain the library. Do not clear browser data to update. InPrivate uses separate temporary storage.
@@ -228,7 +230,9 @@ Inspect the staging script first. It requires build-host network access, verifie
 
 - Web output: `app/dist`. A hosted subpath needs its matching Vite `--base`.
 - Offline Windows: from `app`, run `node windows/stage-voices.mjs`, then `powershell -ExecutionPolicy Bypass -File windows/package.ps1`. Voice staging fetches/checks pinned assets; packaging includes notices.
+- Public Windows: build `pnpm build:public` **without** a hosted subpath, then run `powershell -ExecutionPolicy Bypass -File windows/package.ps1 -Edition PublicWav -Out <fresh-output-folder>`. Packaging verifies the build's version/edition and voice assets, supplies the public-edition instructions and refuses to overwrite an existing archive. A `/readaloud/` website build is not a localhost package.
 - Android: Linux/WSL, JDK 21, Android SDK platform 36, staged media dependencies, and the pinned engine/voice archive required by `app/android/build-apk.sh`. Set `JAVA_HOME`, `ANDROID_HOME`, `SHERPA_ENGINE_APK` and `READALOUD_VOICE_ZIP`, then run `bash app/android/build-apk.sh release` from the root. Sign the unsigned result locally. Do not commit keys, APKs, model archives or generated vendor bundles.
+- Public Android: set `READALOUD_PUBLIC_BUILD=1` before the same build script. It uses the public TypeScript configuration and excludes held encoders. Check `assets/public/build-info.json` in the APK for edition `public-wav` and `compressedExports: false`. Sign with the existing owner release key; never substitute the test key. This changes export capabilities, not the compatibility requirement for the installed app's signature.
 - `app/android/make-voice-zip.py` and the third-party notices describe voice provenance. Don't silently substitute assets.
 - Tests cover narration, chapter metadata/maps, export bridges, transfer integrity and reader behaviour; they do not certify every device, background scenario or publication quality.
 
