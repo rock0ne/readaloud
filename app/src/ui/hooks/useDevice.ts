@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
+import type { PhoneSession } from '../android/phone-session';
 
 interface WakeLockSentinelLike {
   release(): Promise<void>;
@@ -83,4 +84,16 @@ export function useMediaSession(active: boolean, title: string, chapter: string,
   useEffect(() => {
     if (active && typeof navigator !== 'undefined' && navigator.mediaSession) navigator.mediaSession.playbackState = playing ? 'playing' : 'paused';
   }, [active, playing]);
+}
+
+/**
+ * The Android app: keeps reading with the screen off and puts the title, chapter and controls on
+ * the lock screen, in the notification and on a car or headset (ADR-39). Does nothing in a browser.
+ */
+export function usePhoneSession(session: PhoneSession | null, active: boolean, title: string, chapter: string, playing: boolean, controls: MediaControls): void {
+  useEffect(() => {
+    session?.update(active ? (playing ? 'playing' : 'paused') : 'stopped', title, chapter, controls);
+  }, [session, active, title, chapter, playing, controls]);
+  // Leaving the reader ends the service and its notification.
+  useEffect(() => () => session?.update('stopped', '', '', null), [session]);
 }

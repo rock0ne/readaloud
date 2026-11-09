@@ -1,4 +1,5 @@
 app/node_modules/
+/node_modules/
 app/dist/
 app/dist-android/
 app/dev-dist/
@@ -7,3 +8,9 @@ app/test/fixtures/private/
 *.local
 .claude/
 app/release/
+# Build-time voice assets, distributed in offline packages with provenance, not source control.
+app/voice-pack/
+app/android/app/src/main/assets/readaloud-kokoro-voice-2.zip
+# Fetch pinned media dependencies locally; exclude generated third-party binaries.
+app/vendor/media/*/
+app/vendor/media/*.tgz

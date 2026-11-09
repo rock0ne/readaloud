@@ -1,226 +1,227 @@
 # ReadAloud
 
-Listen to your documents in a natural voice, and flag mistakes while you
-listen. It was made for proofreading a finished book by ear, and it works for
-anything you would rather hear than read.
+Read, listen, proofread and prepare audiobooks on Windows and Android. Import documents, use local natural voices, keep notes and correction flags, or prepare narration once and listen without waiting for speech generation between passages.
 
-- Reads `.txt`, `.md`, `.docx`, `.pdf` and `.epub` files, and text you paste.
-- Natural voices from [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M),
-  made on your own device: no account, no subscription, no cloud voice service.
-  Eleven English voices, British and American.
-- The sentence being read is highlighted. Press **F** to flag it, or **N** to
-  flag it and add a note. Then download a corrections file in Markdown: every
-  flag with its chapter and paragraph, the quoted sentence and your note.
-- Remembers where you stopped in each document. Works offline once it is set up.
-- Write notes while you listen (**M**), typed or with a pen, and download them.
-- An optional AI study assistant with your own key for Claude, ChatGPT or
-  Gemini: summaries of a page, a chapter or the whole document, page by page,
-  explanations of a paragraph, answers to your questions and a check for
-  mistakes. It is off until you add a key.
-- Your documents stay on your device. Only if you use the AI assistant is the
-  part you ask about sent, to the company whose key you added.
+## Version and availability
 
-Runs on **Windows** (in Microsoft Edge) and on **Android** phones.
+This branch contains the **0.7.1 source candidate**, not a new GitHub Release or an update to the hosted website. Existing public downloads/site may be older and lack the controls below.
 
-## Windows
+The candidate passed 272 automated tests and bounded developer playback checks, including a Samsung S21+ / Android 15. On 9 November 2026, the owner separately confirmed chapter playback on their **Samsung S26 after importing matching timing JSON files**. This is owner feedback, not independent certification of all S26 scenarios.
 
-### Option 1: the web version (easiest)
+**Public binary distribution remains held** for the encoder corresponding-source/build-provenance issues in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). This source branch excludes downloaded codec bundles, model/voice archives, APKs, personal books/audio, credentials and signing keys. A source push does not clear a binary release.
 
-1. Open **https://rock0ne.github.io/readaloud/** in Microsoft Edge.
-2. Install it: select **App available** in the address bar (or **Settings and
-   more > Apps > Install this site as an app**). It then opens from its own
-   icon and works offline.
-3. The first time you read with the natural voice, select **Download natural
-   voice**. Edge downloads the Kokoro model (about 330 MB) from Hugging Face,
-   once.
+## Install or update
 
-### Option 2: the download (runs from your own PC)
+### Windows
 
-1. From [Releases](https://github.com/rock0ne/readaloud/releases), download
-   `ReadAloud-windows-<version>.zip`. Check that its SHA-256 matches the one
-   on the release page (`Get-FileHash <zip> -Algorithm SHA256` in
-   PowerShell), then unzip it anywhere.
-2. Double-click `ReadAloud.cmd`. ReadAloud opens in Edge. The script is not
-   code-signed, so Windows may ask whether to run it: run it only if the
-   SHA-256 matched. If Windows says it protected your PC, or your
-   organisation blocks it, use the web version instead.
-3. Keep the small window open while you use it, or install the app from Edge as
-   above and it opens from its icon without the window.
+1. Obtain a trusted Windows ZIP for your intended version and verify its supplied SHA256 with `Get-FileHash <zip> -Algorithm SHA256`. The 0.7.1 candidate is not yet a public release.
+2. Extract to a new folder. Close the older ReadAloud server window before starting this copy.
+3. Double-click **ReadAloud.cmd**. It serves the app locally in Edge at `http://127.0.0.1:4173/`. Keep its server window open.
+4. Use the same browser/profile/address to retain the library. Do not clear browser data to update. InPrivate uses separate temporary storage.
 
-It needs nothing installed: a small script in Windows PowerShell, which every
-Windows 10 and 11 PC has, serves the app at `http://127.0.0.1:4173/` on this
-PC only. `ReadAloud.cmd` starts it with `-ExecutionPolicy Bypass`, which
-applies to that one PowerShell window only and does not override your
-organisation's rules. On a PC without WebGPU the voice is faster this way than in the web
-version, because it can use several processor threads. If your organisation
-blocks PowerShell scripts, use the web version.
+The built Windows package needs PowerShell and Edge, not Node.js. Its launcher uses a process-scoped execution-policy setting, not a permanent policy change, and cannot override organisation restrictions.
 
-The web version and the download keep separate libraries, because each address
-has its own storage in the browser. Pick one and stay with it, or move your
-library between them with **Export JSON** and **Import JSON**.
+The [hosted web edition](https://rock0ne.github.io/readaloud/) is separate and may be older. Its library is separate from localhost. Offline packages include verified voice assets; the ordinary web/PWA edition can need a first-use download. Installing a PWA or caching the app is not a backup of your books/audio.
 
-## Android
+### Android
 
-Needs a 64-bit ARM phone (almost all phones from the last few years) with
-Android 7.0 or later.
+1. Use a trusted **signed** APK for a 64-bit ARM phone, Android 7 or later. Check its supplied checksum.
+2. Install over the existing app with the **same signing key**. Do not uninstall first: that can erase books and saved narration.
+3. An unsigned candidate needs signing locally before installation. The owner's release certificate SHA256 is `c5f96167fa4b6633523624bd275745a088d48ed875ff13e5104c6050475dbc0f`. A development-key test APK cannot update a release-key installation.
+4. The offline candidate checks/unpacks its included voice archive locally. Allow unpacking space. Older/network editions may offer **Download natural voice** instead.
+5. Allow playback notifications for media controls. If background playback stops, check Android battery restrictions; Unrestricted battery use may help.
 
-1. Install `ReadAloud-<version>.apk` from
-   [Releases](https://github.com/rock0ne/readaloud/releases). Your phone asks
-   you to allow installing apps from your browser or file manager the first
-   time. Every release is signed with the same key (`CN=rock0ne`, certificate
-   SHA-256 `c5f96167fa4b6633523624bd275745a088d48ed875ff13e5104c6050475dbc0f`),
-   so new versions install over the old one and keep your library.
-2. Open ReadAloud and press **Download natural voice**. The voice downloads
-   once, about 330 MB (Wi-Fi is best), from this project's own release
-   [`kokoro-voice-2`](https://github.com/rock0ne/readaloud/releases/tag/kokoro-voice-2).
-   ReadAloud checks it against its SHA-256 and unpacks it; after that it works
-   offline. Keep the app open while it downloads: if it stops, the next try
-   goes on from where it stopped.
-
-ReadAloud is the only app you need. Coming from 0.2.0: download the voice in
-ReadAloud once, then you can uninstall the sherpa-onnx Kokoro engine app.
-ReadAloud 0.2.0 and earlier still need that engine app: see the
-[0.2.0 README](https://github.com/rock0ne/readaloud/blob/v0.2.0/README.md#android).
-
-Or install it from a computer with [adb](https://developer.android.com/tools/adb),
-with the phone connected by USB and USB debugging on:
+For an already-signed update with USB debugging authorised:
 
 ```bash
-adb install -r ReadAloud-0.3.0.apk
+adb install -r ReadAloud-<version>-signed.apk
 ```
 
-The first sentence takes about 12 seconds after you press Play while the model
-loads. After that, ReadAloud prepares about 40 seconds of speech ahead. A
-phone that is warm (for example while charging) slows down, and then the voice
-can pause for a few seconds between some sentences.
+Never share signing-key passwords or private keys. Only authorise trusted computers.
 
-## Proofreading with it
+## Read a document
 
-1. **Add files** or **Paste text** in the library.
-2. Open the document, pick a voice and a speed (0.8x to 3x), press Play.
-3. While it reads:
+1. Choose **Add files** or **Paste text**. Supported documents: TXT, Markdown, DOCX, PDF and EPUB.
+2. Open it, choose a voice/speed and press Play. Tap/click a sentence to start there. Your position is saved.
+3. **Contents** navigates the book; **Aa** changes font, spacing and scroll/page layout. Search finds text or goes to a page.
+4. Use continuous scrolling for uninterrupted reading, or page-by-page and page-end stops for study.
 
-   | Key | Does |
-   |---|---|
-   | Space | Play or pause |
-   | ← / → | Previous or next sentence |
-   | R | Read the sentence again |
-   | F | Flag the sentence |
-   | N | Flag it and write a note |
-   | M | Write a note on the sentence (no flag) |
-   | [ / ] | Slower or faster |
-   | / | Go to a page or find text |
-   | Page Up / Page Down | Previous or next page, page by page |
-   | Esc | Close the panel or leave the note |
+Ordinary reading generates speech as needed. For a long journey, explicitly prepare it first. Online/system voices are separate from local offline Kokoro narration.
 
-   On a phone, tap the flag button instead. Click or tap a sentence to read
-   from there. In Settings you can set an extra pause at a full stop and the
-   pause between paragraphs; both get shorter as you speed up. The **Aa**
-   button changes the font, text size and line spacing, and switches between
-   one long scroll (the reading flows on, say in the car) and page by page
-   (for study: one page, or two side by side on a wide screen, stopping at
-   the end of each page). 🔍 goes to a page or finds text.
-4. Download the corrections file from the **Flags** panel (or from the
-   document in the library) and fix the mistakes in your manuscript.
+## Prepare once, listen later
 
-## Notes and the AI assistant
+1. Open the book's **Audiobook** panel.
+2. Set pronunciation and pause options before preparation, then choose Emma, Isabella, George, Heart or Michael. Existing reader voices remain available elsewhere.
+3. Choose **Prepare whole audiobook**, or select a chapter and **Prepare selected chapter**.
+4. Keep the app open with adequate storage/battery. Windows is recommended for the heavy work. Preparation can take hours on slower devices; included voices remove a setup download, not synthesis time.
+5. You may cancel and resume: saved passages are retained, not regenerated unnecessarily.
+6. Wait for readiness for the selected narrator. Changing voice, text, pronunciation or relevant reading settings can require different audio.
 
-- **Notes.** Press **M** or ✎ Note to write a note on the sentence being read.
-  On Windows you can write in the note box with a pen and Windows turns the
-  handwriting into text, or add a drawing. The **Notes** panel lists your
-  notes in reading order and downloads them as a Markdown file.
-- **AI assistant (optional).** In Settings, choose Claude, ChatGPT or Gemini,
-  follow the link to that company's key page, make a key and paste it. Choose
-  how long the app keeps it: until you close the app, or from 1 day up to
-  1 year. The **AI** panel in a document then summarises the paragraph, page,
-  chapter or whole document, explains a paragraph, answers your questions
-  and checks a chapter for mistakes, which you can add as flags.
-- **Copy for Claude (no key).** With a Claude subscription, the AI panel can
-  copy the part you are reading with the instructions and open claude.ai:
-  paste it there and send. Paste Claude's reply back to keep it as a note,
-  with page links. ReadAloud cannot sign in to Claude for you: Anthropic does
-  not let other apps use Claude sign-in.
-- Replies point to the sentences they rely on: press "p. 12" to go there, and
-  "Back to where I was" to return. A reply can be read aloud or saved as a note.
-- Each request is charged to your own account with that company. Before a
-  large request the app says how many words it will send.
+Prepared narration is separate from disposable speech cache. Ordinary cache pruning retains it; uninstalling, clearing app/browser storage, storage failure or **Remove saved narration** can erase it.
 
-## Privacy
+### Playback within the book
 
-Documents, flags, notes and settings are stored in the browser on your device
-(IndexedDB) and nowhere else. There is no account, server or analytics. The
-only downloads are the app itself and, once, the Kokoro voice: on Windows from
-Hugging Face, in the Android app from this project's own release.
-If you choose one of Edge's online Microsoft voices instead of Kokoro (they
-are marked "online" in the voice list), Edge sends each sentence to Microsoft
-to be spoken.
+These are playback choices, not preparation/export operations:
 
-The AI assistant is off until you add a key. Then, only when you press one of
-its buttons, the text of that part of the document (never your notes) goes
-straight from your device to the company whose key you added, under that
-company's terms. Your key is kept only in this browser on this device, for as
-long as you chose, and is never included in an export. Forgetting the key in
-the app does not cancel it: to cancel it, delete it on the company's key page.
-Copy for Claude sends nothing itself: the text reaches Claude only when you
-paste it there.
+- **Play entire book:** begin at the start and continue through the book.
+- **Play selected chapter only:** stop at that chapter's end.
+- **Continue from selected chapter:** start there and continue afterward.
 
-## Build it yourself
+**Prepared audio only** stops on a missing passage rather than silently generating it. Play after chapter-only completion repeats that chapter. Text-linked playback retains highlighting, notes, flags and position.
 
-The web app needs [Node.js](https://nodejs.org/) 22 and pnpm 11
-(`corepack enable` gives you the pinned pnpm):
+## Export audio
 
-```bash
+Choose **Export format**, then **Save whole book …** or **Save chapter …**. Exporting reuses saved speech. Compressed encoding takes time, but does not make the voice narrate again.
+
+| Whole-book format | Use | Chapters in ReadAloud 0.7.1+ |
+| --- | --- | --- |
+| WAV | Large uncompressed editing master | Embedded ReadAloud RIFF metadata |
+| MP3 | Widely playable compressed audio | Embedded ReadAloud ID3 text metadata |
+| M4A | Compressed AAC | Embedded Nero markers |
+| M4B | Compressed AAC audiobook | Embedded Nero markers |
+
+**NEW whole-book exports in ALL FOUR formats carry their chapters: copy/import ONE audio file. No separate JSON or ZIP is needed.** Other players may play the audio without showing ReadAloud-specific WAV/MP3 chapters. Nero export supports up to 255 markers; arbitrary third-party metadata formats are not guaranteed.
+
+Compressed output offers 96 or 128 kb/s. Listening speed does not alter the exported master. Edge/Chrome streams whole-book output to disk; Android uses temporary storage before its save dialog. Keep the app open until saving completes.
+
+WAV is roughly 165 MiB/hour at 24 kHz mono; compressed speech roughly 41–55 MiB/hour. Whole-book output must remain below 4 GiB. Single-chapter WAV export has a 256 MiB limit. Free/temporary storage limits still apply.
+
+Exports do not upload or publish. Audiobook distributors have separate rights, narration/AI-disclosure, format, credits, mastering and quality requirements. Human listening/QC and distributor acceptance remain your responsibility.
+
+## Import and play audio directly
+
+Use **Import audio files**, not the ZIP importer. Select the ordinary audio directly; do not ZIP it yourself. Android can also offer **Open with ReadAloud**.
+
+Import accepts WAV, MP3, M4A, M4B, MP4 audio, AAC, Ogg, Opus and FLAC, subject to device codec support. These extra import types are not all export types. MP4 video export is not implemented. Audio-only imports have no synchronised book text, sentence highlighting or text-linked flags.
+
+Choose **Saved audio** and use Play/Pause, seeking and listening speed. With chapters:
+
+- **Play entire audio** starts at the beginning.
+- Choose **Playback chapter**, then **Play selected audio chapter only** to stop at its end.
+- **Continue audio from selected chapter** reads on through the rest.
+
+The app saves position and speed. Chapter stops use media-event/timer precision, not sample-accurate editing. Screen-off, Bluetooth and car behaviour varies by device. Prepare/test while parked; do not operate the app while driving.
+
+## Older downloads: keep the audio, add chapters without preparing again
+
+**This section is ONLY for older unmarked downloads. New 0.7.1 whole-book exports do not need it. An update cannot invent chapter timings absent from an old file. You do not have to prepare the speech or download the whole WAV again.**
+
+### Option A: use an existing matching chaptered audio copy
+
+1. Select the old audio in **Saved audio**.
+2. Choose **Use chapters from matching audio**.
+3. Select the same narration's chaptered M4B (or supported chaptered WAV/MP3/M4A).
+4. Confirm the **same book, narrator and edit**.
+
+Only timings are copied into the selected library record. Neither original audio file is rewritten. Duration must match within one second; duration alone does not prove identity.
+
+### Option B: save timings from narration already prepared in ReadAloud
+
+1. On the device holding the prepared narration, usually Windows, open that exact book's **Audiobook** panel.
+2. Keep its original narrator, pronunciation, pause and reading settings.
+3. Choose **Save chapter timings for older audio**. It reads saved clip information and saves a small `…-chapter-timings.json`, not speech or another full audio file.
+4. Copy that JSON to the phone along with, or after, the original audio.
+5. Select the matching old audio, choose **Import chapter-time map**, select its JSON and confirm.
+6. Chapter playback appears. The app retains the map internally; keep both original files as backups.
+
+**Each book's JSON belongs with that same book's audio.** If you copy several JSON files, import each into its corresponding audio entry. JSON does not contain audio, install a voice, or transfer the book itself. An EPUB's chapter names alone do not supply audio start times.
+
+If no prepared clips, chaptered reference or trustworthy timing map remains, the old audio still plays but boundaries cannot be recovered automatically. Changed narration/pause settings may not match an earlier export. Boundaries are never guessed.
+
+## Transfer the book text and prepared audio together
+
+Use this instead of audio-only import when you want text, highlighting and saved narration together:
+
+1. In Audiobook choose **Save whole book transfer ZIP**, or **Save chapter transfer ZIP**.
+2. Copy the app-created `.readaloud.zip` file(s) to the other device.
+3. Choose **Import book transfer ZIP** there. Chapter transfers merge into a portable book entry; import every chapter before travelling.
+
+Packages contain text, audio and reading settings with integrity checks, not notes, flags, API keys or the original source file. The portable entry does not overwrite an original-file import.
+
+Both devices need 0.6.1+ for the larger-transfer path. **The old 160 MiB total cap is removed**, but ZIP32 stays below 4 GiB; individual passage/manifest and storage limits remain. A ZIP made by a file manager is not a ReadAloud transfer. Use **Import audio files** for ordinary audio.
+
+## Pronunciation, proofreading and notes
+
+Settings provides context-sensitive pronunciation plus a personal pronunciation list. Test a short sample first. Editing pronunciation does not change already-recorded audio: affected speech needs new clips. The displayed document is not rewritten.
+
+Flag mistakes while listening; export corrections from **Flags** or the library. The export includes quoted sentences and chapter/paragraph context; fix the manuscript separately. Use **Notes** for sentence-linked text/drawings and Markdown export. Supported Windows pen input uses the normal input tools.
+
+| Reader key | Action |
+| --- | --- |
+| Space | Play/pause |
+| Left / Right | Previous/next sentence |
+| R | Repeat |
+| F | Flag |
+| N | Flag and note |
+| M | Note without a flag |
+| [ / ] | Slower/faster |
+| / | Search/go to page |
+| Page Up / Page Down | Previous/next page |
+| Esc | Close current panel/dialog |
+
+Mobile has corresponding buttons. These shortcuts describe the document reader, not every native audio control.
+
+## Optional AI assistant
+
+The **AI** panel is separate from local narration. Configure your own supported Claude, ChatGPT or Gemini provider key in Settings. It can summarise/explain document scopes, answer questions and suggest corrections. Generated answers can be wrong; verify them.
+
+Text is sent only when you explicitly request an action, directly to the selected provider under its terms. API charges may apply. Review scope/word count before a large request. Keys stay local for the selected retention period and are excluded from exports. Removing a key in the app does not revoke it at the provider.
+
+**Copy for Claude** copies text/instructions for you to paste yourself; it does not sign in or send for you. A subscription sign-in is not an app API key. Do not send confidential material without permission.
+
+## Storage, privacy and backups
+
+Books, saved narration, imported audio, positions and settings live on the device (IndexedDB). There is no ReadAloud account or automatic cross-device sync. Windows serves localhost only. Explicit AI requests, model downloads in network editions and chosen online/system voices are exceptions to entirely offline use.
+
+- Keep original documents, exported audio, timing JSON and app-created transfer ZIPs.
+- Library **Export JSON** is not a replacement for backing up all prepared narration; use the purpose-built audio/transfer exports.
+- Different browser profiles/addresses have separate libraries; InPrivate data may disappear when closed.
+- Uninstalling, clearing storage, deleting a profile or removing saved narration can lose local data.
+- **Remove selected audio copy** removes its imported copy/position, not the original file. **Remove saved narration** removes that document's retained speech, not its text/notes.
+- Only narrate/transfer material you have rights to use. Never include private books, recordings or credentials in public bug reports.
+
+## Troubleshooting and limits
+
+| Problem | What to check |
+| --- | --- |
+| Pauses while speech is being generated | Prepare the whole audiobook, wait for ready, then use prepared playback. |
+| Only a chapter is ready | Check narrator, scope and readiness counts; preparation/playback choices are separate. |
+| Old audio has no chapter list | Use the older-audio timing recovery steps, not Prepare again. |
+| Timing map rejected | Check same book/narrator/edit and original pauses; don't force a mismatched map. |
+| Only ZIP files visible | Cancel and choose **Import audio files**. |
+| Unsupported/damaged transfer ZIP | Use the app's unmodified transfer export, not a file-manager ZIP. Keep the original/error. |
+| Android update fails | Check signing key/version; don't uninstall to force an update. |
+| Screen-off playback stops | Check Android notification/battery restrictions; test safely before travel. |
+| Library seems missing | Check exact browser/profile/address; don't clear storage. |
+| Large export/import fails | Check free/temporary space, file/format limits and exact error; retain originals. |
+
+Other limits: English Kokoro voices; scanned PDFs need OCR elsewhere; DRM EPUBs cannot be read. Document limits (ordinary files up to 50 MiB, EPUB up to 500 MiB) are not the standalone-audio limits. Codec support varies. Android system-bar overlap and duplicate Open-with imported copies are known issues, not claimed fixed in 0.7.1. Chapter metadata is not proof of narration quality or universal third-party compatibility.
+
+## Build from source
+
+Use Node.js 22, pinned pnpm 11 and the lockfile. Downloaded codec bundles are deliberately excluded from this source branch. Stage pinned dependencies locally:
+
+```powershell
 cd app
-pnpm install
+corepack enable
+pnpm install --frozen-lockfile
+powershell -ExecutionPolicy Bypass -File windows/stage-media.ps1
 pnpm test
 pnpm build
 ```
 
-- `app/dist` is the web app. `app/start-readaloud.cmd` serves it on Windows
-  with no Node; `powershell -ExecutionPolicy Bypass -File app\windows\package.ps1`
-  makes the Windows zip.
-- The Android app is built on Linux or in WSL with JDK 21, the Android SDK
-  (platform 36) and the sherpa-onnx Kokoro engine APK from the
-  [k2-fsa project](https://k2-fsa.github.io/sherpa/onnx/tts/apk-engine.html)
-  ([`sherpa-onnx-1.13.8-arm64-v8a-eng-tts-engine-kokoro-multi-lang-v1_0.apk`](https://huggingface.co/csukuangfj2/sherpa-onnx-apk/resolve/main/tts-engine-new/1.13.8/sherpa-onnx-1.13.8-arm64-v8a-eng-tts-engine-kokoro-multi-lang-v1_0.apk),
-  SHA-256 `402c3628712668fb5eb8cc838add6a8f62caffd69ccc53af75384dde1e2142ec`), whose two native libraries it uses. See
-  `app/android/build-apk.sh`. Sign the release APK with your own key.
-  `app/android/make-voice-zip.py` makes the voice download from the same APK.
-- `docs/` has the design, every decision with its reasons
-  (`docs/04-DECISIONS.md`) and the progress log.
+Inspect the staging script first. It requires build-host network access, verifies pinned npm SHA512 and records SHA256. Generated notices use those staged packages. A local dependency fetch does not resolve the public-binary hold.
 
-## How it works
+- Web output: `app/dist`. A hosted subpath needs its matching Vite `--base`.
+- Offline Windows: from `app`, run `node windows/stage-voices.mjs`, then `powershell -ExecutionPolicy Bypass -File windows/package.ps1`. Voice staging fetches/checks pinned assets; packaging includes notices.
+- Android: Linux/WSL, JDK 21, Android SDK platform 36, staged media dependencies, and the pinned engine/voice archive required by `app/android/build-apk.sh`. Set `JAVA_HOME`, `ANDROID_HOME`, `SHERPA_ENGINE_APK` and `READALOUD_VOICE_ZIP`, then run `bash app/android/build-apk.sh release` from the root. Sign the unsigned result locally. Do not commit keys, APKs, model archives or generated vendor bundles.
+- `app/android/make-voice-zip.py` and the third-party notices describe voice provenance. Don't silently substitute assets.
+- Tests cover narration, chapter metadata/maps, export bridges, transfer integrity and reader behaviour; they do not certify every device, background scenario or publication quality.
 
-- The web app is Preact and TypeScript, built with Vite as an installable
-  web app with an offline service worker.
-- In the browser, [kokoro-js](https://github.com/hexgrad/kokoro) runs Kokoro
-  through Transformers.js and ONNX Runtime Web, on the graphics card (WebGPU)
-  when there is one, otherwise on the processor (WebAssembly).
-- On Android the same app runs inside [Capacitor](https://capacitorjs.com/).
-  [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) makes the speech natively.
-  [eSpeak NG](https://github.com/espeak-ng/espeak-ng) turns the text into
-  phonemes first, so numbers and names are spoken too.
-- The AI assistant calls the provider's API straight from the browser and
-  shows the reply as it is written. There is no server in between.
+Pushing to `main` triggers GitHub Pages. This update is a source branch only: no automatic site deployment or new binary release.
 
-## Limits
+## Licence and design
 
-- English only (Kokoro's British and American voices).
-- No text recognition: a scanned PDF (pictures of pages) cannot be read.
-- DRM-protected EPUBs are refused. Files up to 50 MB (EPUB up to 500 MB).
-- The Android app is for arm64 phones only.
-- OneNote pages and OneDrive or SharePoint links cannot be opened yet. A Word
-  file opens with Add files, or with Open with on Windows.
+ReadAloud is GPL-3.0-or-later: see [LICENSE](LICENSE). Dependencies retain their licences and unresolved notes in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). A licence list alone is not a binary-distribution clearance.
 
-## Licence
-
-GNU General Public License version 3 or later: see [`LICENSE`](LICENSE).
-ReadAloud includes eSpeak NG, which is under the same licence. The other
-parts and their licences are in
-[`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md), which also says what is
-not known about them. Every download carries the full licence texts in its
-`licences/` folder; in the app, open Settings, About, Licences.
-
-Thanks to hexgrad for Kokoro, to the k2-fsa project for sherpa-onnx and its
-Kokoro engine, to Xenova and Hugging Face for kokoro-js, phonemizer and
-Transformers.js, and to the eSpeak NG, ONNX Runtime and PDF.js projects.
+Preact/TypeScript and Vite provide the UI, IndexedDB the local library, Kokoro the speech (browser ONNX or Android sherpa-onnx), and Capacitor the Android shell. `docs/` holds design/decision history. Thanks to the upstream Kokoro, sherpa-onnx, eSpeak NG, Transformers.js, ONNX Runtime, PDF.js, Mediabunny and other maintainers.

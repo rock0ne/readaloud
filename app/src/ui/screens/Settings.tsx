@@ -8,6 +8,8 @@ import { KokoroDownload } from '../components/KokoroDownload';
 import { TextControls } from '../components/TextControls';
 import { VoicePicker, shortVoiceName } from '../components/VoicePicker';
 import { useKokoro, useServices, useSettings } from '../services';
+import { PronunciationEditor } from '../components/PronunciationEditor';
+import { pronunciationText } from '../../core/text/pronunciation';
 
 const CHECK_SENTENCES = [
   'This is the first test sentence, read by the voice you chose.',
@@ -64,9 +66,10 @@ export function SettingsScreen() {
     for (let i = 0; i < sentences.length; i++) {
       const t0 = performance.now();
       try {
-        if (engine.speak) await engine.speak(sentences[i]!, { voice: chosen, rate: 1 }, ac.signal);
+        const text = pronunciationText(sentences[i]!, s.pronunciation, s.locale);
+        if (engine.speak) await engine.speak(text, { voice: chosen, rate: 1 }, ac.signal);
         else if (engine.synthesize) {
-          const clip = await engine.synthesize(sentences[i]!, { voice: chosen, rate: 1 }, ac.signal);
+          const clip = await engine.synthesize(text, { voice: chosen, rate: 1 }, ac.signal);
           await services.audio.play(clip, 1, ac.signal);
         }
         if (ac.signal.aborted) break;
@@ -159,6 +162,7 @@ export function SettingsScreen() {
         </ol>
       </section>
 
+      <PronunciationEditor listen={(text) => void speakAll([text], false)} disabled={checking} canListen={!!chosen} />
       <section>
         <h2>Reading</h2>
         <label class="field">

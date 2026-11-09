@@ -8,6 +8,8 @@ import { DataTransfer } from '../components/DataTransfer';
 import { PasteText } from '../components/PasteText';
 import { downloadText, navigate, toast, useServices, useSettings } from '../services';
 import { readHref } from '../routes';
+import { importTransfer } from '../../core/audio/transfer';
+import { AudioLibrary } from '../components/AudioLibrary';
 
 interface Busy {
   name: string;
@@ -22,15 +24,38 @@ function when(iso?: string): string {
 }
 
 export function Library() {
-  const { repo } = useServices();
+  const { repo, updateSettings } = useServices();
   const settings = useSettings();
   const [docs, setDocs] = useState<DocSummary[] | null>(null);
   const [positions, setPositions] = useState<Map<string, PositionRecord>>(new Map());
   const [busy, setBusy] = useState<Busy | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [transferError, setTransferError] = useState('');
   /** text for the Paste dialog; null while it is closed */
   const [pasting, setPasting] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
+  const audioInput = useRef<HTMLInputElement>(null);
+
+  const importAudio = async (files: File[]) => {
+    if (!files.length || !confirm('Import prepared narration and book text from these files? Existing reading settings will be adjusted to match. Only import transfers you trust.')) return;
+    setTransferError('');
+    let id: string | undefined;
+    for (const file of files) {
+      setBusy({ name: file.name, done: 0, total: 0 });
+      try {
+        const result = await importTransfer(file, repo);
+        await updateSettings({ ...result.reading, preparedAudioOnly: true, layout: 'scroll', stopAtPageEnd: false,
+          voiceByEngine: { ...settings.voiceByEngine, kokoro: result.voiceId } });
+        id = result.docId;
+        toast(`Imported ${result.clips} saved passages. No speech generation needed.`);
+      } catch (e) {
+        const detail = `Could not import ${file.name}: ${e instanceof Error ? e.message : String(e)}`;
+        setTransferError(`${detail}. This must be a ReadAloud transfer ZIP, not audio zipped manually. For a WAV/MP3/M4A/M4B file use Import audio files below. Keep the original file; this error does not prove it is corrupt.`);
+        toast(detail, 'error'); break;
+      }
+    }
+    setBusy(null); await refresh(); if (id) navigate(readHref(id));
+  };
 
   const refresh = useCallback(async () => {
     const [list, pos] = await Promise.all([repo.listSummaries(), repo.listPositions()]);
@@ -102,7 +127,7 @@ export function Library() {
   const reparse = async (id: string) => {
     const doc = await repo.getDocument(id);
     const bytes = await repo.getSource(id);
-    if (!doc || !bytes) return toast('The original file is not stored, so it cannot be re-read.', 'error');
+    if (!doc || !bytes?.byteLength) return toast('The original file is not stored, so it cannot be re-read.', 'error');
     setBusy({ name: doc.sourceName, done: 0, total: 0 });
     try {
       const parsed = await parseBytes(bytes, doc.sourceName, { locale: settings.locale });
@@ -139,7 +164,7 @@ export function Library() {
       }}
     >
       <header class="bar">
-        <h1>ReadAloud</h1>
+        <h1>ReadAloud {__APP_VERSION__}</h1>
         <div class="spacer" />
         <button class="primary" onClick={() => input.current?.click()} disabled={busy !== null}>
           Add files
@@ -147,10 +172,15 @@ export function Library() {
         <button onClick={() => setPasting('')} disabled={busy !== null}>
           Paste text
         </button>
+        <button onClick={() => audioInput.current?.click()} disabled={busy !== null}>Import book transfer ZIP</button>
         <a class="button" href="#/settings">
           Settings
         </a>
       </header>
+      <input ref={audioInput} type="file" multiple accept=".zip,application/zip" hidden onChange={(e) => {
+        const files = Array.from(e.currentTarget.files ?? []); e.currentTarget.value = '';
+        void importAudio(files);
+      }} />
       <input
         ref={input}
         type="file"
@@ -182,6 +212,9 @@ export function Library() {
           <progress max={busy.total || undefined} value={busy.total ? busy.done : undefined} />
         </div>
       )}
+
+      {transferError && <p role="alert">{transferError}</p>}
+      <AudioLibrary />
 
       {docs === null ? null : docs.length === 0 ? (
         <section class="empty">

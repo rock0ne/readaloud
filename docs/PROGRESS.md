@@ -2,6 +2,32 @@
 
 One line per step. Keep it short. Newest at the bottom of each section.
 
+## 0.4.1 Lenovo playback and phone warmth · 2026-10-28
+
+- Built: prepare a chapter/page on Android when measured voice generation is
+  slower than playback; visible progress, cancellation, retained prepared clips,
+  and a 30,000-character bound for undivided long documents (ADR-40).
+- Built: ONNX worker threads sleep while idle. Same model, voices, native
+  libraries and four-thread count. No schema change or new dependency.
+- Verified: 186/186 tests, TypeScript check, release and diagnostic APK builds,
+  ZIP alignment, version 0.4.1 / code 6, installed 0.4.0 certificate identity.
+- Unsigned APK: `app/release/ReadAloud-0.4.1-unsigned.apk`, SHA-256
+  `502f33f457d230e8c253aa94061888dbe2a20fdced1eaaa17760462de9690932`.
+- Live Lenovo checks passed with George at 1.3x: preparation progress, Pause
+  without moving position, Resume reusing completed clips, seven prepared clips
+  without further buffering, and a nine-clip cached replay in the background.
+  Cached replay started in 283 ms; no new native WAV was generated.
+- Signed locally after Rockson entered the existing keystore password in a
+  Windows credential prompt. Updated production in place with `adb install -r`;
+  confirmed 0.4.1/code 6 and the existing book at Foundation 1, page 26, 1.3x.
+  The library was not uninstalled. Diagnostic app and device scratch files removed.
+- Signed APK: `app/release/ReadAloud-0.4.1.apk`, SHA-256
+  `fc1d1bdcd9bb37ba8c81ae2a719cc7f1cc5c77118c2cf04bec1cf2f39350f376`.
+- Status: Complete — no further installation action required for Lenovo.
+  Execution scope: Rockson's authorised local app fix; nothing published.
+  Next actor: Rockson may install the same signed APK on S26 and return listening
+  and warmth observations to this chat. S26 temperature improvement is unverified.
+
 ## Status
 
 | Step | Status | Verified by | Date | Notes |
@@ -36,6 +62,7 @@ One line per step. Keep it short. Newest at the bottom of each section.
 | 36 Add-ons | decided, none built | | 2026-10-21 | ADR-36: curated, off by default; Rockson picks the first |
 | 37 Standalone Android voice | done | android tests + S21+ (see the phone check below) | 2026-10-22 | ADR-37; voice zip on release kokoro-voice-2 (SHA-256 207abec0…), without eSpeak data |
 | 38 Licence texts inside every download | done | build check + labels.test + pane + S21+ | 2026-10-22 | ADR-38: `licences/` in the zip, Pages and APK; notices corrected; zip `/` names; online voices marked. Open: eSpeak NG revision inside phonemizer 1.2.1 |
+| 39 Screen-off reading on Android | done, not yet driven | tsc + 179 tests + WSL release and debug builds + S21+ (screen off 2 min 26 s, media keys, focus against another player) | 2026-10-26 | ADR-39: foreground media service, wake lock, lock-screen and car controls, full audio focus at Play; the first build paused itself (fixed); 0.4.0, versionCode 5. Needs Rockson: a drive with Spotify and the car |
 | Phase 1 gate | waiting on Rockson | | | see below |
 
 ## Phase 1 gate

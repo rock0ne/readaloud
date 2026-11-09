@@ -47,6 +47,7 @@ export class PhoneKokoro implements KokoroBackend, KokoroService {
   private readonly listeners = new Set<(s: KokoroStatus) => void>();
   private readonly queue: Job[] = [];
   private busy = false;
+  private sustainedSpeed: number | undefined;
   private checked: Promise<boolean> | null = null;
   private loading: Promise<void> | null = null;
   private readonly tts: ReadAloudTts;
@@ -61,6 +62,11 @@ export class PhoneKokoro implements KokoroBackend, KokoroService {
 
   get status(): KokoroStatus {
     return this._status;
+  }
+
+  /** Ignore tiny headings: their fixed setup cost does not represent sustained reading. */
+  needsAudioPreparation(rate: number): boolean {
+    return this.sustainedSpeed !== undefined && this.sustainedSpeed < rate;
   }
 
   subscribe(fn: (s: KokoroStatus) => void): () => void {
@@ -158,6 +164,9 @@ export class PhoneKokoro implements KokoroBackend, KokoroService {
         const out = decodeWav(await this.readFile(path));
         const made = out.samples.length / out.sampleRate / ((performance.now() - started) / 1000);
         if (Number.isFinite(made) && made > 0) {
+          if (out.samples.length / out.sampleRate >= 3) {
+            this.sustainedSpeed = this.sustainedSpeed === undefined ? made : this.sustainedSpeed * 0.7 + made * 0.3;
+          }
           const speed = this._status.speed ? this._status.speed * 0.7 + made * 0.3 : made;
           this.emit({ ...this._status, speed });
         }
@@ -176,6 +185,7 @@ export class PhoneKokoro implements KokoroBackend, KokoroService {
     await this.tts.removeVoice();
     this.loading = null;
     this.checked = Promise.resolve(false);
+    this.sustainedSpeed = undefined;
     this.emit({ phase: 'absent', installed: false, source: 'phone', loaded: 0, ...(this._status.total ? { total: this._status.total } : {}) });
   }
 }

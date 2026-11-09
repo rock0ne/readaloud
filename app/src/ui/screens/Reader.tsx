@@ -17,16 +17,17 @@ import { NotesPanel } from '../components/NotesPanel';
 import { AiPanel } from '../components/AiPanel';
 import { TextControls } from '../components/TextControls';
 import { FindBar } from '../components/FindBar';
+import { AudiobookPanel } from '../components/AudiobookPanel';
 import type { CiteHelpers } from '../components/Reply';
 import { useAiJob } from '../hooks/useAiJob';
 import { KokoroDownload } from '../components/KokoroDownload';
 import { VoicePicker, shortVoiceName } from '../components/VoicePicker';
 import { usePlayer } from '../hooks/usePlayer';
 import { useKeys } from '../hooks/useKeys';
-import { useMediaSession, useOnline, useWakeLock } from '../hooks/useDevice';
+import { useMediaSession, useOnline, usePhoneSession, useWakeLock } from '../hooks/useDevice';
 import { toast, useKokoro, useServices, useSettings } from '../services';
 
-type Panel = 'toc' | 'flags' | 'notes' | 'ai' | 'text' | null;
+type Panel = 'toc' | 'flags' | 'notes' | 'ai' | 'text' | 'audiobook' | null;
 
 /** Two pages go side by side when the text pane is at least this many ems wide (ADR-35). */
 const SPREAD_MIN_EM = 50;
@@ -108,8 +109,9 @@ export function Reader({ docId }: { docId: string }) {
 
   // Load the Kokoro model while the reader opens, so the first Play starts quickly.
   useEffect(() => {
+    if (settings.preparedAudioOnly) return;
     void kokoro.installed().then((ok) => (ok ? kokoro.load() : undefined)).catch(() => undefined);
-  }, [kokoro]);
+  }, [kokoro, settings.preparedAudioOnly]);
 
   // The natural voice has just been downloaded: switch to it (ADR-22).
   const kokoroInstalled = kokoroStatus.installed;
@@ -188,6 +190,7 @@ export function Reader({ docId }: { docId: string }) {
   const audioEngine = (player.currentVoice ?? auto?.voice)?.engineId === 'kokoro';
   const isPlaying = view.status === 'playing' || view.status === 'buffering';
   useMediaSession(audioEngine, doc?.title ?? 'ReadAloud', index?.chapter(chapterIndex)?.title ?? '', isPlaying, player);
+  usePhoneSession(services.phoneSession, audioEngine, doc?.title ?? 'ReadAloud', index?.chapter(chapterIndex)?.title ?? '', isPlaying, player);
 
   const saveFlag = async (f: Flag) => {
     await repo.putFlag(f);
@@ -336,7 +339,9 @@ export function Reader({ docId }: { docId: string }) {
     view.status === 'buffering'
       ? activeVoice?.engineId === 'kokoro' && kokoroStatus.phase === 'loading'
         ? 'Loading the natural voice…'
-        : 'Preparing audio…'
+        : view.audioPreparation
+          ? `Preparing ${view.audioPreparation.scope} audio: ${view.audioPreparation.completed} of ${view.audioPreparation.total}. Reading starts when ready. Pause cancels preparation.`
+          : 'Preparing audio…'
       : view.status === 'error'
         ? 'Stopped'
         : view.status === 'ended'
@@ -362,6 +367,7 @@ export function Reader({ docId }: { docId: string }) {
         </div>
         <div class="spacer" />
         <div class="panel-buttons">
+          <button class={panel === 'audiobook' ? 'active' : ''} onClick={() => toggle('audiobook')}>Audiobook</button>
           <button class={panel === 'toc' ? 'active' : ''} onClick={() => toggle('toc')}>
             Contents
           </button>
@@ -412,7 +418,7 @@ export function Reader({ docId }: { docId: string }) {
         </TextPane>
         {panel && (
           <aside class="side-panel">
-            {panel === 'toc' ? (
+            {panel === 'audiobook' ? <AudiobookPanel key={doc.id} doc={doc} /> : panel === 'toc' ? (
               <TocPanel doc={doc} currentChapter={chapterIndex} onGo={go} />
             ) : panel === 'flags' ? (
               <FlagPanel doc={doc} index={index} flags={flags} currentId={view.currentId} onSave={saveFlag} onDelete={deleteFlag} onJump={(id) => jump(id, false)} />

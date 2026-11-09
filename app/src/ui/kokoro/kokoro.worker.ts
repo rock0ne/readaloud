@@ -48,6 +48,7 @@ async function cacheVoices(ids: string[]): Promise<void> {
 
 async function load(wasmPaths: string, voices: string[]): Promise<void> {
   env.wasmPaths = wasmPaths;
+  await useBundledVoicePack(wasmPaths);
   const files = new Map<string, { loaded: number; total: number }>();
   let lastPost = 0;
   const progress_callback = (p: { status: string; file?: string; loaded?: number; total?: number }) => {
@@ -84,6 +85,39 @@ async function load(wasmPaths: string, voices: string[]): Promise<void> {
   stage('warm-up');
   await tts.generate('Ready.', { voice: 'bf_emma' }).catch(() => undefined);
   post({ type: 'ready', device });
+}
+
+let bundleChecked = false;
+async function useBundledVoicePack(wasmPaths: string): Promise<void> {
+  if (bundleChecked) return;
+  const base = new URL('../voice-pack/', wasmPaths);
+  const original = globalThis.fetch.bind(globalThis);
+  let manifest: { model: string; files: { file: string; sha256: string; bytes: number }[] };
+  try {
+    const r = await original(new URL('manifest.json', base));
+    if (!r.ok) { bundleChecked = true; return; }
+    manifest = await r.json();
+  } catch { bundleChecked = true; return; }
+  if (manifest.model !== MODEL || !Array.isArray(manifest.files)) throw new Error('Invalid included voice-pack manifest.');
+  const entries = new Map(manifest.files.map((f) => [f.file, f]));
+  if (manifest.files.some((f) => !/^(?:onnx\/model\.onnx|voices\/[ab][fm]_[a-z]+\.bin|(?:config|tokenizer|tokenizer_config)\.json)$/.test(f.file)
+    || !/^[a-f0-9]{64}$/.test(f.sha256) || !Number.isSafeInteger(f.bytes) || f.bytes <= 0)) throw new Error('Invalid included voice-pack entry.');
+  const remote = `https://huggingface.co/${MODEL}/resolve/main/`;
+  globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    if (!url.startsWith(remote)) return original(input, init);
+    const file = url.slice(remote.length).split('?')[0]!;
+    const item = entries.get(file);
+    // Optional transformer configuration files may not exist. Never fetch a missing pack file online.
+    if (!item) return new Response('Not included', { status: 404 });
+    const r = await original(new URL(file, base), init);
+    if (!r.ok || init?.method === 'HEAD') return r;
+    const bytes = await r.arrayBuffer();
+    const digest = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map((b) => b.toString(16).padStart(2, '0')).join('');
+    if (bytes.byteLength !== item.bytes || digest !== item.sha256) throw new Error(`Included voice file failed integrity check: ${file}`);
+    return new Response(bytes, { status: 200, headers: r.headers });
+  };
+  bundleChecked = true;
 }
 
 async function drain(): Promise<void> {

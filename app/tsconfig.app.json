@@ -8,6 +8,9 @@
     "allowArbitraryExtensions": true,
     "skipLibCheck": true,
     "paths": {
+      "mediabunny": ["./vendor/media/mediabunny/dist/modules/src/index.d.ts"],
+      "@mediabunny/mp3-encoder": ["./vendor/media/mp3-encoder/dist/modules/src/index.d.ts"],
+      "@mediabunny/aac-encoder": ["./vendor/media/aac-encoder/dist/modules/src/index.d.ts"],
       "react": ["./node_modules/preact/compat/"],
       "react-dom": ["./node_modules/preact/compat/"]
     },

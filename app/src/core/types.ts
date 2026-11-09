@@ -192,6 +192,13 @@ export interface DocSummary {
 
 export interface AudioCacheRecord { key: string; blob: Blob; bytes: number; lastUsed: number; }
 
+/** Saved narration is user-owned content, not an evictable streaming cache. */
+export interface NarrationRecord {
+  key: string; docId: string; voiceId: string; planHash: string;
+  total: number; completed: number; bytes: number; ready: boolean; updatedAt: string;
+}
+export interface NarrationAudioRecord { key: string; docId: string; blob: Blob; }
+
 /** The reading font (ADR-33): system fonts only, nothing is downloaded. */
 export type ReaderFont = 'serif' | 'sans' | 'wide' | 'mono';
 
@@ -206,6 +213,8 @@ export interface Settings {
   locale: string;                               // default 'en-GB'
   azure: { region: string; key: string } | null;
   skipCodeBlocks: boolean;                      // default true
+  preparedAudioOnly: boolean;                  // never synthesize during prepared-book listening
+  pronunciation: { enabled: boolean; list: string }; // English context hints + literal personal respellings
   announceHeadings: boolean;                    // default true
   pauseAfterHeadingMs: number;                  // default 600
   pauseBetweenSentencesMs: number;              // default 0: added at a full stop (ADR-31)
