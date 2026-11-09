@@ -72,6 +72,16 @@ this change does not certify audiobook distribution rights or platform acceptanc
 
 ## What is not known
 
+### Hosted public build from 0.7.2
+
+The GitHub Pages build excludes Mediabunny and its added MP3/AAC software encoders.
+It provides WAV export and normal device-supported playback/import of existing
+audio. A build-time module check rejects the held encoder implementation or
+vendor media code in this public output. It does not fetch encoders at runtime.
+The private full-export build and its unresolved obligations below are unchanged;
+this distinction is not a general legal clearance for other app components or
+downloadable binary distribution.
+
 ### ReadAloud 0.6.0 private audio-export candidate
 
 The offline export increment vendors unchanged npm archives for Mediabunny,

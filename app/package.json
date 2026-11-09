@@ -1,7 +1,7 @@
 {
   "name": "readaloud",
   "private": true,
-  "version": "0.7.1",
+  "version": "0.7.2",
   "description": "Listen to documents with natural voices and flag mistakes while you listen.",
   "license": "GPL-3.0-or-later",
   "type": "module",
@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:public": "tsc -p tsconfig.public.json && vite build --mode public",
     "build:android": "tsc -b && vite build --mode android",
     "preview": "vite preview",
     "test": "vitest run"

@@ -80,9 +80,11 @@ function cspMeta(): Plugin {
 // `vite build --mode android` makes the web files for the Android app (ADR-27): they come from the
 // APK, so there is no service worker to install or update.
 export default defineConfig(({ mode }) => {
+  const publicBuild = mode === 'public' || process.env.READALOUD_PUBLIC_BUILD === '1';
   const notices = licences(mode);
   return {
     define: {
+      __COMPRESSED_EXPORTS__: JSON.stringify(!publicBuild),
       __APP_VERSION__: JSON.stringify((JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string }).version),
     },
     plugins: [
@@ -90,6 +92,18 @@ export default defineConfig(({ mode }) => {
       cspMeta(),
       // Every package's licence text goes into the download, in licences/ (ADR-38).
       notices.plugin,
+      publicBuild ? {
+        name: 'public-codec-boundary',
+        generateBundle(_options, bundle) {
+          for (const out of Object.values(bundle)) {
+            if (out.type !== 'chunk') continue;
+            for (const id of out.moduleIds) {
+              if (/\/vendor\/media\/|\/private\/encode\./.test(id.replace(/\\/g, '/')))
+                throw new Error(`Public build must not distribute held encoders: ${id}`);
+            }
+          }
+        },
+      } satisfies Plugin : false,
       // The app does not use the browser Kokoro, so it does not need onnxruntime's 22 MB runtime.
       mode !== 'android' && ortWasm(),
       VitePWA({
@@ -142,6 +156,7 @@ export default defineConfig(({ mode }) => {
     },
     resolve: {
       alias: {
+        'readaloud-codecs': fileURLToPath(new URL(publicBuild ? './src/core/audio/encode-public.ts' : './private/encode.ts', import.meta.url)),
         'mediabunny': fileURLToPath(new URL('./vendor/media/mediabunny/dist/bundles/mediabunny.mjs', import.meta.url)),
         '@mediabunny/mp3-encoder': fileURLToPath(new URL('./vendor/media/mp3-encoder/dist/bundles/mediabunny-mp3-encoder.mjs', import.meta.url)),
         '@mediabunny/aac-encoder': fileURLToPath(new URL('./vendor/media/aac-encoder/dist/bundles/mediabunny-aac-encoder.mjs', import.meta.url)),
