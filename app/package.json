@@ -1,7 +1,7 @@
 {
   "name": "readaloud",
   "private": true,
-  "version": "0.7.2",
+  "version": "0.7.3",
   "description": "Listen to documents with natural voices and flag mistakes while you listen.",
   "license": "GPL-3.0-or-later",
   "type": "module",

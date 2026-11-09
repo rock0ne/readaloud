@@ -81,6 +81,7 @@ function cspMeta(): Plugin {
 // APK, so there is no service worker to install or update.
 export default defineConfig(({ mode }) => {
   const publicBuild = mode === 'public' || process.env.READALOUD_PUBLIC_BUILD === '1';
+  const version = (JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string }).version;
   const notices = licences(mode);
   return {
     define: {
@@ -92,6 +93,15 @@ export default defineConfig(({ mode }) => {
       cspMeta(),
       // Every package's licence text goes into the download, in licences/ (ADR-38).
       notices.plugin,
+      {
+        name: 'readaloud-build-info',
+        generateBundle() {
+          this.emitFile({ type: 'asset', fileName: 'build-info.json', source: JSON.stringify({
+            version, edition: publicBuild ? 'public-wav' : 'private-full', compressedExports: !publicBuild,
+            target: mode === 'android' ? 'android' : 'web',
+          }, null, 2) + '\n' });
+        },
+      } satisfies Plugin,
       publicBuild ? {
         name: 'public-codec-boundary',
         generateBundle(_options, bundle) {
