@@ -151,6 +151,7 @@ export class Player {
   private atPageEnd = false;
   private chapterOnly: number | null = null;
   private atChapterEnd = false;
+  private preparedVoiceId: string | undefined;
   private _state: PlayerState;
   basicFallback = false;
   private readonly deps: PlayerDeps;
@@ -158,7 +159,7 @@ export class Player {
   constructor(deps: PlayerDeps) {
     this.deps = deps;
     const s = deps.settings();
-    this._state = { status: 'idle', rate: clampRate(s.rate), engineId: s.enginePreference[0] ?? 'webspeech' };
+    this._state = { status: 'idle', source: 'reader', rate: clampRate(s.rate), engineId: s.enginePreference[0] ?? 'webspeech' };
   }
 
   get state(): PlayerState {
@@ -208,9 +209,11 @@ export class Player {
     this.atPageEnd = false;
     this.chapterOnly = null;
     this.atChapterEnd = false;
+    this.preparedVoiceId = undefined;
+    this.resetVoice();
     const at = startAt ? this.index.get(startAt) : undefined;
     this.pos = at ? at.ordinal : 0;
-    this.setState({ status: 'idle', docId: doc.id, ...(this.currentSentenceId ? { sentenceId: this.currentSentenceId } : {}) });
+    this.setState({ status: 'idle', source: 'reader', docId: doc.id, ...(this.currentSentenceId ? { sentenceId: this.currentSentenceId } : {}) });
     if (this.currentSentenceId) this.emit({ type: 'sentence', sentenceId: this.currentSentenceId });
   }
 
@@ -224,13 +227,43 @@ export class Player {
     return this.starting;
   }
 
-  /** Navigate existing narration; never prepares/synthesises by itself. */
-  async playChapter(chapter: number, continueBook = false): Promise<void> {
+  /** Explicit feature selection. No persistence, deletion, seeking or automatic playback. */
+  async selectSource(source: PlayerState['source']): Promise<void> {
+    if (source === this._state.source) return;
+    await this.halt('paused');
+    this.dropClips(); // do not reuse in-flight live synthesis inside prepared playback
+    this.resetVoice();
+    if (source === 'reader') this.clearChapterPlayback();
+    this.setState({ source });
+  }
+
+  /** Reader Play always permits live speech, regardless of legacy saved preferences. */
+  async playReader(): Promise<void> {
+    await this.selectSource('reader');
+    await this.play();
+  }
+
+  async toggleReader(): Promise<void> {
+    if (this._state.status === 'playing' || this._state.status === 'buffering') this.pause();
+    else await this.playReader();
+  }
+
+  /** Audiobook resume is strict: no model initialisation or missing-clip synthesis. */
+  async playPrepared(voiceId?: string): Promise<void> {
+    await this.selectSource('audiobook');
+    if (voiceId) this.preparedVoiceId = voiceId;
+    await this.play();
+  }
+
+  /** Navigate existing narration; this entry point always selects strict audiobook playback. */
+  async playChapter(chapter: number, continueBook = false, voiceId?: string): Promise<void> {
     if (!Number.isInteger(chapter) || !this.index) throw new Error('Choose a valid chapter.');
     const at = this.index.order.find((item) => item.block.chapterIndex === chapter && item.sentence.chunks.length > 0
       && !(item.block.type === 'code' && this.deps.settings().skipCodeBlocks));
     if (!at) throw new Error('This chapter has no readable passages.');
+    await this.selectSource('audiobook');
     await this.halt('paused');
+    if (voiceId) this.preparedVoiceId = voiceId;
     this.chapterOnly = continueBook ? null : chapter;
     this.atChapterEnd = false;
     this.seek(at.sentence.id);
@@ -253,13 +286,19 @@ export class Player {
     }
     if (this.atPageEnd) this.pos = Math.min(this.pos + 1, this.index.order.length - 1);
     this.atPageEnd = false;
-    if (this.deps.settings().preparedAudioOnly) {
+    if (this._state.source === 'audiobook') {
       // Cached audio can play even without loading the speech model. No browser/online fallback.
       const engine = this.deps.registry.get('kokoro');
-      const id = this.deps.settings().voiceByEngine.kokoro;
+      const id = this.preparedVoiceId ?? this.deps.settings().voiceByEngine.kokoro;
       const voice = (await engine?.listVoices())?.find((v) => v.id === id)
         ?? (await engine?.listVoices())?.[0];
-      if (!engine || !voice || gen !== this.startGen) return;
+      if (gen !== this.startGen) return;
+      if (!engine || !voice) {
+        const message = 'This audiobook narrator is unavailable. Return to the reader for live speech.';
+        this.setState({ status: 'error', error: message });
+        this.emit({ type: 'error', message });
+        return;
+      }
       this.engine = engine; this.voice = voice; this.basicFallback = false;
       this.setState({ engineId: engine.id, voiceId: voice.id });
     }
@@ -467,7 +506,7 @@ export class Player {
         return;
       }
       // Page by page (ADR-35): stop after the last sentence of a page; Play goes on with the next.
-      if (this.pageEnds?.has(index.order[this.pos]!.sentence.id) && this.pos < index.order.length - 1) {
+      if (this._state.source === 'reader' && this.pageEnds?.has(index.order[this.pos]!.sentence.id) && this.pos < index.order.length - 1) {
         this.atPageEnd = true;
         this.setState({ status: 'paused' });
         this.flushPosition();
@@ -525,7 +564,7 @@ export class Player {
         return true;
       } catch (e) {
         if (signal.aborted) return true;
-        if (this.deps.settings().preparedAudioOnly) throw e;
+        if (this._state.source === 'audiobook') throw e;
         console.warn('[player] chunk failed', attempt + 1, e);
         if (attempt === 0) await abortableSleep(RETRY_DELAY_MS, signal);
       }
@@ -556,7 +595,7 @@ export class Player {
     if (!blob || signal.aborted) return;
     // A longer queue alone cannot keep up with a voice generated slower than playback.
     // Keep this chapter's clips ready before its body starts, using the same voice and rate.
-    if (!this.deps.settings().preparedAudioOnly && engine.id === 'kokoro' && !this.preparedTexts.has(text) && this.deps.needsAudioPreparation?.(this._state.rate)) {
+    if (this._state.source === 'reader' && engine.id === 'kokoro' && !this.preparedTexts.has(text) && this.deps.needsAudioPreparation?.(this._state.rate)) {
       await this.prepareAudio(engine, voice, signal);
       if (signal.aborted) return;
     }
@@ -798,8 +837,8 @@ export class Player {
       const saved = this.doc && cache?.getPreparedAudio
         ? await cache.getPreparedAudio(this.doc.id, key) : undefined;
       if (saved) return saved;
-      if (this.deps.settings().preparedAudioOnly) {
-        throw new Error('This passage is not prepared for this voice. Open Audiobook and prepare the whole book before travelling.');
+      if (this._state.source === 'audiobook') {
+        throw new Error('This passage is not prepared for this audiobook narrator. Audiobook playback stopped without generating speech. Use Reader Play for live reading, or prepare the missing narration in Audiobook.');
       }
       const hit = cache ? await cache.getAudio(key).catch(() => undefined) : undefined;
       if (hit) return hit;

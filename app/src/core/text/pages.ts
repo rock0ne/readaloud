@@ -4,6 +4,17 @@ import type { Block, ParsedDocument } from '../types';
 
 export const PAGE_CHARS = 1800;
 
+/** Two readable columns on desktop/tablet; never squeeze a phone into a spread. */
+export const fitsSpread = (contentWidth: number, fontSize: number): boolean => contentWidth >= Math.max(760, fontSize * 40);
+
+/** Consecutive book pages, including chapter boundaries, without changing page identity. */
+export function facingPages(pages: Page[], here: Page, twoUp: boolean): Page[] {
+  const at = pages.indexOf(here);
+  if (!twoUp || at < 0) return [here];
+  const start = at - at % 2;
+  return pages.slice(start, start + 2);
+}
+
 export interface Page {
   key: string; // `c${chapterIndex}p${label}`, unique in the document
   label: string; // the page number shown

@@ -45,7 +45,7 @@ export function Library() {
       setBusy({ name: file.name, done: 0, total: 0 });
       try {
         const result = await importTransfer(file, repo);
-        await updateSettings({ ...result.reading, preparedAudioOnly: true, layout: 'scroll', stopAtPageEnd: false,
+        await updateSettings({ ...result.reading,
           voiceByEngine: { ...settings.voiceByEngine, kokoro: result.voiceId } });
         id = result.docId;
         toast(`Imported ${result.clips} saved passages. No speech generation needed.`);

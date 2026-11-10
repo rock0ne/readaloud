@@ -4,13 +4,15 @@ Read, listen, proofread and prepare audiobooks on Windows and Android. Import do
 
 ## Version and availability
 
-### Local Windows redesign candidate: 0.8.0
+### Local reader candidate: 0.8.1
 
-The `codex/readaloud-reader-redesign` branch contains a **private Windows 0.8.0 candidate**, not a new public release. The public release and Android download below remain 0.7.3. This candidate retains the private full-export build; encoder redistribution is still held. No GitHub push, release or Pages deployment is part of this design task.
+The `codex/readaloud-reader-redesign` branch contains the **private 0.8.1 candidate** for Windows and Android, not a new public release. The public downloads below remain 0.7.3. This candidate retains the private full-export build; encoder redistribution is still held. No GitHub push, release or Pages deployment is part of this task. A new Android release APK must be signed locally by its owner before installing it as an update.
+
+**Reader and Audiobook are independent.** Reader **Play** / Space reads immediately with the selected voice and may generate missing speech; it can reuse saved narration. **Audiobook → Play entire book / Play selected chapter only / Continue from selected chapter** uses saved narration only, without speech generation or automatic voice fallback. Use **Resume saved audiobook** to resume that strict session. Reader Play returns to live reading instead. The old global prepared-only checkbox is no longer used: it cannot block a fresh book, including upgrades with the old value still saved. No preparation, new WAV download or library reset is needed to restore live reading. Audiobook playback does not change reader layout or its voice preference.
 
 The reader is now book-first: compact playback at the top, tools on demand, generous page margins, optional facing pages, a thin reading-position line, and a quieter bottom voice/speed/notes strip. The library has a cleaner book-list treatment. It is inspired by the spacious reading experience in the owner's Aquile reference, not by copying Aquile's artwork, code or branding.
 
-- **Book icon, top right:** switch between continuous scroll and book pages. Facing pages appear when there is sufficient width; narrow windows fall back to one page. Original page/sentence IDs stay unchanged. Long pages remain scrollable.
+- **Reading layout, top right (also in Aa Appearance):** choose **Scroll**, **One page** or **Two-page spread**. A spread shows consecutive book pages, including across a chapter boundary, for reading ahead during listening. Narrow windows/phones or large text fall back to one readable page and show a hint; your two-page choice is retained. Widen the window, close the tools panel or reduce text size to restore both pages. Original page/sentence IDs stay unchanged. The final unpaired page naturally stands alone. Long pages remain scrollable.
 - **Aa Appearance:** choose System, Paper, Sepia or Night, font, text size, line spacing, facing pages and whether narration pauses at page ends. Existing settings are preserved; the update does not silently switch your layout or stop-at-page preference.
 - **Focus icon:** hide the tools while keeping playback and voice provenance visible. Click the same button, or press Escape after closing any open editor/search/panel, to leave focus mode.
 - **Full-screen icon:** ask the browser to fill the screen; Escape also leaves browser full screen. If unsupported, focus mode is still available.
@@ -21,7 +23,7 @@ The percentage describes **sentence position in the book**, not elapsed audioboo
 
 Candidate r2 addresses the design review: books precede the audio-import section; Appearance captions are at least 12px; the responsive reader renders exactly one transport; Flag stays quiet at narrow widths; and Page Up/Down works from toolbar buttons without hijacking Space or form inputs. A short chapter may intentionally show just one page, and the keyboard focus ring intentionally remains visible.
 
-Candidate checks and pending visual/design review are recorded in `J:/PurpleTeam/output/sol-readaloud-reader-redesign-20261110/`. Automated tests are not evidence that Claude was consulted or that the live UI passed visual QA.
+The 0.8.0 design reviews remain recorded in `J:/PurpleTeam/output/sol-readaloud-reader-redesign-20261110/`; the 0.8.1 repair and twin-page evidence is in `J:/PurpleTeam/output/sol-readaloud-playback-mode-0.8.1-20261110/`. Automated tests are not evidence of a visual/device pass. The same quiet toolbar, reading colours, tools-on-demand and responsive single transport are shared with Android.
 
 ### Public version
 
@@ -90,7 +92,7 @@ These are playback choices, not preparation/export operations:
 - **Play selected chapter only:** stop at that chapter's end.
 - **Continue from selected chapter:** start there and continue afterward.
 
-**Prepared audio only** stops on a missing passage rather than silently generating it. Play after chapter-only completion repeats that chapter. Text-linked playback retains highlighting, notes, flags and position.
+**Audiobook playback** stops on a missing passage rather than silently generating it. **Resume saved audiobook** after chapter-only completion repeats that chapter. Reader Play is separate and permits live speech; it does not require the book to be prepared. Text-linked playback retains highlighting, notes, flags and position.
 
 ## Export audio
 

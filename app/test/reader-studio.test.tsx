@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { ReaderChrome, ReaderTransport, ReadingProgress } from '../src/ui/components/ReaderChrome';
+import { PreparedModeNotice } from '../src/ui/components/PlaybackMode';
 import { TextPane } from '../src/ui/components/TextPane';
 import { useKeys } from '../src/ui/hooks/useKeys';
 import { useCompactReader } from '../src/ui/hooks/useCompactReader';
@@ -13,6 +14,21 @@ document.body.append(root);
 afterEach(() => { act(() => render(null, root)); vi.restoreAllMocks(); });
 
 describe('quiet reader chrome', () => {
+  it('makes audiobook resume and return to live reader explicit, without a global mode picker', () => {
+    const onReader = vi.fn(), onResume = vi.fn();
+    act(() => render(<PreparedModeNotice audiobook busy={false} playing={false} onReader={onReader} onResume={onResume} />, root));
+    expect(root.querySelector('select')).toBeNull();
+    const buttons = root.querySelectorAll<HTMLButtonElement>('button');
+    expect(buttons[0]?.textContent).toBe('Resume saved audiobook');
+    act(() => buttons[0]!.click()); act(() => buttons[1]!.click());
+    expect(onResume).toHaveBeenCalledOnce(); expect(onReader).toHaveBeenCalledOnce();
+    act(() => render(<PreparedModeNotice audiobook={false} busy={false} playing={false} onReader={onReader} onResume={onResume} />, root));
+    expect(root.textContent).toBe('');
+  });
+  it('identifies Reader Play rather than silently resuming strict audiobook mode', () => {
+    act(() => render(<ReaderTransport playing={false} audiobook onPrevious={() => {}} onNext={() => {}} onReplay={() => {}} onToggle={() => {}} />, root));
+    expect(root.querySelector('[aria-label="Read now"]')?.getAttribute('title')).toContain('no preparation required');
+  });
   it('keeps all six tools accessible and dispatches only the chosen tool', () => {
     const onPanel = vi.fn();
     act(() => render(<ReaderChrome title="A long book title" chapter="Chapter 2 · page 5" panel="toc" onPanel={onPanel}

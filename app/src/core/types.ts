@@ -91,6 +91,7 @@ export type PlayerStatus = 'idle' | 'buffering' | 'playing' | 'paused' | 'ended'
 
 export interface PlayerState {
   status: PlayerStatus;
+  source: 'reader' | 'audiobook'; // transient session choice, never a saved global restriction
   docId?: string;
   sentenceId?: string;
   rate: number;        // user speed 0.8..3.0
@@ -213,7 +214,7 @@ export interface Settings {
   locale: string;                               // default 'en-GB'
   azure: { region: string; key: string } | null;
   skipCodeBlocks: boolean;                      // default true
-  preparedAudioOnly: boolean;                  // never synthesize during prepared-book listening
+  preparedAudioOnly: boolean;                  // legacy preference retained for compatibility; playback uses PlayerState.source
   pronunciation: { enabled: boolean; list: string }; // English context hints + literal personal respellings
   announceHeadings: boolean;                    // default true
   pauseAfterHeadingMs: number;                  // default 600

@@ -21,12 +21,12 @@ export function ReaderIcon({ name }: { name: IconName }) {
   return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">{paths[name]}</svg>;
 }
 
-export function ReaderTransport({ playing, onPrevious, onNext, onToggle, onReplay }: {
-  playing: boolean; onPrevious: () => void; onNext: () => void; onToggle: () => void; onReplay: () => void;
+export function ReaderTransport({ playing, audiobook = false, onPrevious, onNext, onToggle, onReplay }: {
+  playing: boolean; audiobook?: boolean; onPrevious: () => void; onNext: () => void; onToggle: () => void; onReplay: () => void;
 }) {
   return <div class="transport" role="group" aria-label="Read aloud controls">
     <button onClick={onPrevious} aria-label="Previous sentence" title="Previous sentence (←)"><ReaderIcon name="previous" /></button>
-    <button class="play" onClick={onToggle} aria-label={playing ? 'Pause' : 'Play'} title="Play or pause (Space)"><ReaderIcon name={playing ? 'pause' : 'play'} /></button>
+    <button class="play" onClick={onToggle} aria-label={playing ? 'Pause' : audiobook ? 'Read now' : 'Play'} title={playing ? 'Pause playback (Space)' : 'Read now — live speech, no preparation required (Space)'}><ReaderIcon name={playing ? 'pause' : 'play'} /></button>
     <button onClick={onNext} aria-label="Next sentence" title="Next sentence (→)"><ReaderIcon name="next" /></button>
     <button onClick={onReplay} aria-label="Replay sentence" title="Replay sentence (R)"><ReaderIcon name="replay" /></button>
   </div>;
@@ -36,10 +36,10 @@ export const PANEL_LABELS: Record<Exclude<ReaderPanel, null>, string> = {
   audiobook: 'Audiobook studio', toc: 'Contents', flags: 'Flags', notes: 'Notes', ai: 'AI assistant', text: 'Appearance',
 };
 
-export function ReaderChrome({ title, chapter, panel, onPanel, flags, notes, aiBusy, focused, onFocus, fullscreen, onFullscreen, paged, onLayout, onFind, transport }: {
+export function ReaderChrome({ title, chapter, panel, onPanel, flags, notes, aiBusy, focused, onFocus, fullscreen, onFullscreen, paged, onLayout, onFind, transport, layoutPicker }: {
   title: string; chapter: string; panel: ReaderPanel; onPanel: (p: Exclude<ReaderPanel, null>) => void;
   flags: number; notes: number; aiBusy: boolean; focused: boolean; onFocus: () => void;
-  fullscreen: boolean; onFullscreen: () => void; paged: boolean; onLayout: () => void; onFind: () => void; transport: ComponentChildren;
+  fullscreen: boolean; onFullscreen: () => void; paged: boolean; onLayout: () => void; onFind: () => void; transport: ComponentChildren; layoutPicker?: ComponentChildren;
 }) {
   return <header class="bar reader-topbar">
     <div class="reader-identity">
@@ -56,7 +56,7 @@ export function ReaderChrome({ title, chapter, panel, onPanel, flags, notes, aiB
     </nav>
     <div class="reader-actions">
       <button class="icon-button reader-find" onClick={onFind} aria-label="Go to a page or find text" title="Go to a page or find text (/)"><ReaderIcon name="search" /></button>
-      <button class="icon-button" aria-pressed={paged} onClick={onLayout} aria-label={paged ? 'Switch to continuous scroll' : 'Switch to book pages'} title={paged ? 'Continuous scroll' : 'Book pages — facing pages on a wide screen'}><ReaderIcon name="book" /></button>
+      {layoutPicker ?? <button class="icon-button" aria-pressed={paged} onClick={onLayout} aria-label={paged ? 'Switch to continuous scroll' : 'Switch to book pages'} title={paged ? 'Continuous scroll' : 'Book pages — facing pages on a wide screen'}><ReaderIcon name="book" /></button>}
       <button class="icon-button focus-toggle" aria-pressed={focused} onClick={onFocus} aria-label={focused ? 'Leave focus mode' : 'Enter focus mode'} title={focused ? 'Leave focus mode (Escape)' : 'Focus — hide the tools'}><ReaderIcon name={focused ? 'close' : 'focus'} /></button>
       <button class="icon-button fullscreen-toggle" aria-pressed={fullscreen} onClick={onFullscreen} aria-label={fullscreen ? 'Leave full screen' : 'Full screen'} title="Full screen"><ReaderIcon name="expand" /></button>
     </div>

@@ -2,6 +2,7 @@
 // reader's Aa panel. System fonts only, so nothing is downloaded.
 import type { ReaderFont, Settings } from '../../core/types';
 import { useServices, useSettings } from '../services';
+import { ReadingLayoutPicker, readingLayout, layoutSettings } from './ReadingLayout';
 
 export const READER_FONTS: Record<ReaderFont, { label: string; stack: string }> = {
   serif: { label: 'Book (serif)', stack: 'var(--serif)' },
@@ -23,22 +24,12 @@ export function TextControls() {
           <span>Aa</span><small>{tone === 'system' ? 'System' : tone === 'paper' ? 'Paper' : tone === 'sepia' ? 'Sepia' : 'Night'}</small>
         </label>)}
       </fieldset>
-      <div class="field" role="radiogroup" aria-label="Layout">
-        Layout
-        <label class="check">
-          <input type="radio" name="reader-layout" checked={s.layout === 'scroll'} onChange={() => update({ layout: 'scroll' })} />
-          One long scroll: the reading flows on, for listening
-        </label>
-        <label class="check">
-          <input type="radio" name="reader-layout" checked={s.layout === 'pages'} onChange={() => update({ layout: 'pages' })} />
-          Page by page, for study
-        </label>
+      <div class="field">
+        <span>Reading layout</span>
+        <ReadingLayoutPicker value={readingLayout(s)} onChange={(choice) => update(layoutSettings(choice))} />
+        <p class="hint">Two-page spread shows consecutive pages, so you can read ahead while listening. Narrow screens use one page without forgetting your choice.</p>
         {s.layout === 'pages' && (
           <>
-            <label class="check">
-              <input type="checkbox" checked={s.twoPages} onChange={(e) => update({ twoPages: e.currentTarget.checked })} />
-              Two pages side by side when the screen is wide enough
-            </label>
             <label class="check">
               <input type="checkbox" checked={s.stopAtPageEnd} onChange={(e) => update({ stopAtPageEnd: e.currentTarget.checked })} />
               Stop reading at the end of each page

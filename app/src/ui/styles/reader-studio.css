@@ -1,5 +1,12 @@
 /* Book-first desktop treatment. The underlying text/sentence IDs and audio are unchanged. */
 .reader-studio { background: var(--surface); color: var(--text); }
+.reading-layout-picker { display:inline-flex; min-width:0; }
+.reading-layout-picker > .sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+.reader-studio .reading-layout-picker select { width:auto; max-width:160px; min-height:36px; font-size:12px; padding:5px 22px 5px 9px; background:var(--surface-2); }
+.spread-hint { font:12px var(--ui); color:var(--muted); text-align:center; margin:16px auto 0; max-width:60ch; }
+.prepared-mode-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.prepared-mode-notice { display:flex; flex:none; align-items:center; justify-content:space-between; gap:12px; padding:10px 24px; border-bottom:1px solid var(--border); background:var(--surface-2); font-size:13px; }
+.prepared-mode-notice button { flex:none; font-size:13px; }
 .reader-studio[data-reading-tone="paper"] { color-scheme: light; --bg:#f4f5f6; --surface:#fff; --surface-2:#f0f2f4; --text:#24272b; --muted:#626a73; --border:#dce1e6; --accent:#285f82; --accent-text:#fff; --focus:#285f82; --highlight:#ffe9a1; --flag:#a62727; --danger:#a62727; }
 .reader-studio[data-reading-tone="sepia"] { color-scheme: light; --bg:#e9e1d1; --surface:#f8f1e2; --surface-2:#eee4d2; --text:#382f25; --muted:#74644d; --border:#daceb6; --accent:#7b572e; --accent-text:#fff; --focus:#7b572e; --highlight:#f3d58b; --flag:#a62727; --danger:#a62727; }
 .reader-studio[data-reading-tone="night"] { color-scheme: dark; --bg:#171b20; --surface:#1d2228; --surface-2:#282f37; --text:#e1e4e9; --muted:#a8b2bf; --border:#39414b; --accent:#9ec9e8; --accent-text:#162330; --focus:#9ec9e8; --highlight:#63532c; --flag:#ff9a9a; --danger:#ff9a9a; }
@@ -97,6 +104,7 @@
   .reader-studio .controls .status { flex-basis:100%; order:9; }
 }
 @media (max-width:720px) {
+  .prepared-mode-notice { padding:10px 12px; align-items:flex-start; flex-wrap:wrap; }
   .desktop-transport { display:none; }
   .reader-topbar { gap:8px; }
   .reader-identity { flex:1; gap:6px; }

@@ -4,7 +4,7 @@ import { DocIndex } from '../../core/model';
 import { createFlag } from '../../core/flags/corrections';
 import { createNote } from '../../core/notes/notes';
 import { RATE_MAX, RATE_MIN, clampRate } from '../../core/store/settings';
-import { PageIndex } from '../../core/text/pages';
+import { PageIndex, facingPages, fitsSpread } from '../../core/text/pages';
 import type { AiResult, AiSuggestion, DocRecord, EngineId, Flag, Note, Voice } from '../../core/types';
 import type { Pick } from '../../core/engines/registry';
 import { TextPane } from '../components/TextPane';
@@ -18,7 +18,9 @@ import { NoteEditor } from '../components/NoteEditor';
 import { NotesPanel } from '../components/NotesPanel';
 import { AiPanel } from '../components/AiPanel';
 import { TextControls } from '../components/TextControls';
+import { ReadingLayoutPicker, readingLayout, layoutSettings } from '../components/ReadingLayout';
 import { FindBar } from '../components/FindBar';
+import { PreparedModeNotice } from '../components/PlaybackMode';
 import { AudiobookPanel } from '../components/AudiobookPanel';
 import type { CiteHelpers } from '../components/Reply';
 import { useAiJob } from '../hooks/useAiJob';
@@ -32,8 +34,6 @@ import { toast, useKokoro, useServices, useSettings } from '../services';
 
 type Panel = ReaderPanel;
 
-/** Two pages go side by side when the text pane is at least this many ems wide (ADR-35). */
-const SPREAD_MIN_EM = 64;
 type Editing = { sentenceId: string; note?: Note };
 
 /** Says which kind of voice is reading, so "natural" is never ambiguous (ADR-30). */
@@ -54,7 +54,7 @@ function upsert<T>(xs: T[], x: T, same: (a: T, b: T) => boolean): T[] {
 export function Reader({ docId }: { docId: string }) {
   const compact = useCompactReader();
   const services = useServices();
-  const { repo, player, registry, kokoro, isTouch } = services;
+  const { repo, player, registry, isTouch } = services;
   const settings = useSettings();
   const kokoroStatus = useKokoro();
   const [doc, setDoc] = useState<DocRecord | null | undefined>(undefined);
@@ -81,6 +81,7 @@ export function Reader({ docId }: { docId: string }) {
   const [aiResults, setAiResults] = useState<AiResult[]>([]);
   const [returnTo, setReturnTo] = useState<string | null>(null);
   const [finding, setFinding] = useState(false);
+  const [modeBusy, setModeBusy] = useState(false);
   const [paneWidth, setPaneWidth] = useState(0);
   const [voices, setVoices] = useState<Voice[]>([]);
   const [auto, setAuto] = useState<Pick | null | undefined>(undefined);
@@ -126,11 +127,8 @@ export function Reader({ docId }: { docId: string }) {
     void loadVoices();
   }, [loadVoices]);
 
-  // Load the Kokoro model while the reader opens, so the first Play starts quickly.
-  useEffect(() => {
-    if (settings.preparedAudioOnly) return;
-    void kokoro.installed().then((ok) => (ok ? kokoro.load() : undefined)).catch(() => undefined);
-  }, [kokoro, settings.preparedAudioOnly]);
+  // Load the speech model only when live speech/preparation is requested. Opening a book
+  // for saved Audiobook playback must not eagerly initialise an otherwise unused model.
 
   // The natural voice has just been downloaded: switch to it (ADR-22).
   const kokoroInstalled = kokoroStatus.installed;
@@ -180,17 +178,15 @@ export function Reader({ docId }: { docId: string }) {
 
   // Page by page (ADR-35): the page being read, and the page facing it when two fit side by side.
   const paged = settings.layout === 'pages';
-  const twoUp = paged && settings.twoPages && paneWidth >= settings.fontSizePx * SPREAD_MIN_EM;
+  const twoUp = paged && settings.twoPages && fitsSpread(paneWidth, settings.fontSizePx);
   const hereKey = (view.currentId && pages?.ofSentence(view.currentId)?.key) || '';
   const sheets = useMemo((): Sheet[] | null => {
     if (!paged || !pages) return null;
     const inChapter = pages.inChapter(chapterIndex);
     const here = pages.get(hereKey) ?? inChapter[0];
     if (!here) return null;
-    const i = inChapter.indexOf(here);
-    const shown = twoUp && i >= 0 ? inChapter.slice(i - (i % 2), i - (i % 2) + 2) : [here];
-    return shown.map((p) => ({ key: p.key, label: p.label, blocks: pages.blocksOf(p, blocks) }));
-  }, [paged, twoUp, pages, chapterIndex, hereKey, blocks]);
+    return facingPages(pages.pages, here, twoUp).map((p) => ({ key: p.key, label: p.label, blocks: pages.blocksOf(p, doc?.blocks ?? []) }));
+  }, [paged, twoUp, pages, chapterIndex, hereKey, doc]);
   // ...and it can stop at the end of each page, to study it.
   const stopAtPages = paged && settings.stopAtPageEnd;
   useEffect(() => {
@@ -324,8 +320,19 @@ export function Reader({ docId }: { docId: string }) {
     void services.updateSettings({ rate });
   };
 
+  const returnToReader = async () => {
+    if (modeBusy) return;
+    setModeBusy(true);
+    try {
+      await player.selectSource('reader');
+      toast('Live reader ready. Press Play to read now; no book preparation is required.');
+    } catch (e) {
+      toast(`Could not change listening mode: ${e instanceof Error ? e.message : String(e)}`, 'error');
+    } finally { setModeBusy(false); }
+  };
+
   useKeys({
-    Space: () => void player.toggle(),
+    Space: () => void player.toggleReader(),
     ArrowLeft: () => player.prev(),
     ArrowRight: () => player.next(),
     r: () => player.replay(),
@@ -373,7 +380,7 @@ export function Reader({ docId }: { docId: string }) {
   const toggle = (p: Exclude<Panel, null>) => setPanel(panel === p ? null : p);
   const ordinal = view.currentId ? index.get(view.currentId)?.ordinal ?? 0 : 0;
   const progress = index.order.length > 1 ? ordinal / (index.order.length - 1) * 100 : view.status === 'ended' ? 100 : 0;
-  const transport = () => <ReaderTransport playing={playing} onPrevious={() => player.prev()} onNext={() => player.next()} onToggle={() => void player.toggle()} onReplay={() => player.replay()} />;
+  const transport = () => <ReaderTransport playing={playing} audiobook={view.source === 'audiobook'} onPrevious={() => player.prev()} onNext={() => player.next()} onToggle={() => void player.toggleReader()} onReplay={() => player.replay()} />;
   const editingAt = editing ? index.get(editing.sentenceId) : undefined;
   const placeOf = (chapter: number, title: string, paragraph: number) => `${title || `Chapter ${chapter + 1}`} · Paragraph ${paragraph}`;
 
@@ -387,7 +394,10 @@ export function Reader({ docId }: { docId: string }) {
           void services.updateSettings({ layout: paged ? 'scroll' : 'pages' });
           if (!paged && settings.stopAtPageEnd) toast('Book pages: narration pauses at page ends. Change this under Appearance.');
         }}
+        layoutPicker={<ReadingLayoutPicker value={readingLayout(settings)} onChange={(choice) => void services.updateSettings(layoutSettings(choice))} />}
         onFind={() => setFinding(!finding)} transport={compact ? null : transport()} />
+
+      <PreparedModeNotice audiobook={view.source === 'audiobook'} busy={modeBusy} playing={playing} onReader={() => void returnToReader()} onResume={() => void player.playPrepared()} />
 
       {kokoroBanner && (
         <div class="banner" role="note">
@@ -406,6 +416,8 @@ export function Reader({ docId }: { docId: string }) {
           onWidth={setPaneWidth}
         >
           {sheets && (
+            <>
+            {settings.twoPages && !twoUp && <p class="spread-hint" role="status">Two-page spread selected. Widen the window, close the tools panel or reduce text size to show both pages.</p>}
             <nav class="pager" aria-label="Pages">
               <button onClick={() => turn(-1)} disabled={sheets[0]?.key === pages.pages[0]?.key} title="Previous page (Page Up)">
                 ‹ Previous
@@ -417,6 +429,7 @@ export function Reader({ docId }: { docId: string }) {
                 Next ›
               </button>
             </nav>
+            </>
           )}
         </TextPane>
         {panel && (
