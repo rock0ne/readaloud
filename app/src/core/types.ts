@@ -92,6 +92,7 @@ export type PlayerStatus = 'idle' | 'buffering' | 'playing' | 'paused' | 'ended'
 export interface PlayerState {
   status: PlayerStatus;
   source: 'reader' | 'audiobook'; // transient session choice, never a saved global restriction
+  readerRange: 'book' | 'chapter' | 'page';
   docId?: string;
   sentenceId?: string;
   rate: number;        // user speed 0.8..3.0
@@ -207,7 +208,7 @@ export type ReaderFont = 'serif' | 'sans' | 'wide' | 'mono';
 export type ReaderLayout = 'scroll' | 'pages';
 
 export interface Settings {
-  schemaVersion: 4;                             // 2: Kokoro first (ADR-22); 3: ai (ADR-30), paragraph pause (ADR-31); 4: reading font (ADR-33), page by page (ADR-35)
+  schemaVersion: 5;                             // v5: continuous Reader flow; explicit page/chapter/book ranges
   enginePreference: EngineId[];                 // default ['kokoro', 'webspeech']
   voiceByEngine: Partial<Record<EngineId, string>>;
   rate: number;                                 // default 1.0
@@ -228,7 +229,7 @@ export interface Settings {
   lineSpacing: number;                          // default 1.7 (ADR-33)
   layout: ReaderLayout;                         // default 'scroll' (ADR-35)
   twoPages: boolean;                            // default true: two pages side by side on a wide screen (ADR-35)
-  stopAtPageEnd: boolean;                       // default true: page by page stops at the end of each page (ADR-35)
+  stopAtPageEnd: boolean;                       // legacy setting, reset false in v5; Reader now uses explicit page/chapter/book ranges
   theme: 'auto' | 'light' | 'dark';             // default 'auto'
   ai: AiSettings;                               // default { provider: null, models: {} }
 }

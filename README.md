@@ -4,16 +4,20 @@ Read, listen, proofread and prepare audiobooks on Windows and Android. Import do
 
 ## Version and availability
 
-### Local reader candidate: 0.8.1
+### Local reader candidate: 0.8.2
 
-The `codex/readaloud-reader-redesign` branch contains the **private 0.8.1 candidate** for Windows and Android, not a new public release. The public downloads below remain 0.7.3. This candidate retains the private full-export build; encoder redistribution is still held. No GitHub push, release or Pages deployment is part of this task. A new Android release APK must be signed locally by its owner before installing it as an update.
+The `codex/readaloud-reader-redesign` branch contains the **private 0.8.2 candidate** for Windows and Android, not a new public release. The public downloads below remain 0.7.3. This candidate retains the private full-export build; encoder redistribution is still held. No GitHub push, release or Pages deployment is part of this task. A new Android release APK must be signed locally by its owner before installing it as an update.
+
+**Continuous listening and explicit scopes (0.8.2):** use **Read** beside the main Play button to choose **Whole book**, **This chapter only** or **This page only**. Whole book is the default and continues from your current position across pages and chapters, in scroll, single-page and twin-page layouts. Page/chapter selection pauses current playback, moves to that part's beginning, and waits for Play; it stops at the chosen boundary. Play then repeats that selected part; **Continue whole book** continues onward after the boundary. Selecting a scope never prepares a full audiobook or changes the visual layout. On phones the same picker sits with the bottom playback controls.
+
+Older versions defaulted to stopping at page ends, which interrupted normal listening. The v5 settings upgrade resets that legacy switch; explicit page/chapter scopes replace it. No library, position, voice, colour, pronunciation, prepared recording or export is deleted or regenerated. Hold off signing the superseded 0.8.1 Android candidate; the shared playback correction is in 0.8.2.
 
 **Reader and Audiobook are independent.** Reader **Play** / Space reads immediately with the selected voice and may generate missing speech; it can reuse saved narration. **Audiobook → Play entire book / Play selected chapter only / Continue from selected chapter** uses saved narration only, without speech generation or automatic voice fallback. Use **Resume saved audiobook** to resume that strict session. Reader Play returns to live reading instead. The old global prepared-only checkbox is no longer used: it cannot block a fresh book, including upgrades with the old value still saved. No preparation, new WAV download or library reset is needed to restore live reading. Audiobook playback does not change reader layout or its voice preference.
 
 The reader is now book-first: compact playback at the top, tools on demand, generous page margins, optional facing pages, a thin reading-position line, and a quieter bottom voice/speed/notes strip. The library has a cleaner book-list treatment. It is inspired by the spacious reading experience in the owner's Aquile reference, not by copying Aquile's artwork, code or branding.
 
 - **Reading layout, top right (also in Aa Appearance):** choose **Scroll**, **One page** or **Two-page spread**. A spread shows consecutive book pages, including across a chapter boundary, for reading ahead during listening. Narrow windows/phones or large text fall back to one readable page and show a hint; your two-page choice is retained. Widen the window, close the tools panel or reduce text size to restore both pages. Original page/sentence IDs stay unchanged. The final unpaired page naturally stands alone. Long pages remain scrollable.
-- **Aa Appearance:** choose System, Paper, Sepia or Night, font, text size, line spacing, facing pages and whether narration pauses at page ends. Existing settings are preserved; the update does not silently switch your layout or stop-at-page preference.
+- **Aa Appearance:** choose System, Paper, Sepia or Night, font, text size, line spacing and facing pages. Listening scope is a separate visible main-player choice, not a consequence of changing appearance.
 - **Focus icon:** hide the tools while keeping playback and voice provenance visible. Click the same button, or press Escape after closing any open editor/search/panel, to leave focus mode.
 - **Full-screen icon:** ask the browser to fill the screen; Escape also leaves browser full screen. If unsupported, focus mode is still available.
 - **Contents / Audiobook / Flags / Notes / AI:** open the relevant side panel. Close it with its labelled cross, Escape, or the same tool button. Audiobook studio still contains narration preparation, whole-book/chapter export, playback modes and chapter-time maps.
@@ -23,7 +27,7 @@ The percentage describes **sentence position in the book**, not elapsed audioboo
 
 Candidate r2 addresses the design review: books precede the audio-import section; Appearance captions are at least 12px; the responsive reader renders exactly one transport; Flag stays quiet at narrow widths; and Page Up/Down works from toolbar buttons without hijacking Space or form inputs. A short chapter may intentionally show just one page, and the keyboard focus ring intentionally remains visible.
 
-The 0.8.0 design reviews remain recorded in `J:/PurpleTeam/output/sol-readaloud-reader-redesign-20261110/`; the 0.8.1 repair and twin-page evidence is in `J:/PurpleTeam/output/sol-readaloud-playback-mode-0.8.1-20261110/`. Automated tests are not evidence of a visual/device pass. The same quiet toolbar, reading colours, tools-on-demand and responsive single transport are shared with Android.
+The 0.8.0 design reviews remain recorded in `J:/PurpleTeam/output/sol-readaloud-reader-redesign-20261110/`; the historical 0.8.1 repair and twin-page evidence is in `J:/PurpleTeam/output/sol-readaloud-playback-mode-0.8.1-20261110/`. Current flow/scope evidence is in `J:/PurpleTeam/output/sol-readaloud-flow-0.8.2-20261110/`. Automated tests are not evidence of a visual/device pass. The same quiet toolbar, reading colours, tools-on-demand and responsive single transport are shared with Android.
 
 ### Public version
 

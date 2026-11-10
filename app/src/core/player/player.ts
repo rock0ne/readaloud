@@ -152,6 +152,9 @@ export class Player {
   private chapterOnly: number | null = null;
   private atChapterEnd = false;
   private preparedVoiceId: string | undefined;
+  private readerStart: number | null = null;
+  private readerEnd: number | null = null;
+  private atReaderEnd = false;
   private _state: PlayerState;
   basicFallback = false;
   private readonly deps: PlayerDeps;
@@ -159,7 +162,7 @@ export class Player {
   constructor(deps: PlayerDeps) {
     this.deps = deps;
     const s = deps.settings();
-    this._state = { status: 'idle', source: 'reader', rate: clampRate(s.rate), engineId: s.enginePreference[0] ?? 'webspeech' };
+    this._state = { status: 'idle', source: 'reader', readerRange: 'book', rate: clampRate(s.rate), engineId: s.enginePreference[0] ?? 'webspeech' };
   }
 
   get state(): PlayerState {
@@ -173,6 +176,12 @@ export class Player {
   get currentVoice(): Voice | null {
     return this.voice;
   }
+
+  get pausedAtPageEnd(): boolean {
+    return this._state.source === 'reader' && this._state.status === 'paused' && this.atPageEnd;
+  }
+
+  get readerRangeFinished(): boolean { return this._state.source === 'reader' && this.atReaderEnd; }
 
   /** Transient progress only; no document or storage schema changes. */
   get audioPreparation(): AudioPreparation | null {
@@ -210,10 +219,12 @@ export class Player {
     this.chapterOnly = null;
     this.atChapterEnd = false;
     this.preparedVoiceId = undefined;
+    this.readerStart = this.readerEnd = null;
+    this.atReaderEnd = false;
     this.resetVoice();
     const at = startAt ? this.index.get(startAt) : undefined;
     this.pos = at ? at.ordinal : 0;
-    this.setState({ status: 'idle', source: 'reader', docId: doc.id, ...(this.currentSentenceId ? { sentenceId: this.currentSentenceId } : {}) });
+    this.setState({ status: 'idle', source: 'reader', readerRange: 'book', docId: doc.id, ...(this.currentSentenceId ? { sentenceId: this.currentSentenceId } : {}) });
     if (this.currentSentenceId) this.emit({ type: 'sentence', sentenceId: this.currentSentenceId });
   }
 
@@ -233,13 +244,39 @@ export class Player {
     await this.halt('paused');
     this.dropClips(); // do not reuse in-flight live synthesis inside prepared playback
     this.resetVoice();
-    if (source === 'reader') this.clearChapterPlayback();
-    this.setState({ source });
+    if (source === 'reader') {
+      this.clearChapterPlayback();
+      this.readerStart = this.readerEnd = null; this.atReaderEnd = false;
+    }
+    this.setState({ source, ...(source === 'reader' ? { readerRange: 'book' as const } : {}) });
+  }
+
+  /** Select a live reading range without autoplay. Page/chapter begin at their first sentence;
+   * book continues from the current position. This never changes saved narration or layout. */
+  async selectReaderRange(kind: PlayerState['readerRange'], firstId?: string, lastId?: string): Promise<void> {
+    const first = firstId ? this.index?.get(firstId) : undefined;
+    const last = lastId ? this.index?.get(lastId) : undefined;
+    if (kind !== 'book' && (!first || !last || last.ordinal < first.ordinal)) throw new Error('Choose a readable page or chapter.');
+    await this.selectSource('reader');
+    await this.halt('paused');
+    this.dropClips();
+    this.pageEnds = null; this.atPageEnd = false;
+    if (kind === 'book') {
+      if (this.atReaderEnd) this.pos = this.pos + 1 < (this.index?.order.length ?? 0) ? this.pos + 1 : 0;
+      this.readerStart = this.readerEnd = null;
+    } else {
+      this.readerStart = first!.ordinal; this.readerEnd = last!.ordinal;
+      this.pos = first!.ordinal;
+    }
+    this.atReaderEnd = false;
+    this.setState({ readerRange: kind, status: 'paused', ...(this.currentSentenceId ? { sentenceId: this.currentSentenceId } : {}) });
+    if (this.currentSentenceId) this.emit({ type: 'sentence', sentenceId: this.currentSentenceId });
   }
 
   /** Reader Play always permits live speech, regardless of legacy saved preferences. */
   async playReader(): Promise<void> {
     await this.selectSource('reader');
+    this.pageEnds = null; // visual pages must never silently interrupt live reading
     await this.play();
   }
 
@@ -279,6 +316,10 @@ export class Player {
   private async start(): Promise<void> {
     const gen = ++this.startGen;
     if (!this.index) return;
+    if (this._state.source === 'reader' && this.atReaderEnd && this.readerStart !== null) {
+      this.pos = this.readerStart;
+      this.atReaderEnd = false;
+    }
     if (this.atChapterEnd && this.chapterOnly !== null) {
       const first = this.index.order.find((item) => item.block.chapterIndex === this.chapterOnly);
       if (first) this.pos = first.ordinal;
@@ -405,6 +446,11 @@ export class Player {
   private moveTo(target: number): void {
     if (!this.index) return;
     const clamped = Math.max(0, Math.min(this.index.order.length - 1, target));
+    if (this._state.source === 'reader' && this.readerEnd !== null && (clamped < this.readerStart! || clamped > this.readerEnd)) {
+      this.readerStart = this.readerEnd = null;
+      this.setState({ readerRange: 'book' });
+    }
+    this.atReaderEnd = false;
     this.atPageEnd = false;
     const wasPlaying = this._state.status === 'playing' || this._state.status === 'buffering';
     if (this.chapterOnly !== null && this.index.order[clamped]?.block.chapterIndex !== this.chapterOnly) this.clearChapterPlayback();
@@ -498,7 +544,13 @@ export class Player {
         await abortableSleep(pause / speed, signal);
         if (signal.aborted) return;
       }
-      // A chapter-only session stops BEFORE entering the next chapter, including at book end.
+      if (this._state.source === 'reader' && this.readerEnd !== null && this.pos >= this.readerEnd) {
+        this.atReaderEnd = true;
+        this.setState({ status: 'paused' });
+        this.flushPosition();
+        return;
+      }
+      // A chapter-only audiobook stops BEFORE entering the next chapter, including at book end.
       if (this.chapterOnly !== null && index.order[this.pos + 1]?.block.chapterIndex !== this.chapterOnly) {
         this.atChapterEnd = true;
         this.setState({ status: 'paused' });
@@ -611,7 +663,7 @@ export class Player {
     let chars = 0;
     let limited = false;
     const skipCode = this.deps.settings().skipCodeBlocks;
-    for (let p = this.pos; p < index.order.length; ) {
+    for (let p = this.pos; p < index.order.length && (this.readerEnd === null || p <= this.readerEnd); ) {
       const item = index.order[p]!;
       if (item.block.chapterIndex !== chapter) break;
       const after = this.after(p);
@@ -629,7 +681,7 @@ export class Player {
       if (this.pageEnds?.has(index.order[after - 1]!.sentence.id)) break;
       p = after;
     }
-    const progress: AudioPreparation = { completed: 0, total: texts.length, scope: limited ? 'section' : this.pageEnds ? 'page' : 'chapter' };
+    const progress: AudioPreparation = { completed: 0, total: texts.length, scope: limited ? 'section' : this.pageEnds || this._state.readerRange === 'page' ? 'page' : 'chapter' };
     this.preparation = progress;
     this.preparedChapter = chapter;
     // Protect completed clips from the small streaming window and persistent-cache pruning.
@@ -664,7 +716,7 @@ export class Player {
    * and the highlight follows by character share (spec 8.3, ADR-22). A short first sentence joins
    * the next one; short sentences after a sentence join it.
    */
-  private unitAt(pos: number): Unit | null {
+  private unitAt(pos: number, respectRange = true): Unit | null {
     const item = this.index?.order[pos];
     if (!item) return null;
     const { block, sentence } = item;
@@ -674,6 +726,7 @@ export class Player {
     const members: Sentence[] = [sentence];
     let length = sentence.chunks[0]!.length;
     const add = (s: Sentence): boolean => {
+      if (respectRange && this._state.source === 'reader' && this.readerEnd !== null && pos + members.length > this.readerEnd) return false;
       if (length + 1 + s.chunks[0]!.length > UNIT_MAX_CHARS) return false;
       members.push(s);
       length += 1 + s.chunks[0]!.length;
@@ -706,6 +759,7 @@ export class Player {
     const members: Sentence[] = [];
     let length = -1;
     for (let k = sentence.index; k < block.sentences.length; k++) {
+      if (this._state.source === 'reader' && this.readerEnd !== null && pos + members.length > this.readerEnd) break;
       const s = block.sentences[k]!;
       if (s.chunks.length !== 1) break;
       const add = 1 + s.chunks[0]!.length;
@@ -739,14 +793,14 @@ export class Player {
   }
 
   /** What an audio engine is given for the sentence at `pos`: its unit's text, or its chunks. */
-  private pieces(pos: number): string[] {
-    const unit = this.unitAt(pos);
+  private pieces(pos: number, respectRange = true): string[] {
+    const unit = this.unitAt(pos, respectRange);
     return unit ? [unit.text] : (this.index?.order[pos]?.sentence.chunks ?? []);
   }
 
   /** The position after the sentence (or unit) at `pos`. */
-  private after(pos: number): number {
-    const unit = this.unitAt(pos);
+  private after(pos: number, respectRange = true): number {
+    const unit = this.unitAt(pos, respectRange);
     return unit ? unit.first + unit.count : pos + 1;
   }
 
@@ -766,6 +820,7 @@ export class Player {
         chars += text.length;
       }
       p = this.after(p);
+      if (this._state.source === 'reader' && this.readerEnd !== null && p > this.readerEnd) return out;
       const item = index.order[p];
       if (!item) return out;
       list = item.block.type === 'code' && skipCode ? [] : this.pieces(p);
@@ -873,17 +928,17 @@ export class Player {
     const settings = this.deps.settings();
     for (let p = 0; p < this.index.order.length;) {
       const item = this.index.order[p]!;
-      const next = this.after(p);
+      const next = this.after(p, false);
       if (!(item.block.type === 'code' && settings.skipCodeBlocks) && (chapter === undefined || item.block.chapterIndex === chapter)) {
         const last = this.index.order[next - 1]!;
         const heading = item.block.type === 'heading' && settings.announceHeadings;
         const end = last.sentence.index === last.block.sentences.length - 1;
-        units.push({ chapter: item.block.chapterIndex, texts: this.pieces(p).map((t) => this.spoken(t)),
+        units.push({ chapter: item.block.chapterIndex, texts: this.pieces(p, false).map((t) => this.spoken(t)),
           beforeMs: heading && item.sentence.index === 0 ? settings.pauseAfterHeadingMs / 2 : 0,
           afterMs: heading && end ? settings.pauseAfterHeadingMs : end ? settings.pauseBetweenParagraphsMs : settings.pauseBetweenSentencesMs });
         // A seek or paused highlight can start in the middle of a joined short-sentence unit.
         for (let q = p; q < next; q++) {
-          for (const text of this.pieces(q)) extra.add(this.spoken(text));
+          for (const text of this.pieces(q, false)) extra.add(this.spoken(text));
         }
       }
       p = next;

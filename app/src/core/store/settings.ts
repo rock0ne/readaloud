@@ -4,7 +4,7 @@ import { DEFAULT_PRONUNCIATION, validPronunciation } from '../text/pronunciation
 
 export function defaultSettings(touch = false): Settings {
   return {
-    schemaVersion: 4,
+    schemaVersion: 5,
     enginePreference: ['kokoro', 'webspeech'],
     voiceByEngine: {},
     rate: 1.0,
@@ -25,7 +25,7 @@ export function defaultSettings(touch = false): Settings {
     lineSpacing: 1.7,
     layout: 'scroll',
     twoPages: true,
-    stopAtPageEnd: true,
+    stopAtPageEnd: false,
     theme: 'auto',
     ai: { provider: null, models: {} },
   };
@@ -52,6 +52,12 @@ export function migrateSettings(saved: StoredSettings): Partial<Settings> {
   }
   // v4 (ADR-33, ADR-35): the reading font, line spacing and page-by-page settings are new and
   // come from the defaults.
+  if ((out.schemaVersion ?? 1) < 5) {
+    // Earlier versions defaulted this to true, making a visual layout choice interrupt listening.
+    // Start upgraded readers in continuous flow. Page-study pauses are an explicit v5 opt-in;
+    // all book, narration, voice, position and visual preferences remain unchanged.
+    out.stopAtPageEnd = false;
+  }
   delete out.schemaVersion;
   return out as Partial<Settings>;
 }

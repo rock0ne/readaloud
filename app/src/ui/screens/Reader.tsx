@@ -5,7 +5,7 @@ import { createFlag } from '../../core/flags/corrections';
 import { createNote } from '../../core/notes/notes';
 import { RATE_MAX, RATE_MIN, clampRate } from '../../core/store/settings';
 import { PageIndex, facingPages, fitsSpread } from '../../core/text/pages';
-import type { AiResult, AiSuggestion, DocRecord, EngineId, Flag, Note, Voice } from '../../core/types';
+import type { AiResult, AiSuggestion, DocRecord, EngineId, Flag, Note, Voice, PlayerState } from '../../core/types';
 import type { Pick } from '../../core/engines/registry';
 import { TextPane } from '../components/TextPane';
 import { PANEL_LABELS, ReaderChrome, ReaderIcon, ReaderTransport, ReadingProgress } from '../components/ReaderChrome';
@@ -19,6 +19,7 @@ import { NotesPanel } from '../components/NotesPanel';
 import { AiPanel } from '../components/AiPanel';
 import { TextControls } from '../components/TextControls';
 import { ReadingLayoutPicker, readingLayout, layoutSettings } from '../components/ReadingLayout';
+import { ReadRangePicker, ReadRangeNotice } from '../components/ReadRange';
 import { FindBar } from '../components/FindBar';
 import { PreparedModeNotice } from '../components/PlaybackMode';
 import { AudiobookPanel } from '../components/AudiobookPanel';
@@ -188,11 +189,9 @@ export function Reader({ docId }: { docId: string }) {
     return facingPages(pages.pages, here, twoUp).map((p) => ({ key: p.key, label: p.label, blocks: pages.blocksOf(p, doc?.blocks ?? []) }));
   }, [paged, twoUp, pages, chapterIndex, hereKey, doc]);
   // ...and it can stop at the end of each page, to study it.
-  const stopAtPages = paged && settings.stopAtPageEnd;
   useEffect(() => {
-    player.setPageEnds(stopAtPages && pages ? new Set(pages.pages.map((p) => p.lastSentenceId).filter(Boolean)) : null);
-    return () => player.setPageEnds(null);
-  }, [player, pages, stopAtPages]);
+    player.setPageEnds(null);
+  }, [player, docId]);
   const turn = (dir: 1 | -1) => {
     if (!pages || !sheets?.length) return;
     const edge = dir === 1 ? sheets.at(-1) : sheets[0];
@@ -320,6 +319,18 @@ export function Reader({ docId }: { docId: string }) {
     void services.updateSettings({ rate });
   };
 
+  const selectReadRange = async (kind: PlayerState['readerRange'], play = false) => {
+    if (!index || !pages) return;
+    try {
+      const here = player.currentSentenceId;
+      const page = here ? pages.ofSentence(here) : pages.pages[0];
+      const chapter = index.order.filter((item) => item.block.chapterIndex === chapterIndex);
+      await player.selectReaderRange(kind, kind === 'page' ? page?.firstSentenceId : chapter[0]?.sentence.id,
+        kind === 'page' ? page?.lastSentenceId : chapter.at(-1)?.sentence.id);
+      if (play) await player.playReader();
+    } catch (e) { toast(e instanceof Error ? e.message : String(e), 'error'); }
+  };
+
   const returnToReader = async () => {
     if (modeBusy) return;
     setModeBusy(true);
@@ -380,7 +391,8 @@ export function Reader({ docId }: { docId: string }) {
   const toggle = (p: Exclude<Panel, null>) => setPanel(panel === p ? null : p);
   const ordinal = view.currentId ? index.get(view.currentId)?.ordinal ?? 0 : 0;
   const progress = index.order.length > 1 ? ordinal / (index.order.length - 1) * 100 : view.status === 'ended' ? 100 : 0;
-  const transport = () => <ReaderTransport playing={playing} audiobook={view.source === 'audiobook'} onPrevious={() => player.prev()} onNext={() => player.next()} onToggle={() => void player.toggleReader()} onReplay={() => player.replay()} />;
+  const transport = () => <ReaderTransport playing={playing} audiobook={view.source === 'audiobook'} onPrevious={() => player.prev()} onNext={() => player.next()} onToggle={() => void player.toggleReader()} onReplay={() => player.replay()}
+    rangePicker={<ReadRangePicker value={view.readerRange} onChange={(kind) => void selectReadRange(kind)} />} />;
   const editingAt = editing ? index.get(editing.sentenceId) : undefined;
   const placeOf = (chapter: number, title: string, paragraph: number) => `${title || `Chapter ${chapter + 1}`} · Paragraph ${paragraph}`;
 
@@ -392,12 +404,12 @@ export function Reader({ docId }: { docId: string }) {
         onFullscreen={() => void toggleFullscreen()} paged={paged}
         onLayout={() => {
           void services.updateSettings({ layout: paged ? 'scroll' : 'pages' });
-          if (!paged && settings.stopAtPageEnd) toast('Book pages: narration pauses at page ends. Change this under Appearance.');
         }}
         layoutPicker={<ReadingLayoutPicker value={readingLayout(settings)} onChange={(choice) => void services.updateSettings(layoutSettings(choice))} />}
         onFind={() => setFinding(!finding)} transport={compact ? null : transport()} />
 
       <PreparedModeNotice audiobook={view.source === 'audiobook'} busy={modeBusy} playing={playing} onReader={() => void returnToReader()} onResume={() => void player.playPrepared()} />
+      {player.readerRangeFinished && view.readerRange !== 'book' && <ReadRangeNotice kind={view.readerRange} onBook={() => void selectReadRange('book', true)} />}
 
       {kokoroBanner && (
         <div class="banner" role="note">

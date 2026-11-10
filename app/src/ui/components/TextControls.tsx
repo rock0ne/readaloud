@@ -28,14 +28,10 @@ export function TextControls() {
         <span>Reading layout</span>
         <ReadingLayoutPicker value={readingLayout(s)} onChange={(choice) => update(layoutSettings(choice))} />
         <p class="hint">Two-page spread shows consecutive pages, so you can read ahead while listening. Narrow screens use one page without forgetting your choice.</p>
-        {s.layout === 'pages' && (
-          <>
-            <label class="check">
-              <input type="checkbox" checked={s.stopAtPageEnd} onChange={(e) => update({ stopAtPageEnd: e.currentTarget.checked })} />
-              Stop reading at the end of each page
-            </label>
-          </>
-        )}
+      </div>
+      <div class="field">
+        <span>Listening scope</span>
+        <p class="hint">Use Read beside the main Play button to choose Whole book, This chapter only or This page only. Whole book reads continuously across pages and chapters in every visual layout. Selecting a page/chapter starts at its beginning when you press Play.</p>
       </div>
       <label class="field">
         Font

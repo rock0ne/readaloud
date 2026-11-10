@@ -252,8 +252,7 @@ describe('whole-book prepared narration', () => {
     expect(JSON.stringify(f.settings)).toBe(before);
     f.engine.isAvailable = async () => ({ ok: true });
     await f.player.playReader(); await f.player.settled;
-    expect(f.player.state.status).toBe('paused'); // original reader stop is still present
-    expect(f.player.currentSentenceId).toBe(f.doc.blocks[0]!.sentences[0]!.id);
+    expect(f.player.state.status).toBe('ended'); // Reader Play explicitly uses continuous book flow
     expect(f.synthesize).not.toHaveBeenCalled(); // live reader can still reuse saved narration
   });
 

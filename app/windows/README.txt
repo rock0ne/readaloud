@@ -6,7 +6,7 @@ Reads .txt, .md, .docx, .pdf and .epub files, and text you paste.
 
 Check the download first
 ------------------------
-For this private Windows 0.8.1 candidate, the accompanying SHA256SUMS.txt shows the
+For this private Windows 0.8.2 candidate, the accompanying SHA256SUMS.txt shows the
 SHA-256 of this zip. It has not been published as a GitHub release. Open PowerShell in
 the folder that holds the zip and type (with this zip's name):
 
@@ -54,7 +54,7 @@ What stays on this PC
 - Your documents, flags, notes and settings stay in Edge on this PC.
   ReadAloud has no account and collects no usage data.
 
-The new reader (0.8.1 Windows candidate)
+The new reader (0.8.2 Windows candidate)
 ----------------------------------------
 Play/pause, previous/next sentence and replay now sit in the top centre.
 Reading layout (top right, also in Aa Appearance) offers Scroll, One page or
@@ -62,8 +62,13 @@ Two-page spread. Spread shows consecutive pages, even over chapter boundaries,
 so you can read ahead while listening. Narrow screens fall back to one page;
 widen the window, close the tools panel or reduce text size to show both.
 Aa Appearance chooses System/Paper/Sepia/Night, font, size and spacing.
-Existing page-end pause settings remain unchanged: check Appearance if you
-want continuous narration in page view. Long pages can still scroll.
+Read beside Play chooses Whole book, This chapter only, or This page only.
+Whole book continues from your position across pages/chapters. Choosing a
+page/chapter moves to its beginning and waits for Play, then stops at its end.
+Play repeats that selected part; Continue whole book continues onward.
+Layout and listening scope are separate. The legacy automatic page-end pause
+is reset on upgrade, without deleting books, notes, audio or other preferences.
+Long pages can still scroll.
 
 Focus hides the tools, not playback or the voice's local/online status.
 Use its cross or Escape to leave. Full screen is a separate browser option.
@@ -77,7 +82,7 @@ record any visual/Claude-review checks still pending. No files are uploaded.
 
 Whole-book narration and offline travel
 --------------------------------------
-The library and Audiobook studio headings must show 0.8.1 for this candidate.
+The library and Audiobook studio headings must show 0.8.2 for this candidate.
 Downloading the zip does not replace an older server/app that is still open.
 Close the old server window, run this folder's ReadAloud.cmd, then reopen/refresh
 the same localhost app without clearing its library/site data.

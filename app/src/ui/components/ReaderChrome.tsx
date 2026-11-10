@@ -21,14 +21,15 @@ export function ReaderIcon({ name }: { name: IconName }) {
   return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">{paths[name]}</svg>;
 }
 
-export function ReaderTransport({ playing, audiobook = false, onPrevious, onNext, onToggle, onReplay }: {
-  playing: boolean; audiobook?: boolean; onPrevious: () => void; onNext: () => void; onToggle: () => void; onReplay: () => void;
+export function ReaderTransport({ playing, audiobook = false, onPrevious, onNext, onToggle, onReplay, rangePicker }: {
+  playing: boolean; audiobook?: boolean; onPrevious: () => void; onNext: () => void; onToggle: () => void; onReplay: () => void; rangePicker?: ComponentChildren;
 }) {
   return <div class="transport" role="group" aria-label="Read aloud controls">
     <button onClick={onPrevious} aria-label="Previous sentence" title="Previous sentence (←)"><ReaderIcon name="previous" /></button>
     <button class="play" onClick={onToggle} aria-label={playing ? 'Pause' : audiobook ? 'Read now' : 'Play'} title={playing ? 'Pause playback (Space)' : 'Read now — live speech, no preparation required (Space)'}><ReaderIcon name={playing ? 'pause' : 'play'} /></button>
     <button onClick={onNext} aria-label="Next sentence" title="Next sentence (→)"><ReaderIcon name="next" /></button>
     <button onClick={onReplay} aria-label="Replay sentence" title="Replay sentence (R)"><ReaderIcon name="replay" /></button>
+    {rangePicker}
   </div>;
 }
 
