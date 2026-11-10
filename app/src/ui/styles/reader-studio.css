@@ -140,8 +140,8 @@
   .reader-identity { flex:1; gap:6px; }
   .reader-eyebrow, .reader-studio .fullscreen-toggle, .reader-studio .reader-actions .reader-find { display:none; }
   .reader-studio .reader-actions { margin-left:auto; }
-  .reader-studio .panel-buttons { gap:2px; overflow-x:auto; }
-  .reader-studio .panel-buttons button { min-width:max-content; padding:6px 9px; min-height:44px; }
+  .reader-studio .panel-buttons { gap:2px; min-width:0; width:100%; max-width:100%; flex:0 0 100%; overflow-x:auto; flex-wrap:nowrap; }
+  .reader-studio .panel-buttons button { flex:0 0 auto; min-width:max-content; padding:6px 9px; min-height:44px; }
   .appearance-label > span { display:none; }
   .reader-studio .text-pane { padding-top:24px; padding-bottom:32px; }
   .reading-progress { padding:10px 12px 8px; grid-template-columns:1fr 2fr auto; gap:8px; font-size:12px; }
