@@ -26,6 +26,7 @@ import { KokoroDownload } from '../components/KokoroDownload';
 import { VoicePicker, shortVoiceName } from '../components/VoicePicker';
 import { usePlayer } from '../hooks/usePlayer';
 import { useKeys } from '../hooks/useKeys';
+import { useCompactReader } from '../hooks/useCompactReader';
 import { useMediaSession, useOnline, usePhoneSession, useWakeLock } from '../hooks/useDevice';
 import { toast, useKokoro, useServices, useSettings } from '../services';
 
@@ -51,6 +52,7 @@ function upsert<T>(xs: T[], x: T, same: (a: T, b: T) => boolean): T[] {
 }
 
 export function Reader({ docId }: { docId: string }) {
+  const compact = useCompactReader();
   const services = useServices();
   const { repo, player, registry, kokoro, isTouch } = services;
   const settings = useSettings();
@@ -371,7 +373,7 @@ export function Reader({ docId }: { docId: string }) {
   const toggle = (p: Exclude<Panel, null>) => setPanel(panel === p ? null : p);
   const ordinal = view.currentId ? index.get(view.currentId)?.ordinal ?? 0 : 0;
   const progress = index.order.length > 1 ? ordinal / (index.order.length - 1) * 100 : view.status === 'ended' ? 100 : 0;
-  const transport = <ReaderTransport playing={playing} onPrevious={() => player.prev()} onNext={() => player.next()} onToggle={() => void player.toggle()} onReplay={() => player.replay()} />;
+  const transport = () => <ReaderTransport playing={playing} onPrevious={() => player.prev()} onNext={() => player.next()} onToggle={() => void player.toggle()} onReplay={() => player.replay()} />;
   const editingAt = editing ? index.get(editing.sentenceId) : undefined;
   const placeOf = (chapter: number, title: string, paragraph: number) => `${title || `Chapter ${chapter + 1}`} · Paragraph ${paragraph}`;
 
@@ -385,7 +387,7 @@ export function Reader({ docId }: { docId: string }) {
           void services.updateSettings({ layout: paged ? 'scroll' : 'pages' });
           if (!paged && settings.stopAtPageEnd) toast('Book pages: narration pauses at page ends. Change this under Appearance.');
         }}
-        onFind={() => setFinding(!finding)} transport={transport} />
+        onFind={() => setFinding(!finding)} transport={compact ? null : transport()} />
 
       {kokoroBanner && (
         <div class="banner" role="note">
@@ -509,7 +511,7 @@ export function Reader({ docId }: { docId: string }) {
 
       {finding && <FindBar index={index} pages={pages} currentId={view.currentId} onGo={(id) => jump(id, false)} onClose={() => setFinding(false)} />}
       <footer class="controls" aria-label="Playback">
-        {transport}
+        {compact ? transport() : null}
         <div class="speed" aria-label="Speed">
           <button onClick={() => setRate(view.rate - 0.1)} disabled={view.rate <= RATE_MIN} aria-label="Slower" title="Slower ([)">
             −

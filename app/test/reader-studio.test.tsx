@@ -4,6 +4,7 @@ import { act } from 'preact/test-utils';
 import { ReaderChrome, ReaderTransport, ReadingProgress } from '../src/ui/components/ReaderChrome';
 import { TextPane } from '../src/ui/components/TextPane';
 import { useKeys } from '../src/ui/hooks/useKeys';
+import { useCompactReader } from '../src/ui/hooks/useCompactReader';
 import { defaultSettings, withDefaults } from '../src/core/store/settings';
 import { makeDoc, sampleBlocks } from './helpers/docs';
 
@@ -89,6 +90,30 @@ describe('book text and keyboard preservation', () => {
     act(() => render(<Keys />, root));
     for (const element of root.querySelectorAll('input, a')) act(() => { element.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', bubbles: true })); });
     expect(fn).not.toHaveBeenCalled();
+  });
+  it('turns pages from toolbar buttons while preserving native Space and panel scrolling', () => {
+    const next = vi.fn(), previous = vi.fn(), play = vi.fn();
+    function Keys() { useKeys({ PageDown: next, PageUp: previous, Space: play }); return <><header class="reader-topbar"><button>Contents</button><input /></header><aside><button>Panel action</button></aside></>; }
+    act(() => render(<Keys />, root));
+    const button = root.querySelector('.reader-topbar button')!;
+    for (const key of ['PageDown', 'PageUp', ' ']) act(() => { button.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles:true })); });
+    expect(next).toHaveBeenCalledTimes(1); expect(previous).toHaveBeenCalledTimes(1); expect(play).not.toHaveBeenCalled();
+    for (const element of root.querySelectorAll('input, aside button')) act(() => { element.dispatchEvent(new KeyboardEvent('keydown', { key:'PageDown', bubbles:true })); });
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+  it('renders one transport and moves it on resize, without CSS-only duplicate controls', () => {
+    let matches = false;
+    const listeners = new Set<() => void>();
+    vi.stubGlobal('matchMedia', () => ({ get matches() { return matches; }, addEventListener: (_: string, fn: () => void) => listeners.add(fn), removeEventListener: (_: string, fn: () => void) => listeners.delete(fn) }));
+    function Responsive() { const compact = useCompactReader(); const transport = () => <ReaderTransport playing={false} onPrevious={() => {}} onNext={() => {}} onToggle={() => {}} onReplay={() => {}} />;
+      return <><header>{compact ? null : transport()}</header><footer>{compact ? transport() : null}</footer></>; }
+    act(() => render(<Responsive />, root));
+    expect(root.querySelectorAll('.transport')).toHaveLength(1); expect(root.querySelector('header .transport')).not.toBeNull();
+    matches = true; act(() => { listeners.forEach((fn) => fn()); });
+    expect(root.querySelectorAll('.transport')).toHaveLength(1); expect(root.querySelector('footer .transport')).not.toBeNull();
+    matches = false; act(() => { listeners.forEach((fn) => fn()); });
+    expect(root.querySelectorAll('.transport')).toHaveLength(1); expect(root.querySelector('header .transport')).not.toBeNull();
+    act(() => render(null, root)); expect(listeners.size).toBe(0); vi.unstubAllGlobals();
   });
 });
 

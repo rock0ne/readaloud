@@ -19,6 +19,8 @@ The reader is now book-first: compact playback at the top, tools on demand, gene
 
 The percentage describes **sentence position in the book**, not elapsed audiobook time. Formatting remains the existing normalized reading text; this is not a pixel-identical EPUB renderer. Text, book IDs, prepared clips, imported audio and chapter metadata have not been migrated or regenerated. Keep the same Edge profile and `http://127.0.0.1:4173/` address for your existing library. Do not clear site data or move to an InPrivate profile to upgrade. A separate test port has a separate empty library.
 
+Candidate r2 addresses the design review: books precede the audio-import section; Appearance captions are at least 12px; the responsive reader renders exactly one transport; Flag stays quiet at narrow widths; and Page Up/Down works from toolbar buttons without hijacking Space or form inputs. A short chapter may intentionally show just one page, and the keyboard focus ring intentionally remains visible.
+
 Candidate checks and pending visual/design review are recorded in `J:/PurpleTeam/output/sol-readaloud-reader-redesign-20261110/`. Automated tests are not evidence that Claude was consulted or that the live UI passed visual QA.
 
 ### Public version

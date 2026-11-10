@@ -216,7 +216,6 @@ export function Library() {
 
       {transferError && <p role="alert">{transferError}</p>}
       <section class="library-intro"><div class="reader-eyebrow">READ · LISTEN · MAKE IT YOURS</div><h2>Your library</h2><p>Pick up where you left off. A quieter place for books, listening and ideas.</p></section>
-      <AudioLibrary />
 
       {docs === null ? null : docs.length === 0 ? (
         <section class="empty">
@@ -258,6 +257,8 @@ export function Library() {
           })}
         </ul>
       )}
+
+      <AudioLibrary />
 
       <footer class="bar footer">
         <DataTransfer onImported={refresh} />
