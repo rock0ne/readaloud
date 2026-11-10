@@ -37,6 +37,26 @@ async function fixture() {
 }
 
 describe('whole-book prepared narration', () => {
+  it('reuses prepared audio and exact chapter timings after reader-only appearance changes', async () => {
+    const f = await fixture();
+    await prepareNarration(f.plan, f.engine, f.voice, f.repo, new AbortController().signal, () => undefined);
+    const before = await inspectNarration(f.plan, f.voice.id, f.repo);
+    const beforeWav = await wholeBookWav(f.plan, f.voice.id, f.repo, new AbortController().signal);
+    const beforeChunks: Uint8Array[] = [];
+    for await (const chunk of beforeWav.chunks) beforeChunks.push(chunk);
+    const calls = f.synthesize.mock.calls.length;
+    Object.assign(f.settings, { readerTone: 'night', readerFont: 'sans', fontSizePx: 24, lineSpacing: 2, layout: 'pages', twoPages: true });
+    expect(f.player.narrationPlan()).toEqual(f.plan);
+    const after = await inspectNarration(f.player.narrationPlan(), f.voice.id, f.repo);
+    expect(after.key).toBe(before.key); expect(after.ready).toBe(true);
+    expect(after.completed).toBe(before.completed);
+    const afterWav = await wholeBookWav(f.player.narrationPlan(), f.voice.id, f.repo, new AbortController().signal);
+    const afterChunks: Uint8Array[] = [];
+    for await (const chunk of afterWav.chunks) afterChunks.push(chunk);
+    expect(afterChunks).toEqual(beforeChunks);
+    expect(afterWav.chapterStarts).toEqual(beforeWav.chapterStarts);
+    expect(f.synthesize.mock.calls).toHaveLength(calls);
+  });
   it('plays one chapter from the saved whole book, stops there, and can continue across chapters without synthesis', async () => {
     const f = await fixture();
     await prepareNarration(f.plan, f.engine, f.voice, f.repo, new AbortController().signal, () => undefined);

@@ -223,6 +223,7 @@ export interface Settings {
   pauseOnFlag: boolean;                         // default false on desktop, true on touch devices
   fontSizePx: number;                           // default 18
   readerFont: ReaderFont;                       // default 'serif' (ADR-33)
+  readerTone: 'system' | 'paper' | 'sepia' | 'night'; // reader-only palette; no voice/cache identity changes
   lineSpacing: number;                          // default 1.7 (ADR-33)
   layout: ReaderLayout;                         // default 'scroll' (ADR-35)
   twoPages: boolean;                            // default true: two pages side by side on a wide screen (ADR-35)

@@ -8,6 +8,8 @@ import { PageIndex } from '../../core/text/pages';
 import type { AiResult, AiSuggestion, DocRecord, EngineId, Flag, Note, Voice } from '../../core/types';
 import type { Pick } from '../../core/engines/registry';
 import { TextPane } from '../components/TextPane';
+import { PANEL_LABELS, ReaderChrome, ReaderIcon, ReaderTransport, ReadingProgress } from '../components/ReaderChrome';
+import type { ReaderPanel } from '../components/ReaderChrome';
 import type { Sheet } from '../components/TextPane';
 import { FlagPanel } from '../components/FlagPanel';
 import { TocPanel } from '../components/TocPanel';
@@ -27,10 +29,10 @@ import { useKeys } from '../hooks/useKeys';
 import { useMediaSession, useOnline, usePhoneSession, useWakeLock } from '../hooks/useDevice';
 import { toast, useKokoro, useServices, useSettings } from '../services';
 
-type Panel = 'toc' | 'flags' | 'notes' | 'ai' | 'text' | 'audiobook' | null;
+type Panel = ReaderPanel;
 
 /** Two pages go side by side when the text pane is at least this many ems wide (ADR-35). */
-const SPREAD_MIN_EM = 50;
+const SPREAD_MIN_EM = 64;
 type Editing = { sentenceId: string; note?: Note };
 
 /** Says which kind of voice is reading, so "natural" is never ambiguous (ADR-30). */
@@ -55,7 +57,22 @@ export function Reader({ docId }: { docId: string }) {
   const kokoroStatus = useKokoro();
   const [doc, setDoc] = useState<DocRecord | null | undefined>(undefined);
   const [flags, setFlags] = useState<Flag[]>([]);
-  const [panel, setPanel] = useState<Panel>(isTouch || innerWidth < 900 ? null : 'toc');
+  const [panel, setPanel] = useState<Panel>(null);
+  const [focused, setFocused] = useState(false);
+  const [fullscreen, setFullscreen] = useState(!!document.fullscreenElement);
+  const readerRoot = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const changed = () => setFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', changed);
+    return () => document.removeEventListener('fullscreenchange', changed);
+  }, []);
+  const toggleFullscreen = async () => {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else if (readerRoot.current?.requestFullscreen) await readerRoot.current.requestFullscreen();
+      else toast('Full screen is not available in this browser. Focus mode is still available.');
+    } catch { toast('Full screen was not opened. You can still use focus mode.'); }
+  };
   const [noteFor, setNoteFor] = useState<Flag | null>(null);
   const [notes, setNotes] = useState<Note[]>([]);
   const [editing, setEditing] = useState<Editing | null>(null);
@@ -315,10 +332,10 @@ export function Reader({ docId }: { docId: string }) {
     '[': () => setRate(view.rate - 0.1),
     ']': () => setRate(view.rate + 0.1),
     m: () => writeNote(),
-    g: () => setPanel('toc'),
+    g: () => { setFocused(false); setPanel('toc'); },
     '/': () => setFinding(true),
     ...(paged ? { PageDown: () => turn(1), PageUp: () => turn(-1) } : {}),
-    Escape: () => (editing ? setEditing(null) : noteFor ? setNoteFor(null) : finding ? setFinding(false) : setPanel(null)),
+    Escape: () => (editing ? setEditing(null) : noteFor ? setNoteFor(null) : finding ? setFinding(false) : panel ? setPanel(null) : setFocused(false)),
   });
 
   if (doc === undefined) return <main class="boot">Opening…</main>;
@@ -352,39 +369,23 @@ export function Reader({ docId }: { docId: string }) {
   const page = view.currentId ? pages.ofSentence(view.currentId) : undefined;
   const chapterLine = [index.chapter(chapterIndex)?.title ?? '', page ? `page ${page.label}` : ''].filter(Boolean).join(' · ');
   const toggle = (p: Exclude<Panel, null>) => setPanel(panel === p ? null : p);
+  const ordinal = view.currentId ? index.get(view.currentId)?.ordinal ?? 0 : 0;
+  const progress = index.order.length > 1 ? ordinal / (index.order.length - 1) * 100 : view.status === 'ended' ? 100 : 0;
+  const transport = <ReaderTransport playing={playing} onPrevious={() => player.prev()} onNext={() => player.next()} onToggle={() => void player.toggle()} onReplay={() => player.replay()} />;
   const editingAt = editing ? index.get(editing.sentenceId) : undefined;
   const placeOf = (chapter: number, title: string, paragraph: number) => `${title || `Chapter ${chapter + 1}`} · Paragraph ${paragraph}`;
 
   return (
-    <main class={`reader${panel ? ' with-panel' : ''}${paged ? ' paged' : ''}`}>
-      <header class="bar">
-        <a class="button" href="#/" aria-label="Back to library">
-          ←
-        </a>
-        <div class="titles">
-          <div class="doc-title">{doc.title}</div>
-          <div class="chapter-title">{chapterLine}</div>
-        </div>
-        <div class="spacer" />
-        <div class="panel-buttons">
-          <button class={panel === 'audiobook' ? 'active' : ''} onClick={() => toggle('audiobook')}>Audiobook</button>
-          <button class={panel === 'toc' ? 'active' : ''} onClick={() => toggle('toc')}>
-            Contents
-          </button>
-          <button class={panel === 'flags' ? 'active' : ''} onClick={() => toggle('flags')}>
-            Flags{flags.length ? ` (${flags.filter((f) => f.status === 'open').length})` : ''}
-          </button>
-          <button class={panel === 'notes' ? 'active' : ''} onClick={() => toggle('notes')}>
-            Notes{notes.length ? ` (${notes.length})` : ''}
-          </button>
-          <button class={panel === 'ai' ? 'active' : ''} onClick={() => toggle('ai')} title="AI study assistant, with your own key">
-            AI{ai.job ? ' …' : ''}
-          </button>
-          <button class={panel === 'text' ? 'active' : ''} onClick={() => toggle('text')} title="Font, spacing and layout" aria-label="Font, spacing and layout">
-            Aa
-          </button>
-        </div>
-      </header>
+    <main ref={readerRoot} data-reading-tone={settings.readerTone} class={`reader reader-studio${panel ? ' with-panel' : ''}${paged ? ' paged' : ''}${focused ? ' reader-focused' : ''}`}>
+      <ReaderChrome title={doc.title} chapter={chapterLine} panel={panel} onPanel={toggle}
+        flags={flags.filter((f) => f.status === 'open').length} notes={notes.length} aiBusy={!!ai.job}
+        focused={focused} onFocus={() => { setFocused(!focused); setPanel(null); }} fullscreen={fullscreen}
+        onFullscreen={() => void toggleFullscreen()} paged={paged}
+        onLayout={() => {
+          void services.updateSettings({ layout: paged ? 'scroll' : 'pages' });
+          if (!paged && settings.stopAtPageEnd) toast('Book pages: narration pauses at page ends. Change this under Appearance.');
+        }}
+        onFind={() => setFinding(!finding)} transport={transport} />
 
       {kokoroBanner && (
         <div class="banner" role="note">
@@ -417,7 +418,8 @@ export function Reader({ docId }: { docId: string }) {
           )}
         </TextPane>
         {panel && (
-          <aside class="side-panel">
+          <aside class="side-panel" id="reader-tools-panel" aria-label={PANEL_LABELS[panel]}>
+            <div class="reader-panel-heading"><span>{PANEL_LABELS[panel]}</span><button class="icon-button" onClick={() => setPanel(null)} aria-label="Close reader tools"><ReaderIcon name="close" /></button></div>
             {panel === 'audiobook' ? <AudiobookPanel key={doc.id} doc={doc} /> : panel === 'toc' ? (
               <TocPanel doc={doc} currentChapter={chapterIndex} onGo={go} />
             ) : panel === 'flags' ? (
@@ -469,6 +471,7 @@ export function Reader({ docId }: { docId: string }) {
           </div>
         )}
       </div>
+      <ReadingProgress percent={progress} chapter={index.chapter(chapterIndex)?.title ?? ''} page={page ? `Page ${page.label} / ${pages.pages.at(-1)?.label}` : ''} />
 
       {editing && (
         <NoteEditor
@@ -506,23 +509,7 @@ export function Reader({ docId }: { docId: string }) {
 
       {finding && <FindBar index={index} pages={pages} currentId={view.currentId} onGo={(id) => jump(id, false)} onClose={() => setFinding(false)} />}
       <footer class="controls" aria-label="Playback">
-        <div class="transport">
-          <button onClick={() => player.prev()} aria-label="Previous sentence" title="Previous sentence (←)">
-            ⏮
-          </button>
-          <button class="play" onClick={() => void player.toggle()} aria-label={playing ? 'Pause' : 'Play'} title="Play or pause (Space)">
-            {playing ? '⏸' : '▶'}
-          </button>
-          <button onClick={() => player.next()} aria-label="Next sentence" title="Next sentence (→)">
-            ⏭
-          </button>
-          <button onClick={() => player.replay()} aria-label="Replay sentence" title="Replay sentence (R)">
-            ↺
-          </button>
-          <button class={finding ? 'active' : ''} onClick={() => setFinding(!finding)} aria-label="Go to a page or find text" title="Go to a page or find text (/)">
-            🔍
-          </button>
-        </div>
+        {transport}
         <div class="speed" aria-label="Speed">
           <button onClick={() => setRate(view.rate - 0.1)} disabled={view.rate <= RATE_MIN} aria-label="Slower" title="Slower ([)">
             −
@@ -549,7 +536,7 @@ export function Reader({ docId }: { docId: string }) {
           Flag + note
         </button>
         <button class="flag-btn" onClick={() => void flagCurrent(false)} title="Flag this sentence (F)">
-          FLAG
+          Flag
         </button>
       </footer>
     </main>

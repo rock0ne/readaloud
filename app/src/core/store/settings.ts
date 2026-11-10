@@ -21,6 +21,7 @@ export function defaultSettings(touch = false): Settings {
     pauseOnFlag: touch,
     fontSizePx: 18,
     readerFont: 'serif',
+    readerTone: 'system',
     lineSpacing: 1.7,
     layout: 'scroll',
     twoPages: true,
@@ -63,6 +64,7 @@ export function withDefaults(saved: StoredSettings | undefined, touch = false): 
     ...d,
     ...m,
     schemaVersion: d.schemaVersion,
+    readerTone: ['system', 'paper', 'sepia', 'night'].includes(m.readerTone ?? '') ? m.readerTone! : d.readerTone,
     voiceByEngine: { ...d.voiceByEngine, ...(m.voiceByEngine ?? {}) },
     // Preserve pre-0.5.1 prepared clips on upgrade. New installations still default to hints on.
     pronunciation: validPronunciation(m.pronunciation) ? { ...m.pronunciation }

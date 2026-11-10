@@ -16,6 +16,13 @@ export function TextControls() {
   const update = (p: Partial<Settings>) => void services.updateSettings(p);
   return (
     <>
+      <fieldset class="reader-tone-picker">
+        <legend>Reading colour</legend>
+        {(['system', 'paper', 'sepia', 'night'] as const).map((tone) => <label class={`tone-swatch tone-${tone}`} key={tone}>
+          <input type="radio" name="reader-tone" checked={s.readerTone === tone} onChange={() => update({ readerTone: tone })} />
+          <span>Aa</span><small>{tone === 'system' ? 'System' : tone === 'paper' ? 'Paper' : tone === 'sepia' ? 'Sepia' : 'Night'}</small>
+        </label>)}
+      </fieldset>
       <div class="field" role="radiogroup" aria-label="Layout">
         Layout
         <label class="check">

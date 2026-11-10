@@ -4,6 +4,25 @@ Read, listen, proofread and prepare audiobooks on Windows and Android. Import do
 
 ## Version and availability
 
+### Local Windows redesign candidate: 0.8.0
+
+The `codex/readaloud-reader-redesign` branch contains a **private Windows 0.8.0 candidate**, not a new public release. The public release and Android download below remain 0.7.3. This candidate retains the private full-export build; encoder redistribution is still held. No GitHub push, release or Pages deployment is part of this design task.
+
+The reader is now book-first: compact playback at the top, tools on demand, generous page margins, optional facing pages, a thin reading-position line, and a quieter bottom voice/speed/notes strip. The library has a cleaner book-list treatment. It is inspired by the spacious reading experience in the owner's Aquile reference, not by copying Aquile's artwork, code or branding.
+
+- **Book icon, top right:** switch between continuous scroll and book pages. Facing pages appear when there is sufficient width; narrow windows fall back to one page. Original page/sentence IDs stay unchanged. Long pages remain scrollable.
+- **Aa Appearance:** choose System, Paper, Sepia or Night, font, text size, line spacing, facing pages and whether narration pauses at page ends. Existing settings are preserved; the update does not silently switch your layout or stop-at-page preference.
+- **Focus icon:** hide the tools while keeping playback and voice provenance visible. Click the same button, or press Escape after closing any open editor/search/panel, to leave focus mode.
+- **Full-screen icon:** ask the browser to fill the screen; Escape also leaves browser full screen. If unsupported, focus mode is still available.
+- **Contents / Audiobook / Flags / Notes / AI:** open the relevant side panel. Close it with its labelled cross, Escape, or the same tool button. Audiobook studio still contains narration preparation, whole-book/chapter export, playback modes and chapter-time maps.
+- **Keyboard:** Space plays/pauses; left/right move a sentence; R replays; F flags; N flags with a note; M writes a note; G opens Contents; / finds text/pages; [ and ] change speed; Page Up/Down turn pages in page view. Native input fields, links and buttons retain their own keyboard behaviour.
+
+The percentage describes **sentence position in the book**, not elapsed audiobook time. Formatting remains the existing normalized reading text; this is not a pixel-identical EPUB renderer. Text, book IDs, prepared clips, imported audio and chapter metadata have not been migrated or regenerated. Keep the same Edge profile and `http://127.0.0.1:4173/` address for your existing library. Do not clear site data or move to an InPrivate profile to upgrade. A separate test port has a separate empty library.
+
+Candidate checks and pending visual/design review are recorded in `J:/PurpleTeam/output/sol-readaloud-reader-redesign-20261110/`. Automated tests are not evidence that Claude was consulted or that the live UI passed visual QA.
+
+### Public version
+
 The current release is **ReadAloud 0.7.3**. [Open its download page](https://github.com/rock0ne/readaloud/releases/tag/v0.7.3): download **ReadAloud-windows-0.7.3.zip** for Windows or **ReadAloud-0.7.3.apk** for Android. Capabilities and export limitations are described below rather than added to the app's filename. The Android download uses the owner's established release signature; an unsigned or development-key test APK is not a public update.
 
 GitHub Pages and public downloads provide reading, preparation, WAV export, audio import/playback, chapter navigation and older-file timing recovery. **Creating MP3/M4A/M4B is disabled in the public WAV edition** while encoder redistribution remains held. Existing compressed audio still imports and plays. Private 0.7.1 full-export packages retain their formats; you do not have to replace a working full-export installation with this restricted edition.

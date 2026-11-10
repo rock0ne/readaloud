@@ -3,6 +3,8 @@ import { App } from './ui/App';
 import './ui/styles/base.css';
 import './ui/styles/reader.css';
 import './ui/styles/mobile.css';
+import './ui/styles/reader-studio.css';
+import './ui/styles/library-studio.css';
 
 render(<App />, document.getElementById('app')!);
 
