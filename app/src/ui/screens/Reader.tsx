@@ -375,7 +375,11 @@ export function Reader({ docId }: { docId: string }) {
     setDoc(saved); setAiResults([]);
     const [f, n] = await Promise.all([repo.listFlags(saved.id), repo.listNotes(saved.id)]);
     setFlags(f); setNotes(n);
-    if (listen) void player.playReader();
+    if (listen) {
+      // On a phone return to the reader so Pause is not hidden behind the editor.
+      if (compact) setPanel(null);
+      void player.playReader();
+    }
     return saved;
   };
 
