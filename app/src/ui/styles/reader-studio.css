@@ -93,7 +93,7 @@
   .reader-focused .reader-topbar { padding-top:8px; padding-bottom:8px; }
 }
 @media (min-width:1500px) {
-  .reader-studio .reader-topbar { grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); padding-top:12px; padding-bottom:12px; }
+  .reader-studio .reader-topbar { grid-template-columns:minmax(180px,1fr) auto auto; padding-top:12px; padding-bottom:12px; }
   .reader-toolbar-tools { display:flex; grid-column:3; grid-row:1; justify-content:flex-end; align-items:center; gap:12px; min-width:0; }
   .reader-studio .reader-toolbar-tools .panel-buttons { padding:0; gap:0; }
   .reader-studio .reader-toolbar-tools .panel-buttons button { padding-left:8px; padding-right:8px; }
