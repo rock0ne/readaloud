@@ -2,12 +2,16 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { ReadingTools } from '../src/ui/components/ReadingTools';
+import { libraryProgress } from '../src/ui/components/libraryProgress';
 
 const root = document.createElement('div');
 document.body.append(root);
 afterEach(() => act(() => render(null, root)));
 
 describe('phone reading tools', () => {
+  it.each([[undefined, 4, 0], [0, 4, 25], [7, 4, 100], [-2, 4, 0], [0, 0, 0], [Infinity, 4, 0], [NaN, 4, 0]])('bounds library progress for ordinal %s and %s sentences', (ordinal, count, expected) => {
+    expect(libraryProgress(ordinal, count!)).toBe(expected);
+  });
   it('starts collapsed without removing the voice, speed or note actions', () => {
     act(() => render(<ReadingTools compact><select aria-label="Voice"><option>Emma</option></select><button>Slower</button><button>Note</button></ReadingTools>, root));
     expect(root.querySelector('details')?.open).toBe(false);

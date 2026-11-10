@@ -11,6 +11,7 @@ import { readHref } from '../routes';
 import { importTransfer } from '../../core/audio/transfer';
 import { AudioLibrary } from '../components/AudioLibrary';
 import { ReaderIcon } from '../components/ReaderChrome';
+import { libraryProgress } from '../components/libraryProgress';
 
 interface Busy {
   name: string;
@@ -227,7 +228,7 @@ export function Library() {
         <ul class="doc-list">
           {docs.map((d) => {
             const pos = positions.get(d.id);
-            const pct = pos?.ordinal !== undefined && d.sentenceCount > 0 ? Math.round(((pos.ordinal + 1) / d.sentenceCount) * 100) : 0;
+            const pct = libraryProgress(pos?.ordinal, d.sentenceCount);
             return (
               <li key={d.id} class="doc">
                 <a class="doc-main" href={readHref(d.id)}>

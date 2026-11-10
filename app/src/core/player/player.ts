@@ -211,7 +211,12 @@ export class Player {
 
   async load(doc: DocRecord, startAt?: string): Promise<void> {
     await this.halt('idle');
-    this.flushPosition();
+    // Editing has already atomically anchored this document's new revision. Do not
+    // overwrite that anchor with a sentence/ordinal from the old, possibly longer text.
+    if (this.doc?.id === doc.id && this.doc.sourceHash !== doc.sourceHash) {
+      if (this.saveTimer) clearTimeout(this.saveTimer);
+      this.saveTimer = null;
+    } else this.flushPosition();
     this.dropClips();
     this.doc = doc;
     this.index = new DocIndex(doc);

@@ -140,6 +140,17 @@ describe('direct document editing', () => {
     expect(spoken[0]).toBe('The saved draft now sounds different.'); expect(spoken.join(' ')).not.toContain('First sentence here.');
     expect(player.state.source).toBe('reader'); player.stop();
   });
+  it('does not overwrite the new draft anchor by flushing an old longer revision on player reload', async () => {
+    const { repo, original } = await fixture(); const draft = await repo.enableEditing(original.id);
+    const player = new Player({ positions: repo, registry: new EngineRegistry([]), settings: defaultSettings });
+    await player.load(draft, 'b3.s0');
+    player.flushPosition();
+    const saved = await repo.saveDraft(draft.id, 0, 'b1', 'Shortened paragraph.');
+    await player.load(saved, 'b1.s0');
+    // Flush any pending IDB transactions; the saved paragraph, not the old final sentence, wins.
+    expect(await repo.getPosition(draft.id)).toMatchObject({ sentenceId: 'b1.s0', ordinal: new DocIndex(saved).get('b1.s0')!.ordinal });
+    player.stop();
+  });
   it('removing narration keeps edits/recovery, and deleting the document cascades its recovery', async () => {
     const { repo, original } = await fixture(); const draft = await repo.enableEditing(original.id);
     const key = await audioKey('kokoro', 'bf_emma', 'First sentence here.');
