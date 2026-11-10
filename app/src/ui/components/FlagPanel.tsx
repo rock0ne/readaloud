@@ -37,9 +37,7 @@ function FlagItem({ flag, here, onSave, onDelete, onJump }: { flag: Flag; here: 
       <div class="flag-where">
         {flag.chapterTitle || `Chapter ${flag.chapterIndex + 1}`} · Paragraph {flag.paragraphInChapter}
         <span class="spacer" />
-        <button class="link" onClick={() => onJump(flag.sentenceId)} title="Go to this sentence">
-          Go to
-        </button>
+        {flag.sentenceId.startsWith('unplaced:') ? <span class="hint">Old quote — not in this revision</span> : <button class="link" onClick={() => onJump(flag.sentenceId)} title="Go to this sentence">Go to</button>}
       </div>
       <blockquote class={open ? 'quote open' : 'quote'} onClick={() => setOpen(!open)}>
         {flag.quote}

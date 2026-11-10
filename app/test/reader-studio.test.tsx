@@ -29,13 +29,13 @@ describe('quiet reader chrome', () => {
     act(() => render(<ReaderTransport playing={false} audiobook onPrevious={() => {}} onNext={() => {}} onReplay={() => {}} onToggle={() => {}} />, root));
     expect(root.querySelector('[aria-label="Read now"]')?.getAttribute('title')).toContain('no preparation required');
   });
-  it('keeps all six tools accessible and dispatches only the chosen tool', () => {
+  it('keeps all seven tools accessible and dispatches only the chosen tool', () => {
     const onPanel = vi.fn();
     act(() => render(<ReaderChrome title="A long book title" chapter="Chapter 2 · page 5" panel="toc" onPanel={onPanel}
       flags={2} notes={3} aiBusy={false} focused={false} onFocus={() => {}} fullscreen={false} onFullscreen={() => {}}
       paged={false} onLayout={() => {}} onFind={() => {}} transport={null} />, root));
     const tools = root.querySelectorAll<HTMLButtonElement>('.panel-buttons button');
-    expect(tools).toHaveLength(6);
+    expect(tools).toHaveLength(7);
     expect(tools[1]?.textContent).toBe('Audiobook');
     expect(tools[0]?.getAttribute('aria-expanded')).toBe('true');
     act(() => tools[1]!.click());

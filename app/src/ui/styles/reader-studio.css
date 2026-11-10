@@ -1,5 +1,13 @@
 /* Book-first desktop treatment. The underlying text/sentence IDs and audio are unchanged. */
 .reader-studio { background: var(--surface); color: var(--text); }
+.draft-panel { font:14px/1.6 var(--ui); padding:16px; overflow-wrap:anywhere; }
+.draft-panel h2 { margin:0 0 14px; font-size:20px; }
+.draft-panel h3 { font-size:15px; margin-top:24px; }
+.draft-text-label { display:block; margin-top:16px; font-weight:600; }
+.draft-text-label textarea { display:block; width:100%; box-sizing:border-box; margin-top:8px; min-height:180px; resize:vertical; font:15px/1.6 var(--ui); }
+.draft-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.draft-panel .hint { font-size:13px; }
+.draft-panel .check { display:flex; align-items:flex-start; gap:8px; }
 .read-range { display:flex; align-items:center; gap:6px; font:12px var(--ui); }
 .read-range > span { color:var(--muted); }
 .reader-studio .read-range select { width:auto; min-width:0; max-width:160px; font:12px var(--ui); padding:6px 22px 6px 7px; }

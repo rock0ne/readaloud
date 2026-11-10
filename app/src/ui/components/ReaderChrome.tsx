@@ -1,7 +1,7 @@
 // Original, deliberately quiet reader chrome. No third-party artwork or fonts.
 import type { ComponentChildren } from 'preact';
 
-export type ReaderPanel = 'toc' | 'flags' | 'notes' | 'ai' | 'text' | 'audiobook' | null;
+export type ReaderPanel = 'toc' | 'flags' | 'notes' | 'ai' | 'text' | 'audiobook' | 'draft' | null;
 type IconName = 'back' | 'previous' | 'next' | 'play' | 'pause' | 'replay' | 'search' | 'focus' | 'expand' | 'close' | 'book';
 
 export function ReaderIcon({ name }: { name: IconName }) {
@@ -35,6 +35,7 @@ export function ReaderTransport({ playing, audiobook = false, onPrevious, onNext
 
 export const PANEL_LABELS: Record<Exclude<ReaderPanel, null>, string> = {
   audiobook: 'Audiobook studio', toc: 'Contents', flags: 'Flags', notes: 'Notes', ai: 'AI assistant', text: 'Appearance',
+  draft: 'Edit draft',
 };
 
 export function ReaderChrome({ title, chapter, panel, onPanel, flags, notes, aiBusy, focused, onFocus, fullscreen, onFullscreen, paged, onLayout, onFind, transport, layoutPicker }: {
@@ -50,7 +51,7 @@ export function ReaderChrome({ title, chapter, panel, onPanel, flags, notes, aiB
     <div class="desktop-transport">{transport}</div>
     <div class="reader-toolbar-tools">
     <nav class="panel-buttons" aria-label="Reader tools">
-      {(['toc', 'audiobook', 'flags', 'notes', 'ai', 'text'] as const).map((p) => <button key={p} class={panel === p ? 'active' : ''} aria-expanded={panel === p} aria-controls="reader-tools-panel" onClick={() => onPanel(p)} title={p === 'ai' ? 'AI study assistant, with your own key' : PANEL_LABELS[p]}>
+      {(['toc', 'audiobook', 'draft', 'flags', 'notes', 'ai', 'text'] as const).map((p) => <button key={p} class={panel === p ? 'active' : ''} aria-expanded={panel === p} aria-controls="reader-tools-panel" onClick={() => onPanel(p)} title={p === 'ai' ? 'AI study assistant, with your own key' : PANEL_LABELS[p]}>
         {p === 'text' ? <span class="appearance-label">Aa <span>Appearance</span></span> : p === 'audiobook' ? 'Audiobook' : p === 'ai' ? `AI${aiBusy ? ' …' : ''}` : PANEL_LABELS[p]}
         {p === 'flags' && flags > 0 ? <span class="tool-count">{flags}</span> : p === 'notes' && notes > 0 ? <span class="tool-count">{notes}</span> : null}
       </button>)}

@@ -47,6 +47,17 @@ export interface DocRecord extends ParsedDocument {
   sourceHash: string;  // sha256 hex of the original bytes (duplicate detection)
   addedAt: string;     // ISO 8601
   lastOpenedAt?: string;
+  /** Local editing session on this document; never inferred from an imported file. */
+  draft?: DraftState;
+}
+
+export interface DraftEdit { blockId: string; before: string; after: string; at: string; }
+export interface DraftState {
+  sessionId?: string;
+  baseDocId: string;
+  baseSourceHash: string;
+  revision: number;
+  edits: DraftEdit[]; // Last 50 paragraph edits, newest last. Original remains a separate book.
 }
 
 // ===== Voices =====

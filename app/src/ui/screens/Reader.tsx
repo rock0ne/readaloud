@@ -23,6 +23,7 @@ import { ReadRangePicker, ReadRangeNotice } from '../components/ReadRange';
 import { FindBar } from '../components/FindBar';
 import { PreparedModeNotice } from '../components/PlaybackMode';
 import { AudiobookPanel } from '../components/AudiobookPanel';
+import { DraftPanel } from '../components/DraftPanel';
 import type { CiteHelpers } from '../components/Reply';
 import { useAiJob } from '../hooks/useAiJob';
 import { KokoroDownload } from '../components/KokoroDownload';
@@ -83,6 +84,10 @@ export function Reader({ docId }: { docId: string }) {
   const [returnTo, setReturnTo] = useState<string | null>(null);
   const [finding, setFinding] = useState(false);
   const [modeBusy, setModeBusy] = useState(false);
+  const draftDirty = useRef(false);
+  const onDraftDirty = useCallback((dirty: boolean) => { draftDirty.current = dirty; }, []);
+  const leaveDraft = () => !draftDirty.current || confirm('Discard the unsaved paragraph edit?');
+  const closePanel = () => { if (leaveDraft()) setPanel(null); };
   const [paneWidth, setPaneWidth] = useState(0);
   const [voices, setVoices] = useState<Voice[]>([]);
   const [auto, setAuto] = useState<Pick | null | undefined>(undefined);
@@ -342,6 +347,37 @@ export function Reader({ docId }: { docId: string }) {
     } finally { setModeBusy(false); }
   };
 
+  const createWorkingDraft = async () => {
+    if (!doc) return;
+    player.pause(); await player.settled;
+    const d = await repo.enableEditing(doc.id);
+    await player.load(d, current?.sentence.id);
+    setDoc(d);
+  };
+  const restoreImportedDocument = async () => {
+    if (!doc?.draft) return;
+    if (ai.job) throw new Error('Stop the active AI request before restoring this document.');
+    player.pause(); await player.settled;
+    const restored = await repo.restoreOriginalDocument(doc.id, doc.draft.revision, doc.sourceHash);
+    await player.load(restored);
+    setDoc(restored); setAiResults([]);
+    const [f, n] = await Promise.all([repo.listFlags(restored.id), repo.listNotes(restored.id)]);
+    setFlags(f); setNotes(n);
+  };
+  const saveWorkingDraft = async (blockId: string, text: string, undo: boolean, listen: boolean) => {
+    if (!doc?.draft) throw new Error('Enable editing this document first.');
+    if (ai.job) throw new Error('Stop the active AI request before editing this draft.');
+    player.pause(); await player.settled;
+    const saved = await repo.saveDraft(doc.id, doc.draft.revision, blockId, text, undo, doc.sourceHash);
+    const targetId = undo ? doc.draft.edits.at(-1)?.blockId : blockId;
+    await player.load(saved, saved.blocks.find((b) => b.id === targetId)?.sentences[0]?.id);
+    setDoc(saved); setAiResults([]);
+    const [f, n] = await Promise.all([repo.listFlags(saved.id), repo.listNotes(saved.id)]);
+    setFlags(f); setNotes(n);
+    if (listen) void player.playReader();
+    return saved;
+  };
+
   useKeys({
     Space: () => void player.toggleReader(),
     ArrowLeft: () => player.prev(),
@@ -352,10 +388,10 @@ export function Reader({ docId }: { docId: string }) {
     '[': () => setRate(view.rate - 0.1),
     ']': () => setRate(view.rate + 0.1),
     m: () => writeNote(),
-    g: () => { setFocused(false); setPanel('toc'); },
+    g: () => { if (leaveDraft()) { setFocused(false); setPanel('toc'); } },
     '/': () => setFinding(true),
     ...(paged ? { PageDown: () => turn(1), PageUp: () => turn(-1) } : {}),
-    Escape: () => (editing ? setEditing(null) : noteFor ? setNoteFor(null) : finding ? setFinding(false) : panel ? setPanel(null) : setFocused(false)),
+    Escape: () => (editing ? setEditing(null) : noteFor ? setNoteFor(null) : finding ? setFinding(false) : panel ? closePanel() : setFocused(false)),
   });
 
   if (doc === undefined) return <main class="boot">Opening…</main>;
@@ -388,7 +424,11 @@ export function Reader({ docId }: { docId: string }) {
             : 'Looking for voices…';
   const page = view.currentId ? pages.ofSentence(view.currentId) : undefined;
   const chapterLine = [index.chapter(chapterIndex)?.title ?? '', page ? `page ${page.label}` : ''].filter(Boolean).join(' · ');
-  const toggle = (p: Exclude<Panel, null>) => setPanel(panel === p ? null : p);
+  const toggle = (p: Exclude<Panel, null>) => {
+    if (!leaveDraft()) return;
+    if (p === 'draft') player.pause();
+    setPanel(panel === p ? null : p);
+  };
   const ordinal = view.currentId ? index.get(view.currentId)?.ordinal ?? 0 : 0;
   const progress = index.order.length > 1 ? ordinal / (index.order.length - 1) * 100 : view.status === 'ended' ? 100 : 0;
   const transport = () => <ReaderTransport playing={playing} audiobook={view.source === 'audiobook'} onPrevious={() => player.prev()} onNext={() => player.next()} onToggle={() => void player.toggleReader()} onReplay={() => player.replay()}
@@ -400,7 +440,7 @@ export function Reader({ docId }: { docId: string }) {
     <main ref={readerRoot} data-reading-tone={settings.readerTone} class={`reader reader-studio${panel ? ' with-panel' : ''}${paged ? ' paged' : ''}${focused ? ' reader-focused' : ''}`}>
       <ReaderChrome title={doc.title} chapter={chapterLine} panel={panel} onPanel={toggle}
         flags={flags.filter((f) => f.status === 'open').length} notes={notes.length} aiBusy={!!ai.job}
-        focused={focused} onFocus={() => { setFocused(!focused); setPanel(null); }} fullscreen={fullscreen}
+        focused={focused} onFocus={() => { if (leaveDraft()) { setFocused(!focused); setPanel(null); } }} fullscreen={fullscreen}
         onFullscreen={() => void toggleFullscreen()} paged={paged}
         onLayout={() => {
           void services.updateSettings({ layout: paged ? 'scroll' : 'pages' });
@@ -446,8 +486,9 @@ export function Reader({ docId }: { docId: string }) {
         </TextPane>
         {panel && (
           <aside class="side-panel" id="reader-tools-panel" aria-label={PANEL_LABELS[panel]}>
-            <div class="reader-panel-heading"><span>{PANEL_LABELS[panel]}</span><button class="icon-button" onClick={() => setPanel(null)} aria-label="Close reader tools"><ReaderIcon name="close" /></button></div>
-            {panel === 'audiobook' ? <AudiobookPanel key={doc.id} doc={doc} /> : panel === 'toc' ? (
+            <div class="reader-panel-heading"><span>{PANEL_LABELS[panel]}</span><button class="icon-button" onClick={closePanel} aria-label="Close reader tools"><ReaderIcon name="close" /></button></div>
+            {panel === 'draft' ? <DraftPanel key={`${doc.id}:${!!doc.draft}`} doc={doc} currentBlockId={current?.block.id}
+              onCreate={createWorkingDraft} onSave={saveWorkingDraft} onRestore={restoreImportedDocument} onDirty={onDraftDirty} /> : panel === 'audiobook' ? <AudiobookPanel key={`${doc.id}:${doc.sourceHash}`} doc={doc} /> : panel === 'toc' ? (
               <TocPanel doc={doc} currentChapter={chapterIndex} onGo={go} />
             ) : panel === 'flags' ? (
               <FlagPanel doc={doc} index={index} flags={flags} currentId={view.currentId} onSave={saveFlag} onDelete={deleteFlag} onJump={(id) => jump(id, false)} />

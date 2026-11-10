@@ -4,9 +4,22 @@ Read, listen, proofread and prepare audiobooks on Windows and Android. Import do
 
 ## Version and availability
 
-### Local reader candidate: 0.8.2
+### Local reader candidate: 0.8.3
 
-The `codex/readaloud-reader-redesign` branch contains the **private 0.8.2 candidate** for Windows and Android, not a new public release. The public downloads below remain 0.7.3. This candidate retains the private full-export build; encoder redistribution is still held. No GitHub push, release or Pages deployment is part of this task. A new Android release APK must be signed locally by its owner before installing it as an update.
+The `codex/readaloud-reader-redesign` branch contains the **private 0.8.3 candidate** for Windows and Android, not a new public release. The public downloads below remain 0.7.3. This candidate retains the private full-export build; encoder redistribution is still held. No GitHub push, release or Pages deployment is part of this task. A new Android release APK must be signed locally by its owner before installing it as an update.
+
+**Edit your draft while listening (0.8.3):**
+
+1. In the main reader, click a sentence in the paragraph you want to change, then **Edit draft**.
+2. Confirm you own the text or have permission, then **Enable editing this document**. You stay in the same document and library entry; no duplicate book is created. ReadAloud keeps the original import in a hidden recovery record. No DRM is removed.
+3. Edit the paragraph in the box. To move to another paragraph, click its sentence in the book and choose **Edit selected paragraph**. Seeking does not discard unsaved text.
+4. **Save changes** edits the document stored in ReadAloud directly. **Save & listen from here** saves and starts live reading from that paragraph onward with the selected voice. Pause or choose a page/chapter scope normally. No full-book preparation is required. The EPUB/Word file on disk is not silently overwritten.
+5. **Undo last saved edit** restores the last paragraph change; the last 50 saved edits are available, including after reopening the app. **Discard unsaved edit** leaves saved text unchanged. **Restore original imported document** restores the whole pre-edit import after confirmation, including its original stored bytes/format; export the edited text first if you want to keep it. Conflicting saves/restores from another window are rejected, not silently overwritten; retain the unsaved text and reopen the latest document.
+6. **Export edited TXT / Export edited Markdown** saves the current revised reading text outside the app. Save pending edits first. These exports are not a rebuilt EPUB, Word or publishing master: original images, layout and complete metadata are not preserved. The settings/notes backup is not a draft-text backup. Keep the original manuscript and export your edits regularly.
+
+Editing is plain text, one existing paragraph, heading, code or list block at a time. Internally the revised reading source is normalized Markdown; this does not rewrite the original EPUB/Word container. Line breaks do not create separate blocks; empty-block deletion and full document layout/structure editing are not supported. Editing a heading updates its existing Contents/chapter label, not the library book title. Existing note/flag identities stay with this document. Unmatched old annotation quotes remain marked unplaced rather than attaching to different words. Saved AI answers for a changed document are cleared; stop any active AI request before saving. The feature never starts an AI request or uploads a manuscript itself.
+
+**Narration after edits:** changed spoken text has a different content/voice key, so old words cannot be played for the revised passage. Unchanged prepared clips remain on the same document and are reused without copying a large audiobook. Audiobook studio rechecks completeness and **Prepare** generates only missing clips. Existing downloaded WAV/MP3/M4A/M4B files remain unchanged; re-export to include revisions. Transferring a prepared document includes its current reading text/audio, not its local revision history or recovery source. Reader and Audiobook remain independent. Deleting a library document also deletes its local recovery record; export needed text first.
 
 **Continuous listening and explicit scopes (0.8.2):** use **Read** beside the main Play button to choose **Whole book**, **This chapter only** or **This page only**. Whole book is the default and continues from your current position across pages and chapters, in scroll, single-page and twin-page layouts. Page/chapter selection pauses current playback, moves to that part's beginning, and waits for Play; it stops at the chosen boundary. Play then repeats that selected part; **Continue whole book** continues onward after the boundary. Selecting a scope never prepares a full audiobook or changes the visual layout. On phones the same picker sits with the bottom playback controls.
 

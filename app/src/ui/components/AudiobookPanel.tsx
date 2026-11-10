@@ -38,7 +38,7 @@ export function AudiobookPanel({ doc }: { doc: DocRecord }) {
       .then((whole) => { if (current) setRecord(whole); })
       .catch((e: unknown) => { if (current) setError(String(e)); });
     return () => { current = false; };
-  }, [doc.id, voiceId, settings.skipCodeBlocks, settings.announceHeadings,
+  }, [doc.id, doc.sourceHash, voiceId, settings.skipCodeBlocks, settings.announceHeadings,
     settings.pronunciation, settings.locale,
     settings.pauseAfterHeadingMs, settings.pauseBetweenParagraphsMs, settings.pauseBetweenSentencesMs, player, repo]);
   useEffect(() => {
@@ -48,7 +48,7 @@ export function AudiobookPanel({ doc }: { doc: DocRecord }) {
       .then((selected) => { if (current) setChapterRecord(selected); })
       .catch((e: unknown) => { if (current) setError(String(e)); });
     return () => { current = false; };
-  }, [doc.id, voiceId, chapter, settings.skipCodeBlocks, settings.announceHeadings,
+  }, [doc.id, doc.sourceHash, voiceId, chapter, settings.skipCodeBlocks, settings.announceHeadings,
     settings.pronunciation, settings.locale,
     settings.pauseAfterHeadingMs, settings.pauseBetweenParagraphsMs, settings.pauseBetweenSentencesMs, player, repo]);
 
