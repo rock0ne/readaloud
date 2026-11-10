@@ -4,9 +4,13 @@ Read, listen, proofread and prepare audiobooks on Windows and Android. Import do
 
 ## Version and availability
 
-### Local reader candidate: 0.8.3
+### Local reader candidate: 0.8.4
 
-The `codex/readaloud-reader-redesign` branch contains the **private 0.8.3 candidate** for Windows and Android, not a new public release. The public downloads below remain 0.7.3. This candidate retains the private full-export build; encoder redistribution is still held. No GitHub push, release or Pages deployment is part of this task. A new Android release APK must be signed locally by its owner before installing it as an update.
+The `codex/readaloud-reader-redesign` branch contains the **private 0.8.4 Android parity candidate**, built on the Windows 0.8.3 direct-editing reader, not a new public release. The public downloads below remain 0.7.3. This candidate retains the private full-export build; encoder redistribution is still held. No GitHub push, release or Pages deployment is part of this task. A new Android release APK must be signed locally by its owner before installing it as an update.
+
+**Phone reader (0.8.4):** books come first in the library. The reader shares Windows' quiet toolbar, Paper/Sepia/Night tones, Contents, Audiobook studio, Edit draft, Flags, Notes and AI. Swipe the top tools row sideways if a tool is off-screen. Bottom Play reads live without prior preparation; **Read** selects whole book, chapter or page independently of the visual layout. Expand **Voice, speed & notes** for those controls; Flag and the current voice/status remain visible. Two-page spreads are retained as a preference but fall back to one readable page on narrow screens.
+
+Android now keeps the app inside system bars, cutouts and the on-screen keyboard. The draft editor temporarily uses the playback dock's space so editing actions remain reachable. Export edited TXT/Markdown, notes or JSON through Android's normal **Save** dialog: pick a location and confirm Save, or cancel without changing the document. No all-files storage permission is required. Editing still changes this app's document, not the original EPUB/Word file outside the app. Undo and original-import recovery remain available. Full usage is below; no book/audio re-import or new narration preparation is required for this UI update. Existing audio exports do not gain later text edits automatically.
 
 **Edit your draft while listening (0.8.3):**
 

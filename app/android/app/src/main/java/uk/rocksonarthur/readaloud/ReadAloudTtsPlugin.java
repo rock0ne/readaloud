@@ -171,6 +171,35 @@ public class ReadAloudTtsPlugin extends Plugin {
         });
     }
 
+    /** Text exports use the same user-picked destination, without WebView blob downloads. */
+    @PluginMethod
+    public void saveTextExport(PluginCall call) {
+        worker.execute(() -> {
+            File file = null;
+            try {
+                String text = call.getString("text");
+                String mime = call.getString("mime", "text/plain");
+                if (text == null || text.length() > 16 * 1024 * 1024) throw new IOException("Text export exceeds 16 MiB");
+                if (!mime.equals("text/plain") && !mime.equals("text/markdown") && !mime.equals("application/json"))
+                    throw new IOException("Unsupported text format");
+                byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
+                if (bytes.length > 16 * 1024 * 1024) throw new IOException("Text export exceeds 16 MiB");
+                String token = UUID.randomUUID().toString();
+                file = exportFile(token);
+                try (OutputStream out = new FileOutputStream(file)) { out.write(bytes); }
+                call.getData().put("token", token);
+                String name = call.getString("name", "readaloud.txt").replaceAll("[\\\\/:*?\"<>|]", "_");
+                Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+                    .setType(mime).putExtra(Intent.EXTRA_TITLE, name);
+                File staged = file;
+                getActivity().runOnUiThread(() -> {
+                    try { startActivityForResult(call, intent, "audioExportSelected"); }
+                    catch (Throwable e) { staged.delete(); call.reject("Could not open Save dialog: " + e.getMessage()); }
+                });
+            } catch (Throwable e) { if (file != null) file.delete(); call.reject(e.getMessage()); }
+        });
+    }
+
     @PluginMethod
     public void appendAudioExport(PluginCall call) {
         worker.execute(() -> {
@@ -214,7 +243,7 @@ public class ReadAloudTtsPlugin extends Plugin {
                 file = exportFile(call.getString("token"));
                 Intent data = result.getData();
                 if (result.getResultCode() != Activity.RESULT_OK || data == null || data.getData() == null) {
-                    call.reject("Saving the audio was cancelled"); return;
+                    call.reject("Saving the file was cancelled"); return;
                 }
                 try (InputStream in = new FileInputStream(file);
                      OutputStream out = getContext().getContentResolver().openOutputStream(data.getData(), "w")) {
@@ -223,7 +252,7 @@ public class ReadAloudTtsPlugin extends Plugin {
                     while ((n = in.read(buf)) != -1) out.write(buf, 0, n);
                 }
                 call.resolve();
-            } catch (Throwable e) { call.reject("Could not save audio: " + e.getMessage()); }
+            } catch (Throwable e) { call.reject("Could not save file: " + e.getMessage()); }
             finally { if (file != null) file.delete(); if (call.getString("token") != null) { exportSizes.remove(call.getString("token")); exportLimits.remove(call.getString("token")); } }
         });
     }

@@ -30,4 +30,5 @@
  .library-studio .doc-main { padding:14px; gap:12px; }
  .library-studio .doc-title { font-size:14px; }
  .library-studio .doc-actions { padding:0 10px 10px; }
+ .library-studio .bar > button, .library-studio .bar > a, .library-studio .doc-actions button { min-height:44px; }
 }

@@ -24,6 +24,7 @@ import { FindBar } from '../components/FindBar';
 import { PreparedModeNotice } from '../components/PlaybackMode';
 import { AudiobookPanel } from '../components/AudiobookPanel';
 import { DraftPanel } from '../components/DraftPanel';
+import { ReadingTools } from '../components/ReadingTools';
 import type { CiteHelpers } from '../components/Reply';
 import { useAiJob } from '../hooks/useAiJob';
 import { KokoroDownload } from '../components/KokoroDownload';
@@ -433,6 +434,10 @@ export function Reader({ docId }: { docId: string }) {
   const progress = index.order.length > 1 ? ordinal / (index.order.length - 1) * 100 : view.status === 'ended' ? 100 : 0;
   const transport = () => <ReaderTransport playing={playing} audiobook={view.source === 'audiobook'} onPrevious={() => player.prev()} onNext={() => player.next()} onToggle={() => void player.toggleReader()} onReplay={() => player.replay()}
     rangePicker={<ReadRangePicker value={view.readerRange} onChange={(kind) => void selectReadRange(kind)} />} />;
+  const voiceStatus = () => <div class="status" aria-live="polite" title={status}>
+    {status}
+    {view.rate > 2 && player.currentVoice?.engineId === 'webspeech' ? ' · capped at 2.0× for browser voices' : ''}
+  </div>;
   const editingAt = editing ? index.get(editing.sentenceId) : undefined;
   const placeOf = (chapter: number, title: string, paragraph: number) => `${title || `Chapter ${chapter + 1}`} · Paragraph ${paragraph}`;
 
@@ -578,6 +583,8 @@ export function Reader({ docId }: { docId: string }) {
       {finding && <FindBar index={index} pages={pages} currentId={view.currentId} onGo={(id) => jump(id, false)} onClose={() => setFinding(false)} />}
       <footer class="controls" aria-label="Playback">
         {compact ? transport() : null}
+        {compact ? voiceStatus() : null}
+        <ReadingTools compact={compact}>
         <div class="speed" aria-label="Speed">
           <button onClick={() => setRate(view.rate - 0.1)} disabled={view.rate <= RATE_MIN} aria-label="Slower" title="Slower ([)">
             −
@@ -593,16 +600,14 @@ export function Reader({ docId }: { docId: string }) {
           value={player.currentVoice ? { engineId: player.currentVoice.engineId, voiceId: player.currentVoice.id } : null}
           onPick={(e, v) => void pickVoice(e, v)}
         />
-        <div class="status" aria-live="polite">
-          {status}
-          {view.rate > 2 && player.currentVoice?.engineId === 'webspeech' ? ' · capped at 2.0× for browser voices' : ''}
-        </div>
+        {compact ? null : voiceStatus()}
         <button class="jot" onClick={writeNote} title="Write a note on this sentence (M)">
           ✎ Note
         </button>
         <button class="note" onClick={() => void flagCurrent(true)} title="Flag with a note about the mistake (N)">
           Flag + note
         </button>
+        </ReadingTools>
         <button class="flag-btn" onClick={() => void flagCurrent(false)} title="Flag this sentence (F)">
           Flag
         </button>
