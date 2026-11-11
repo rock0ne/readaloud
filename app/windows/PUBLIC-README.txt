@@ -11,6 +11,11 @@ ReadAloud for Windows
 This edition reads documents, prepares local narration, exports WAV with chapters,
 plays existing WAV/MP3/M4A/M4B and other device-supported audio, imports chapter
 timing JSON and supports text-linked book transfers, notes and proofreading.
+The quiet reader has Paper/Sepia/Night tones and optional two-page spreads.
+Reader Play reads live; Audiobook playback uses prepared audio only. Choose
+Read whole book, this chapter or this page separately from the visual layout.
+Edit draft changes this app's document with Undo/original-import recovery;
+it does not overwrite your original EPUB/Word file. Export revised TXT/Markdown.
 It does NOT create MP3/M4A/M4B: their added software encoders are excluded while
 redistribution requirements remain unresolved. They are not fetched at runtime.
 
