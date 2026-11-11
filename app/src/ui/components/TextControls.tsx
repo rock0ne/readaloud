@@ -2,6 +2,7 @@
 // reader's Aa panel. System fonts only, so nothing is downloaded.
 import type { ReaderFont, Settings } from '../../core/types';
 import { useServices, useSettings } from '../services';
+import { ReadingLayoutPicker, readingLayout, layoutSettings } from './ReadingLayout';
 
 export const READER_FONTS: Record<ReaderFont, { label: string; stack: string }> = {
   serif: { label: 'Book (serif)', stack: 'var(--serif)' },
@@ -16,28 +17,21 @@ export function TextControls() {
   const update = (p: Partial<Settings>) => void services.updateSettings(p);
   return (
     <>
-      <div class="field" role="radiogroup" aria-label="Layout">
-        Layout
-        <label class="check">
-          <input type="radio" name="reader-layout" checked={s.layout === 'scroll'} onChange={() => update({ layout: 'scroll' })} />
-          One long scroll: the reading flows on, for listening
-        </label>
-        <label class="check">
-          <input type="radio" name="reader-layout" checked={s.layout === 'pages'} onChange={() => update({ layout: 'pages' })} />
-          Page by page, for study
-        </label>
-        {s.layout === 'pages' && (
-          <>
-            <label class="check">
-              <input type="checkbox" checked={s.twoPages} onChange={(e) => update({ twoPages: e.currentTarget.checked })} />
-              Two pages side by side when the screen is wide enough
-            </label>
-            <label class="check">
-              <input type="checkbox" checked={s.stopAtPageEnd} onChange={(e) => update({ stopAtPageEnd: e.currentTarget.checked })} />
-              Stop reading at the end of each page
-            </label>
-          </>
-        )}
+      <fieldset class="reader-tone-picker">
+        <legend>Reading colour</legend>
+        {(['system', 'paper', 'sepia', 'night'] as const).map((tone) => <label class={`tone-swatch tone-${tone}`} key={tone}>
+          <input type="radio" name="reader-tone" checked={s.readerTone === tone} onChange={() => update({ readerTone: tone })} />
+          <span>Aa</span><small>{tone === 'system' ? 'System' : tone === 'paper' ? 'Paper' : tone === 'sepia' ? 'Sepia' : 'Night'}</small>
+        </label>)}
+      </fieldset>
+      <div class="field">
+        <span>Reading layout</span>
+        <ReadingLayoutPicker value={readingLayout(s)} onChange={(choice) => update(layoutSettings(choice))} />
+        <p class="hint">Two-page spread shows consecutive pages, so you can read ahead while listening. Narrow screens use one page without forgetting your choice.</p>
+      </div>
+      <div class="field">
+        <span>Listening scope</span>
+        <p class="hint">Use Read beside the main Play button to choose Whole book, This chapter only or This page only. Whole book reads continuously across pages and chapters in every visual layout. Selecting a page/chapter starts at its beginning when you press Play.</p>
       </div>
       <label class="field">
         Font

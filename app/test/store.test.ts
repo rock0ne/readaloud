@@ -63,7 +63,7 @@ describe('U9 store', () => {
     const desk = await fresh(false);
     const s = await desk.getSettings();
     expect(s.enginePreference).toEqual(['kokoro', 'webspeech']);
-    expect(s.schemaVersion).toBe(4);
+    expect(s.schemaVersion).toBe(5);
     expect(s.ai).toEqual({ provider: null, models: {} });
     expect(s.pauseOnFlag).toBe(false);
     desk.close();
@@ -85,7 +85,7 @@ describe('U9 store', () => {
     } as unknown as Settings;
     await r.saveSettings(v1);
     const s = await r.getSettings();
-    expect(s.schemaVersion).toBe(4);
+    expect(s.schemaVersion).toBe(5);
     expect(s.ai).toEqual({ provider: null, models: {} });
     expect(s.enginePreference).toEqual(['kokoro', 'webspeech']);
     expect(s.voiceByEngine).toEqual({ webspeech: 'Microsoft Sonia Online (Natural)' });
@@ -98,12 +98,12 @@ describe('U9 store', () => {
     const { readerFont: _f, lineSpacing: _l, layout: _y, twoPages: _t, stopAtPageEnd: _p, ...v3 } = await r.getSettings();
     await r.saveSettings({ ...v3, schemaVersion: 3, fontSizePx: 22, rate: 1.4 } as unknown as Settings);
     expect(await r.getSettings()).toMatchObject({
-      schemaVersion: 4,
+      schemaVersion: 5,
       readerFont: 'serif',
       lineSpacing: 1.7,
       layout: 'scroll',
       twoPages: true,
-      stopAtPageEnd: true,
+      stopAtPageEnd: false,
       fontSizePx: 22,
       rate: 1.4,
     });

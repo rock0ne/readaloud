@@ -7,6 +7,7 @@ export interface ReadAloudSchema extends DBSchema {
   docs: { key: string; value: DocRecord; indexes: { bySourceHash: string } };
   summaries: { key: string; value: DocSummary };
   sources: { key: string; value: { docId: string; bytes: ArrayBuffer } };
+  documentRecovery: { key: string; value: { docId: string; doc: DocRecord; bytes: ArrayBuffer } };
   positions: { key: string; value: PositionRecord };
   flags: { key: string; value: Flag; indexes: { byDoc: string } };
   audio: { key: string; value: AudioCacheRecord; indexes: { byLastUsed: number } };
@@ -20,7 +21,7 @@ export interface ReadAloudSchema extends DBSchema {
 }
 
 export const DB_NAME = 'readaloud';
-export const DB_VERSION = 3;
+export const DB_VERSION = 4;
 
 export type ReadAloudDb = IDBPDatabase<ReadAloudSchema>;
 
@@ -56,6 +57,7 @@ export function openReadAloudDb(name = DB_NAME): Promise<ReadAloudDb> {
         db.createObjectStore('narrations', { keyPath: 'key' }).createIndex('byDoc', 'docId');
         db.createObjectStore('narrationAudio', { keyPath: 'key' }).createIndex('byDoc', 'docId');
       }
+      if (oldVersion < 4) db.createObjectStore('documentRecovery', { keyPath: 'docId' });
     },
   });
   return opening;

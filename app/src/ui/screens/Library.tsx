@@ -10,6 +10,8 @@ import { downloadText, navigate, toast, useServices, useSettings } from '../serv
 import { readHref } from '../routes';
 import { importTransfer } from '../../core/audio/transfer';
 import { AudioLibrary } from '../components/AudioLibrary';
+import { ReaderIcon } from '../components/ReaderChrome';
+import { libraryProgress } from '../components/libraryProgress';
 
 interface Busy {
   name: string;
@@ -44,7 +46,7 @@ export function Library() {
       setBusy({ name: file.name, done: 0, total: 0 });
       try {
         const result = await importTransfer(file, repo);
-        await updateSettings({ ...result.reading, preparedAudioOnly: true, layout: 'scroll', stopAtPageEnd: false,
+        await updateSettings({ ...result.reading,
           voiceByEngine: { ...settings.voiceByEngine, kokoro: result.voiceId } });
         id = result.docId;
         toast(`Imported ${result.clips} saved passages. No speech generation needed.`);
@@ -148,7 +150,7 @@ export function Library() {
 
   return (
     <main
-      class={`library${dragging ? ' dragging' : ''}`}
+      class={`library library-studio${dragging ? ' dragging' : ''}`}
       onDragOver={(e) => {
         e.preventDefault();
         setDragging(true);
@@ -164,7 +166,7 @@ export function Library() {
       }}
     >
       <header class="bar">
-        <h1>ReadAloud {__APP_VERSION__}</h1>
+        <h1 class="library-brand"><ReaderIcon name="book" /> ReadAloud <span>{__APP_VERSION__}</span></h1>
         <div class="spacer" />
         <button class="primary" onClick={() => input.current?.click()} disabled={busy !== null}>
           Add files
@@ -214,7 +216,7 @@ export function Library() {
       )}
 
       {transferError && <p role="alert">{transferError}</p>}
-      <AudioLibrary />
+      <section class="library-intro"><div class="reader-eyebrow">READ · LISTEN · MAKE IT YOURS</div><h2>Your library</h2><p>Pick up where you left off. A quieter place for books, listening and ideas.</p></section>
 
       {docs === null ? null : docs.length === 0 ? (
         <section class="empty">
@@ -226,14 +228,17 @@ export function Library() {
         <ul class="doc-list">
           {docs.map((d) => {
             const pos = positions.get(d.id);
-            const pct = pos?.ordinal !== undefined && d.sentenceCount > 0 ? Math.round(((pos.ordinal + 1) / d.sentenceCount) * 100) : 0;
+            const pct = libraryProgress(pos?.ordinal, d.sentenceCount);
             return (
               <li key={d.id} class="doc">
                 <a class="doc-main" href={readHref(d.id)}>
+                  <span class={`book-spine book-spine-${d.format}`} aria-hidden="true"><ReaderIcon name="book" /><span>{d.format}</span></span>
+                  <span class="book-details">
                   <span class="doc-title">{d.title}</span>
                   <span class="doc-meta">
                     <span class={`badge badge-${d.format}`}>{d.format}</span>
                     {pct}% · opened {when(d.lastOpenedAt)}
+                  </span>
                   </span>
                   <span class="progress" style={{ '--pct': `${pct}%` }} />
                 </a>
@@ -253,6 +258,8 @@ export function Library() {
           })}
         </ul>
       )}
+
+      <AudioLibrary />
 
       <footer class="bar footer">
         <DataTransfer onImported={refresh} />

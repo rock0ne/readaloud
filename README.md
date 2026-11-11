@@ -4,11 +4,57 @@ Read, listen, proofread and prepare audiobooks on Windows and Android. Import do
 
 ## Version and availability
 
-The current release is **ReadAloud 0.7.3**. [Open its download page](https://github.com/rock0ne/readaloud/releases/tag/v0.7.3): download **ReadAloud-windows-0.7.3.zip** for Windows or **ReadAloud-0.7.3.apk** for Android. Capabilities and export limitations are described below rather than added to the app's filename. The Android download uses the owner's established release signature; an unsigned or development-key test APK is not a public update.
+### ReadAloud 0.8.4
+
+**[Download ReadAloud 0.8.4](https://github.com/rock0ne/readaloud/releases/tag/v0.8.4)** — choose **ReadAloud-windows-0.8.4.zip** for Windows or the signed **ReadAloud-0.8.4.apk** for Android. Downloadable apps are under **Releases**, not GitHub's Source code ZIP. The downloads include local voices and the complete user guide. Check the supplied SHA256 before installing.
+
+This release brings the quiet reader redesign to both platforms: Paper/Sepia/Night tones, optional two-page reading, independent live Reader and saved Audiobook playback, explicit book/chapter/page listening scopes, and draft editing with Undo. Android adds reachable compact controls, keyboard/system-bar handling and a native text-export Save dialog. **The public downloads export WAV; they do not create MP3/M4A/M4B.** Existing compressed audio still imports and plays when supported by the device. Private full-export users should keep their working copy if they need those held encoders.
+
+**Phone reader (0.8.4):** books come first in the library. The reader shares Windows' quiet toolbar, Paper/Sepia/Night tones, Contents, Audiobook studio, Edit draft, Flags, Notes and AI. Swipe the top tools row sideways if a tool is off-screen. Bottom Play reads live without prior preparation; **Read** selects whole book, chapter or page independently of the visual layout. Expand **Voice, speed & notes** for those controls; Flag and the current voice/status remain visible. Two-page spreads are retained as a preference but fall back to one readable page on narrow screens.
+
+Android now keeps the app inside system bars, cutouts and the on-screen keyboard. The draft editor temporarily uses the playback dock's space so editing actions remain reachable; **Save & listen from here** closes the phone editor and returns to the reader with Pause available. Export edited TXT/Markdown, notes or JSON through Android's normal **Save** dialog: pick a location and confirm Save, or cancel without changing the document. No all-files storage permission is required. Editing still changes this app's document, not the original EPUB/Word file outside the app. Undo and original-import recovery remain available. Full usage is below; no book/audio re-import or new narration preparation is required for this UI update. Existing audio exports do not gain later text edits automatically.
+
+**Edit your draft while listening (0.8.3):**
+
+1. In the main reader, click a sentence in the paragraph you want to change, then **Edit draft**.
+2. Confirm you own the text or have permission, then **Enable editing this document**. You stay in the same document and library entry; no duplicate book is created. ReadAloud keeps the original import in a hidden recovery record. No DRM is removed.
+3. Edit the paragraph in the box. To move to another paragraph, click its sentence in the book and choose **Edit selected paragraph**. Seeking does not discard unsaved text.
+4. **Save changes** edits the document stored in ReadAloud directly. **Save & listen from here** saves and starts live reading from that paragraph onward with the selected voice. Pause or choose a page/chapter scope normally. No full-book preparation is required. The EPUB/Word file on disk is not silently overwritten.
+5. **Undo last saved edit** restores the last paragraph change; the last 50 saved edits are available, including after reopening the app. **Discard unsaved edit** leaves saved text unchanged. **Restore original imported document** restores the whole pre-edit import after confirmation, including its original stored bytes/format; export the edited text first if you want to keep it. Conflicting saves/restores from another window are rejected, not silently overwritten; retain the unsaved text and reopen the latest document.
+6. **Export edited TXT / Export edited Markdown** saves the current revised reading text outside the app. Save pending edits first. These exports are not a rebuilt EPUB, Word or publishing master: original images, layout and complete metadata are not preserved. The settings/notes backup is not a draft-text backup. Keep the original manuscript and export your edits regularly.
+
+Editing is plain text, one existing paragraph, heading, code or list block at a time. Internally the revised reading source is normalized Markdown; this does not rewrite the original EPUB/Word container. Line breaks do not create separate blocks; empty-block deletion and full document layout/structure editing are not supported. Editing a heading updates its existing Contents/chapter label, not the library book title. Existing note/flag identities stay with this document. Unmatched old annotation quotes remain marked unplaced rather than attaching to different words. Saved AI answers for a changed document are cleared; stop any active AI request before saving. The feature never starts an AI request or uploads a manuscript itself.
+
+**Narration after edits:** changed spoken text has a different content/voice key, so old words cannot be played for the revised passage. Unchanged prepared clips remain on the same document and are reused without copying a large audiobook. Audiobook studio rechecks completeness and **Prepare** generates only missing clips. Existing downloaded WAV/MP3/M4A/M4B files remain unchanged; re-export to include revisions. Transferring a prepared document includes its current reading text/audio, not its local revision history or recovery source. Reader and Audiobook remain independent. Deleting a library document also deletes its local recovery record; export needed text first.
+
+**Continuous listening and explicit scopes (0.8.2):** use **Read** beside the main Play button to choose **Whole book**, **This chapter only** or **This page only**. Whole book is the default and continues from your current position across pages and chapters, in scroll, single-page and twin-page layouts. Page/chapter selection pauses current playback, moves to that part's beginning, and waits for Play; it stops at the chosen boundary. Play then repeats that selected part; **Continue whole book** continues onward after the boundary. Selecting a scope never prepares a full audiobook or changes the visual layout. On phones the same picker sits with the bottom playback controls.
+
+Older versions defaulted to stopping at page ends, which interrupted normal listening. The settings upgrade resets that legacy switch; explicit page/chapter scopes replace it. No library, position, voice, colour, pronunciation, prepared recording or export is deleted or regenerated.
+
+**Reader and Audiobook are independent.** Reader **Play** / Space reads immediately with the selected voice and may generate missing speech; it can reuse saved narration. **Audiobook → Play entire book / Play selected chapter only / Continue from selected chapter** uses saved narration only, without speech generation or automatic voice fallback. Use **Resume saved audiobook** to resume that strict session. Reader Play returns to live reading instead. The old global prepared-only checkbox is no longer used: it cannot block a fresh book, including upgrades with the old value still saved. No preparation, new WAV download or library reset is needed to restore live reading. Audiobook playback does not change reader layout or its voice preference.
+
+The reader is now book-first: compact playback at the top, tools on demand, generous page margins, optional facing pages, a thin reading-position line, and a quieter bottom voice/speed/notes strip. The library has a cleaner book-list treatment. It is inspired by the spacious reading experience in the owner's Aquile reference, not by copying Aquile's artwork, code or branding.
+
+- **Reading layout, top right (also in Aa Appearance):** choose **Scroll**, **One page** or **Two-page spread**. A spread shows consecutive book pages, including across a chapter boundary, for reading ahead during listening. Narrow windows/phones or large text fall back to one readable page and show a hint; your two-page choice is retained. Widen the window, close the tools panel or reduce text size to restore both pages. Original page/sentence IDs stay unchanged. The final unpaired page naturally stands alone. Long pages remain scrollable.
+- **Aa Appearance:** choose System, Paper, Sepia or Night, font, text size, line spacing and facing pages. Listening scope is a separate visible main-player choice, not a consequence of changing appearance.
+- **Focus icon:** hide the tools while keeping playback and voice provenance visible. Click the same button, or press Escape after closing any open editor/search/panel, to leave focus mode.
+- **Full-screen icon:** ask the browser to fill the screen; Escape also leaves browser full screen. If unsupported, focus mode is still available.
+- **Contents / Audiobook / Flags / Notes / AI:** open the relevant side panel. Close it with its labelled cross, Escape, or the same tool button. Audiobook studio still contains narration preparation, whole-book/chapter export, playback modes and chapter-time maps.
+- **Keyboard:** Space plays/pauses; left/right move a sentence; R replays; F flags; N flags with a note; M writes a note; G opens Contents; / finds text/pages; [ and ] change speed; Page Up/Down turn pages in page view. Native input fields, links and buttons retain their own keyboard behaviour.
+
+The percentage describes **sentence position in the book**, not elapsed audiobook time. Formatting remains the existing normalized reading text; this is not a pixel-identical EPUB renderer. Text, book IDs, prepared clips, imported audio and chapter metadata have not been migrated or regenerated. Keep the same Edge profile and `http://127.0.0.1:4173/` address for your existing library. Do not clear site data or move to an InPrivate profile to upgrade. A separate test port has a separate empty library.
+
+Books precede the audio-import section; Appearance captions are at least 12px; the responsive reader renders exactly one transport; Flag stays quiet at narrow widths; and Page Up/Down works from toolbar buttons without hijacking Space or form inputs. A short chapter may intentionally show just one page, and the keyboard focus ring intentionally remains visible.
+
+The quiet toolbar, reading colours, tools-on-demand and responsive single transport are shared with Android. Automated tests do not certify subjective speech quality, every device, every codec, screen-off endurance or car/Bluetooth use.
+
+### Public version
+
+The current release is **ReadAloud 0.8.4**. [Open its download page](https://github.com/rock0ne/readaloud/releases/tag/v0.8.4): download **ReadAloud-windows-0.8.4.zip** for Windows or **ReadAloud-0.8.4.apk** for Android. Capabilities and export limitations are described below rather than added to the app's filename. The Android download uses the established release signature; an unsigned or development-key test APK is not a public update.
 
 GitHub Pages and public downloads provide reading, preparation, WAV export, audio import/playback, chapter navigation and older-file timing recovery. **Creating MP3/M4A/M4B is disabled in the public WAV edition** while encoder redistribution remains held. Existing compressed audio still imports and plays. Private 0.7.1 full-export packages retain their formats; you do not have to replace a working full-export installation with this restricted edition.
 
-Release checks passed 273 automated tests, and the extracted Windows download passed offline preparation/export/playback checks. Earlier candidates also had bounded developer checks on a Samsung S21+ / Android 15. On 9 November 2026, the owner separately confirmed chapter playback on their **Samsung S26 after importing matching timing JSON files** in the 0.7.1 candidate. This is owner feedback, not independent certification of all S26 scenarios or the 0.7.3 APK.
+The 0.8.4 source candidate passed 340 automated tests (one optional private-input test skipped) and bounded developer checks on a Samsung S21+ / Android 15. The release notes record the separate public-build checks and their limits. Earlier owner feedback confirmed chapter playback on a Samsung S26 after importing matching timing JSON files; that is not independent certification of every S26 scenario or of this release APK.
 
 **Public redistribution of the added encoder bundles remains held** for the corresponding-source/build-provenance issues in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). The hosted build excludes those packages entirely and fails if their modules enter its output. Source control excludes downloaded codec bundles, model/voice archives, APKs, personal books/audio, credentials and signing keys. A source push does not clear a downloadable binary release.
 
@@ -16,7 +62,7 @@ Release checks passed 273 automated tests, and the extracted Windows download pa
 
 ### Windows
 
-1. Download `ReadAloud-windows-0.7.3.zip` from the release page and verify its supplied SHA256 with `Get-FileHash <zip> -Algorithm SHA256`. Avoid GitHub's automatically generated **Source code ZIP** if you want a ready-to-run app.
+1. Download `ReadAloud-windows-0.8.4.zip` from the release page and verify its supplied SHA256 with `Get-FileHash <zip> -Algorithm SHA256`. Avoid GitHub's automatically generated **Source code ZIP** if you want a ready-to-run app.
 2. Extract to a new folder. Close the older ReadAloud server window before starting this copy.
 3. Double-click **ReadAloud.cmd**. It serves the app locally in Edge at `http://127.0.0.1:4173/`. Keep its server window open.
 4. Use the same browser/profile/address to retain the library. Do not clear browser data to update. InPrivate uses separate temporary storage.
@@ -30,7 +76,7 @@ The [hosted web edition](https://rock0ne.github.io/readaloud/) is separate and m
 1. Use a trusted **signed** APK for a 64-bit ARM phone, Android 7 or later. Check its supplied checksum.
 2. Install over the existing app with the **same signing key**. Do not uninstall first: that can erase books and saved narration.
 3. An unsigned candidate needs signing locally before installation. The owner's release certificate SHA256 is `c5f96167fa4b6633523624bd275745a088d48ed875ff13e5104c6050475dbc0f`. A development-key test APK cannot update a release-key installation.
-4. The offline candidate checks/unpacks its included voice archive locally. Allow unpacking space. Older/network editions may offer **Download natural voice** instead.
+4. The offline app checks/unpacks its included voice archive locally. Allow unpacking space. Older/network editions may offer **Download natural voice** instead.
 5. Allow playback notifications for media controls. If background playback stops, check Android battery restrictions; Unrestricted battery use may help.
 
 For an already-signed update with USB debugging authorised:
@@ -46,7 +92,7 @@ Never share signing-key passwords or private keys. Only authorise trusted comput
 1. Choose **Add files** or **Paste text**. Supported documents: TXT, Markdown, DOCX, PDF and EPUB.
 2. Open it, choose a voice/speed and press Play. Tap/click a sentence to start there. Your position is saved.
 3. **Contents** navigates the book; **Aa** changes font, spacing and scroll/page layout. Search finds text or goes to a page.
-4. Use continuous scrolling for uninterrupted reading, or page-by-page and page-end stops for study.
+4. Choose Scroll, One page or Two-page spread for the visual layout. Separately choose Read whole book, this chapter or this page for the listening scope. Whole-book live reading continues across pages and chapters.
 
 Ordinary reading generates speech as needed. For a long journey, explicitly prepare it first. Online/system voices are separate from local offline Kokoro narration.
 
@@ -69,7 +115,7 @@ These are playback choices, not preparation/export operations:
 - **Play selected chapter only:** stop at that chapter's end.
 - **Continue from selected chapter:** start there and continue afterward.
 
-**Prepared audio only** stops on a missing passage rather than silently generating it. Play after chapter-only completion repeats that chapter. Text-linked playback retains highlighting, notes, flags and position.
+**Audiobook playback** stops on a missing passage rather than silently generating it. **Resume saved audiobook** after chapter-only completion repeats that chapter. Reader Play is separate and permits live speech; it does not require the book to be prepared. Text-linked playback retains highlighting, notes, flags and position.
 
 ## Export audio
 

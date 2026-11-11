@@ -47,7 +47,7 @@ it('transfers chapters to one phone book and plays with no model or synthesis', 
     audioCache: f.b, audio: { play: async () => undefined } });
   await phone.load(imported);
   expect((await inspectNarration(phone.narrationPlan(), f.voice.id, f.b)).ready).toBe(true);
-  await phone.play(); await phone.settled;
+  await phone.playPrepared(); await phone.settled;
   expect(phone.state.status).toBe('ended'); expect(f.engine.synthesize).not.toHaveBeenCalled();
 });
 

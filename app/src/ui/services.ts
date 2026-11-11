@@ -167,6 +167,12 @@ export function onToast(fn: (t: ToastMessage) => void): () => void {
 // ----- downloads -----
 
 export function downloadText(name: string, text: string, mime = 'text/plain'): void {
+  if (IN_ANDROID_APP) {
+    if (!['text/plain', 'text/markdown', 'application/json'].includes(mime)) { toast('Unsupported text export format.', 'error'); return; }
+    void readAloudTts.saveTextExport({ name, text, mime: mime as 'text/plain' | 'text/markdown' | 'application/json' })
+      .then(() => toast('File saved.')).catch((e: unknown) => toast(e instanceof Error ? e.message : String(e), 'error'));
+    return;
+  }
   const url = URL.createObjectURL(new Blob([text], { type: `${mime};charset=utf-8` }));
   const a = document.createElement('a');
   a.href = url;

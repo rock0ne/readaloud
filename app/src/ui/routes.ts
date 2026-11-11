@@ -1,5 +1,12 @@
 import { useEffect, useState } from 'preact/hooks';
 
+let navigationGuard: (() => boolean) | null = null;
+/** Only the mounted editor can guard a route change; no imported content supplies this. */
+export function guardNavigation(guard: () => boolean): () => void {
+  navigationGuard = guard;
+  return () => { if (navigationGuard === guard) navigationGuard = null; };
+}
+
 export type Route = { name: 'library' } | { name: 'read'; docId: string } | { name: 'settings' } | { name: 'licences' };
 
 export function parseHash(hash: string): Route {
@@ -14,7 +21,12 @@ export function parseHash(hash: string): Route {
 export function useRoute(): Route {
   const [route, setRoute] = useState(() => parseHash(location.hash));
   useEffect(() => {
-    const onChange = () => setRoute(parseHash(location.hash));
+    let lastHash = location.hash;
+    const onChange = () => {
+      if (navigationGuard && !navigationGuard()) { history.replaceState(null, '', lastHash || '#/'); return; }
+      lastHash = location.hash;
+      setRoute(parseHash(location.hash));
+    };
     addEventListener('hashchange', onChange);
     return () => removeEventListener('hashchange', onChange);
   }, []);
