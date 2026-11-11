@@ -6,6 +6,15 @@ import { openReadAloudDb, type ReadAloudDb } from './db';
 import { withDefaults } from './settings';
 import { isExpired } from '../ai/keys';
 import type { NarrationRecord } from '../types';
+import { draftFileName, draftMarkdown, reviseDraft } from '../text/draft';
+import { sha256Hex } from '../util/hash';
+
+// Only parsed reading fields may enter from loaders/transfers; imported JSON cannot declare
+// itself an editable local document or provide a local undo/recovery history.
+function readingFields(p: ParsedDocument): ParsedDocument {
+  return { title: p.title, language: p.language, format: p.format, blocks: p.blocks,
+    chapters: p.chapters, toc: p.toc, charCount: p.charCount, warnings: p.warnings };
+}
 
 export class DuplicateDocumentError extends Error {
   readonly existingId: string;
@@ -113,7 +122,7 @@ export class Repo {
   async addDocument(parsed: ParsedDocument, bytes: ArrayBuffer, sourceName: string, sourceHash: string): Promise<DocRecord> {
     const existing = await this.findByHash(sourceHash);
     if (existing) throw new DuplicateDocumentError(existing.id);
-    const doc: DocRecord = { ...parsed, id: newId(), sourceName, sourceHash, addedAt: nowIso() };
+    const doc: DocRecord = { ...readingFields(parsed), id: newId(), sourceName, sourceHash, addedAt: nowIso() };
     const tx = this.db.transaction(['docs', 'summaries', 'sources'], 'readwrite');
     // put() can throw synchronously (e.g. a detached buffer). Without an explicit abort the
     // requests already queued would commit and leave a document with no source.
@@ -139,6 +148,95 @@ export class Repo {
     return doc;
   }
 
+  /** Enable direct editing on the open document; original bytes/text are a hidden recovery record. */
+  async enableEditing(id: string): Promise<DocRecord> {
+    const base = await this.getDocument(id);
+    if (!base) throw new Error('Document not found.');
+    if (base.draft) return base;
+    const originalBytes = await this.getSource(id) ?? new ArrayBuffer(0);
+    const draft: DocRecord = { ...structuredClone(base), format: 'md', sourceName: draftFileName(base, 'md'),
+      draft: { sessionId: newId(), baseDocId: id, baseSourceHash: base.sourceHash, revision: 0, edits: [] } };
+    const bytes = new TextEncoder().encode(draftMarkdown(draft, true)).buffer;
+    draft.sourceHash = await sha256Hex(bytes);
+    const tx = this.db.transaction(['docs', 'summaries', 'sources', 'documentRecovery'], 'readwrite');
+    try {
+      const current = await tx.objectStore('docs').get(id);
+      if (current?.draft) { await tx.done; return current; }
+      if (!current || current.sourceHash !== base.sourceHash) throw new Error('The original changed. Reopen it before creating a draft.');
+      await tx.objectStore('documentRecovery').put({ docId: id, doc: current, bytes: originalBytes });
+      await tx.objectStore('docs').put(draft);
+      await tx.objectStore('summaries').put(summaryOf(draft));
+      await tx.objectStore('sources').put({ docId: id, bytes });
+      await tx.done;
+      return draft;
+    } catch (e) { try { tx.abort(); } catch { /* done */ } await tx.done.catch(() => undefined); throw e; }
+  }
+
+  async getOriginalDocument(id: string): Promise<DocRecord | undefined> {
+    return (await this.db.get('documentRecovery', id))?.doc;
+  }
+
+  /** Full recovery is separate from the last-50 paragraph Undo stack. */
+  async restoreOriginalDocument(id: string, revision: number, expectedSourceHash?: string): Promise<DocRecord> {
+    const tx = this.db.transaction(['docs', 'summaries', 'sources', 'documentRecovery', 'flags', 'notes', 'positions', 'ai'], 'readwrite');
+    try {
+      const current = await tx.objectStore('docs').get(id);
+      if (!current?.draft || current.draft.revision !== revision || (expectedSourceHash && expectedSourceHash !== current.sourceHash)) throw new Error('This document changed in another window. Reopen it before restoring.');
+      const recovery = await tx.objectStore('documentRecovery').get(id);
+      if (!recovery) throw new Error('The original recovery copy is not available on this device.');
+      const duplicate = await tx.objectStore('docs').index('bySourceHash').get(recovery.doc.sourceHash);
+      if (duplicate && duplicate.id !== id) throw new Error('The original source is already a separate library entry. Open that original instead; the edited document has not changed.');
+      const doc = { ...recovery.doc, ...(current.lastOpenedAt ? { lastOpenedAt: current.lastOpenedAt } : {}) };
+      await tx.objectStore('docs').put(doc);
+      await tx.objectStore('summaries').put(summaryOf(doc));
+      await tx.objectStore('sources').put({ docId: id, bytes: recovery.bytes });
+      const index = new DocIndex(doc);
+      for (const name of ['flags', 'notes'] as const) {
+        for (const item of await tx.objectStore(name).index('byDoc').getAll(id)) {
+          await tx.objectStore(name).put((anchorFlag(item, index, id) ?? { ...item, sentenceId: `unplaced:${item.id}` }) as never);
+        }
+      }
+      await tx.objectStore('positions').delete(id);
+      for (const key of await tx.objectStore('ai').index('byDoc').getAllKeys(id)) await tx.objectStore('ai').delete(key);
+      await tx.done;
+      return doc;
+    } catch (e) { try { tx.abort(); } catch { /* done */ } await tx.done.catch(() => undefined); throw e; }
+  }
+
+  /** Compare-and-swap revision, source, annotations and position in one atomic transaction. */
+  async saveDraft(id: string, revision: number, blockId: string, text: string, undo = false, expectedSourceHash?: string): Promise<DocRecord> {
+    const old = await this.getDocument(id);
+    if (!old?.draft || old.draft.revision !== revision || (expectedSourceHash && old.sourceHash !== expectedSourceHash)) throw new Error('This draft changed in another window. Reopen the book before saving; your text has not been saved.');
+    const doc = reviseDraft(old, blockId, text, undo);
+    if (doc === old) return old;
+    const bytes = new TextEncoder().encode(draftMarkdown(doc, true)).buffer;
+    doc.sourceHash = await sha256Hex(bytes);
+    const tx = this.db.transaction(['docs', 'summaries', 'sources', 'flags', 'notes', 'positions', 'ai'], 'readwrite');
+    try {
+      const current = await tx.objectStore('docs').get(id);
+      if (current?.sourceHash !== old.sourceHash || current?.draft?.revision !== revision) throw new Error('This draft changed in another window. Reopen the book before saving; your text has not been saved.');
+      await tx.objectStore('docs').put({ ...doc, ...(current.lastOpenedAt ? { lastOpenedAt: current.lastOpenedAt } : {}) });
+      await tx.objectStore('summaries').put(summaryOf(doc));
+      await tx.objectStore('sources').put({ docId: id, bytes });
+      const index = new DocIndex(doc);
+      for (const name of ['flags', 'notes'] as const) {
+        for (const item of await tx.objectStore(name).index('byDoc').getAll(id)) {
+          // Unmatched old quotes are retained but must never highlight a new sentence with a reused ID.
+          const placed = anchorFlag(item, index, id) ?? { ...item, sentenceId: `unplaced:${item.id}` };
+          await tx.objectStore(name).put(placed as never);
+        }
+      }
+      const targetId = undo ? old.draft?.edits.at(-1)?.blockId : blockId;
+      const block = doc.blocks.find((b) => b.id === targetId);
+      const at = block?.sentences[0] && index.get(block.sentences[0].id);
+      if (at) await tx.objectStore('positions').put({ docId: id, sentenceId: at.sentence.id, ordinal: at.ordinal, updatedAt: nowIso() });
+      // A saved answer based on pre-edit wording must not appear as an answer about this revision.
+      for (const key of await tx.objectStore('ai').index('byDoc').getAllKeys(id)) await tx.objectStore('ai').delete(key);
+      await tx.done;
+      return doc;
+    } catch (e) { try { tx.abort(); } catch { /* done */ } await tx.done.catch(() => undefined); throw e; }
+  }
+
   /**
    * Replaces the parsed content (re-parse) and re-anchors flags; returns flags that could not be
    * placed. Reads and writes share one transaction, so a failure leaves the old version intact.
@@ -149,10 +247,11 @@ export class Repo {
     try {
       const old = await tx.objectStore('docs').get(id);
       if (!old) throw new Error('Document not found');
+      if (old.draft) throw new Error('Use Edit draft to change this document, or Restore original imported document first.');
       const flags = await tx.objectStore('flags').index('byDoc').getAll(id);
       const pos = await tx.objectStore('positions').get(id);
       const notes = await tx.objectStore('notes').index('byDoc').getAll(id);
-      const doc: DocRecord = { ...old, ...parsed, id, sourceName: old.sourceName, sourceHash: old.sourceHash, addedAt: old.addedAt };
+      const doc: DocRecord = { ...old, ...readingFields(parsed), id, sourceName: old.sourceName, sourceHash: old.sourceHash, addedAt: old.addedAt };
       const index = new DocIndex(doc);
       const ops: Array<Promise<unknown>> = [tx.objectStore('docs').put(doc), tx.objectStore('summaries').put(summaryOf(doc))];
       for (const f of flags) {
@@ -188,10 +287,10 @@ export class Repo {
   }
 
   async touchOpened(id: string): Promise<void> {
-    const doc = await this.getDocument(id);
-    if (!doc) return;
-    doc.lastOpenedAt = nowIso();
     const tx = this.db.transaction(['docs', 'summaries'], 'readwrite');
+    const doc = await tx.objectStore('docs').get(id);
+    if (!doc) { await tx.done; return; }
+    doc.lastOpenedAt = nowIso();
     await Promise.all([tx.objectStore('docs').put(doc), tx.objectStore('summaries').put(summaryOf(doc)), tx.done]);
   }
 
@@ -204,11 +303,12 @@ export class Repo {
     const flagKeys = await this.db.getAllKeysFromIndex('flags', 'byDoc', id);
     const noteKeys = await this.db.getAllKeysFromIndex('notes', 'byDoc', id);
     const aiKeys = await this.db.getAllKeysFromIndex('ai', 'byDoc', id);
-    const tx = this.db.transaction(['docs', 'summaries', 'sources', 'positions', 'flags', 'notes', 'ai'], 'readwrite');
+    const tx = this.db.transaction(['docs', 'summaries', 'sources', 'positions', 'flags', 'notes', 'ai', 'documentRecovery'], 'readwrite');
     await Promise.all([
       tx.objectStore('docs').delete(id),
       tx.objectStore('summaries').delete(id),
       tx.objectStore('sources').delete(id),
+      tx.objectStore('documentRecovery').delete(id),
       tx.objectStore('positions').delete(id),
       ...flagKeys.map((k) => tx.objectStore('flags').delete(k)),
       ...noteKeys.map((k) => tx.objectStore('notes').delete(k)),

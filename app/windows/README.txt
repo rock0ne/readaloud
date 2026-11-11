@@ -6,7 +6,7 @@ Reads .txt, .md, .docx, .pdf and .epub files, and text you paste.
 
 Check the download first
 ------------------------
-For this private 0.6.0 candidate, the accompanying SHA256SUMS.txt shows the
+For this private Windows 0.8.2 candidate, the accompanying SHA256SUMS.txt shows the
 SHA-256 of this zip. It has not been published as a GitHub release. Open PowerShell in
 the folder that holds the zip and type (with this zip's name):
 
@@ -15,8 +15,9 @@ the folder that holds the zip and type (with this zip's name):
 If the two values are not exactly the same, do not open the zip: delete it.
 
 Before using this update, export positions/flags/notes with Export JSON and
-retain your original documents. The new version adds narration stores to the
-existing local database; an older app version cannot open that upgraded schema.
+retain your original documents and audio. This UI update does not change the
+0.7.3 database schema or regenerate prepared narration. Keep the same Edge
+profile and localhost address to retain the library. Do not clear site data.
 
 Start
 -----
@@ -43,7 +44,7 @@ Install it as an app (optional)
 -------------------------------
 In Edge, select "App available - Install ReadAloud" in the address bar (or
 Settings and more > Apps > Install this site as an app). ReadAloud then opens
-from its own icon, even when the small window is closed.
+from its own icon. The local server window must still be running to serve it.
 
 What stays on this PC
 ---------------------
@@ -53,12 +54,45 @@ What stays on this PC
 - Your documents, flags, notes and settings stay in Edge on this PC.
   ReadAloud has no account and collects no usage data.
 
+The new reader (0.8.2 Windows candidate)
+----------------------------------------
+Play/pause, previous/next sentence and replay now sit in the top centre.
+Reading layout (top right, also in Aa Appearance) offers Scroll, One page or
+Two-page spread. Spread shows consecutive pages, even over chapter boundaries,
+so you can read ahead while listening. Narrow screens fall back to one page;
+widen the window, close the tools panel or reduce text size to show both.
+Aa Appearance chooses System/Paper/Sepia/Night, font, size and spacing.
+Read beside Play chooses Whole book, This chapter only, or This page only.
+Whole book continues from your position across pages/chapters. Choosing a
+page/chapter moves to its beginning and waits for Play, then stops at its end.
+Play repeats that selected part; Continue whole book continues onward.
+Layout and listening scope are separate. The legacy automatic page-end pause
+is reset on upgrade, without deleting books, notes, audio or other preferences.
+Long pages can still scroll.
+
+Focus hides the tools, not playback or the voice's local/online status.
+Use its cross or Escape to leave. Full screen is a separate browser option.
+Contents, Audiobook, Flags, Notes and AI open panels only when wanted; use their
+cross to close. Audiobook retains all preparation/export/chapter controls.
+The thin progress line is reading position, not elapsed audio time.
+USER-GUIDE.md includes the complete guide, keyboard keys and older-audio help.
+
+This is a local candidate, not a new public release. The accompanying results
+record any visual/Claude-review checks still pending. No files are uploaded.
+
 Whole-book narration and offline travel
 --------------------------------------
-The library and Audiobook studio headings must show 0.6.0 for these controls.
+The library and Audiobook studio headings must show 0.8.2 for this candidate.
 Downloading the zip does not replace an older server/app that is still open.
 Close the old server window, run this folder's ReadAloud.cmd, then reopen/refresh
 the same localhost app without clearing its library/site data.
+
+Reader Play reads immediately. It does not require book preparation and can
+reuse saved audio. Audiobook playback is separate: it only uses prepared audio
+and never silently generates a missing passage. Resume saved audiobook resumes
+that session; Reader Play returns to live reading. There is no global prepared-
+only switch. Old saved values cannot disable live reading. Your library, notes,
+audio and existing exports need no reset or new preparation.
 
 Prepare whole audiobook and Prepare selected chapter are separate controls.
 Choose the chapter in the Chapter selector for chapter-only preparation/export.
@@ -80,7 +114,8 @@ Save chapter WAV creates one normal-speed 24 kHz mono PCM WAV per chapter
 (up to 256 MB). It does not master, add credits or publish.
 Check distributor requirements and listen/QC before publication.
 
-Export format (0.6.0): WAV, MP3, M4A or M4B. The save buttons follow your
+Export format in this private full-export candidate: WAV, MP3, M4A or M4B.
+The save buttons follow your
 selection for both whole book and selected chapter. MP3 and AAC encoders are
 included for offline use, with no codec/voice download at export time. M4A/M4B
 use AAC. Choose a 96 or 128 kb/s compressed-audio target. Encoding reuses the
@@ -99,7 +134,9 @@ chapter, without generating speech again. Use Windows Edge/Chrome's save dialog.
 It streams to disk rather than assembling the entire book in memory. Classic WAV
 must stay below 4 GiB; use chapter exports for a larger book. At 24 kHz the file
 is about 165 MB per hour. Keep the app open until export finishes. The single
-WAV has no chapter-navigation metadata; chapter WAVs remain available.
+WAV includes ReadAloud chapter-navigation metadata; chapter WAVs remain
+available. New whole-book WAV/MP3/M4A/M4B exports all include chapters.
+Older audio may need a matching chapter-time JSON map, not new narration.
 
 Save whole book transfer ZIP or Save chapter transfer ZIP creates a .readaloud.zip.
 Version 0.6.1 removes the old 160 MB export/import cap and reads individual

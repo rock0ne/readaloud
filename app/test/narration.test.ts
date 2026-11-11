@@ -37,10 +37,30 @@ async function fixture() {
 }
 
 describe('whole-book prepared narration', () => {
+  it('reuses prepared audio and exact chapter timings after reader-only appearance changes', async () => {
+    const f = await fixture();
+    await prepareNarration(f.plan, f.engine, f.voice, f.repo, new AbortController().signal, () => undefined);
+    const before = await inspectNarration(f.plan, f.voice.id, f.repo);
+    const beforeWav = await wholeBookWav(f.plan, f.voice.id, f.repo, new AbortController().signal);
+    const beforeChunks: Uint8Array[] = [];
+    for await (const chunk of beforeWav.chunks) beforeChunks.push(chunk);
+    const calls = f.synthesize.mock.calls.length;
+    Object.assign(f.settings, { readerTone: 'night', readerFont: 'sans', fontSizePx: 24, lineSpacing: 2, layout: 'pages', twoPages: true });
+    expect(f.player.narrationPlan()).toEqual(f.plan);
+    const after = await inspectNarration(f.player.narrationPlan(), f.voice.id, f.repo);
+    expect(after.key).toBe(before.key); expect(after.ready).toBe(true);
+    expect(after.completed).toBe(before.completed);
+    const afterWav = await wholeBookWav(f.player.narrationPlan(), f.voice.id, f.repo, new AbortController().signal);
+    const afterChunks: Uint8Array[] = [];
+    for await (const chunk of afterWav.chunks) afterChunks.push(chunk);
+    expect(afterChunks).toEqual(beforeChunks);
+    expect(afterWav.chapterStarts).toEqual(beforeWav.chapterStarts);
+    expect(f.synthesize.mock.calls).toHaveLength(calls);
+  });
   it('plays one chapter from the saved whole book, stops there, and can continue across chapters without synthesis', async () => {
     const f = await fixture();
     await prepareNarration(f.plan, f.engine, f.voice, f.repo, new AbortController().signal, () => undefined);
-    f.settings.preparedAudioOnly = true; f.synthesize.mockClear();
+    await f.player.selectSource('audiobook'); f.synthesize.mockClear();
     const heard: number[] = [];
     f.player.subscribe((event) => { if (event.type === 'sentence') {
       const block = f.doc.blocks.find((b) => b.sentences.some((s) => s.id === event.sentenceId));
@@ -60,7 +80,7 @@ describe('whole-book prepared narration', () => {
   it('plays/repeats the final chapter without jumping to the beginning and rejects missing chapters', async () => {
     const f = await fixture();
     await prepareNarration(f.plan, f.engine, f.voice, f.repo, new AbortController().signal, () => undefined);
-    f.settings.preparedAudioOnly = true; f.synthesize.mockClear();
+    await f.player.selectSource('audiobook'); f.synthesize.mockClear();
     await f.player.playChapter(1); await f.player.settled;
     expect(f.player.chapterPlayback).toEqual({chapter:1,finished:true});
     expect(f.player.state.status).toBe('paused');
@@ -138,7 +158,7 @@ describe('whole-book prepared narration', () => {
     expect(JSON.stringify(doc)).toBe(original);
     await prepareNarration(plan, f.engine, f.voice, f.repo, new AbortController().signal, () => undefined);
     expect(f.synthesize.mock.calls.flat().join(' ')).toContain('lyve');
-    f.settings.preparedAudioOnly = true;
+    await f.player.selectSource('audiobook');
     f.synthesize.mockClear();
     await f.player.play(); await f.player.settled;
     expect(f.player.state.status).toBe('ended');
@@ -166,7 +186,7 @@ describe('whole-book prepared narration', () => {
   it('plays across chapters and after a mid-unit seek without initializing/synthesizing a voice', async () => {
     const f = await fixture();
     await prepareNarration(f.plan, f.engine, f.voice, f.repo, new AbortController().signal, () => undefined);
-    f.settings.preparedAudioOnly = true;
+    await f.player.selectSource('audiobook');
     f.engine.isAvailable = vi.fn(async () => ({ ok: false }));
     f.synthesize.mockClear();
     await f.player.play(); await f.player.settled;
@@ -179,10 +199,69 @@ describe('whole-book prepared narration', () => {
   });
 
   it('stops on missing prepared audio instead of silently generating', async () => {
-    const f = await fixture(); f.settings.preparedAudioOnly = true;
-    await f.player.play(); await f.player.settled;
+    const f = await fixture();
+    await f.player.playPrepared(); await f.player.settled;
     expect(f.player.state.status).toBe('error');
     expect(f.player.state.error).toContain('not prepared');
+    expect(f.synthesize).not.toHaveBeenCalled(); expect(f.play).not.toHaveBeenCalled();
+  });
+
+  it('reads an unprepared book despite a legacy global prepared-only preference', async () => {
+    const f = await fixture(); f.settings.preparedAudioOnly = true;
+    await f.player.playReader(); await f.player.settled;
+    expect(f.player.state).toMatchObject({ status: 'ended', source: 'reader' });
+    expect(f.synthesize).toHaveBeenCalled();
+    expect(f.settings.preparedAudioOnly).toBe(true); // not a destructive preference migration
+  });
+
+  it('recovers from missing audiobook narration with explicit Reader Play, without re-preparing', async () => {
+    const f = await fixture();
+    await f.player.playPrepared(); await f.player.settled;
+    expect(f.player.state.status).toBe('error'); expect(f.synthesize).not.toHaveBeenCalled();
+    const failedAt = f.player.currentSentenceId;
+    await f.player.playReader(); await f.player.settled;
+    expect(f.player.state).toMatchObject({ status: 'ended', source: 'reader' });
+    expect(f.player.state.error).toBeUndefined(); expect(f.synthesize).toHaveBeenCalled();
+    expect(failedAt).toBe(f.doc.blocks[0]!.sentences[0]!.id);
+    expect((await inspectNarration(f.plan, f.voice.id, f.repo)).completed).toBe(0);
+  });
+
+  it('does not carry audiobook restrictions or chapter-only limits to another book', async () => {
+    const f = await fixture();
+    await prepareNarration(f.plan, f.engine, f.voice, f.repo, new AbortController().signal, () => undefined);
+    await f.player.playChapter(0); await f.player.settled;
+    expect(f.player.state.source).toBe('audiobook');
+    const other = makeDoc([{ type: 'paragraph', text: 'A fresh book with no prepared narration.' }]);
+    await f.player.load(other); f.synthesize.mockClear();
+    expect(f.player.state.source).toBe('reader'); expect(f.player.chapterPlayback).toBeNull();
+    await f.player.play(); await f.player.settled;
+    expect(f.player.state.status).toBe('ended'); expect(f.synthesize).toHaveBeenCalled();
+    expect((await inspectNarration(f.plan, f.voice.id, f.repo)).ready).toBe(true);
+  });
+
+  it('keeps page stops and narrator preferences separate from audiobook playback', async () => {
+    const f = await fixture();
+    await prepareNarration(f.plan, f.engine, f.voice, f.repo, new AbortController().signal, () => undefined);
+    const before = JSON.stringify(f.settings);
+    f.player.setPageEnds(new Set([f.doc.blocks[0]!.sentences[0]!.id]));
+    f.engine.isAvailable = vi.fn(async () => ({ ok: false }));
+    f.synthesize.mockClear();
+    await f.player.playChapter(0, true, f.voice.id); await f.player.settled;
+    expect(f.player.state.status).toBe('ended'); // ignores reader page stops, without clearing them
+    expect(f.synthesize).not.toHaveBeenCalled(); expect(f.engine.isAvailable).not.toHaveBeenCalled();
+    expect(JSON.stringify(f.settings)).toBe(before);
+    f.engine.isAvailable = async () => ({ ok: true });
+    await f.player.playReader(); await f.player.settled;
+    expect(f.player.state.status).toBe('ended'); // Reader Play explicitly uses continuous book flow
+    expect(f.synthesize).not.toHaveBeenCalled(); // live reader can still reuse saved narration
+  });
+
+  it('never reuses an ordinary live cache clip as proof of prepared audiobook narration', async () => {
+    const f = await fixture();
+    await f.player.playReader(); await f.player.settled;
+    f.synthesize.mockClear(); f.play.mockClear();
+    await f.player.playPrepared(); await f.player.settled;
+    expect(f.player.state.status).toBe('error');
     expect(f.synthesize).not.toHaveBeenCalled(); expect(f.play).not.toHaveBeenCalled();
   });
 

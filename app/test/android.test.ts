@@ -65,6 +65,7 @@ function fakePlugin(installed = true, download: (report: (loaded: number) => voi
   const listeners = new Set<(p: { loaded: number; total: number }) => void>();
   const state = { installed, downloads: 0, inits: 0, removed: 0, screenOn: [] as boolean[] };
   const tts: ReadAloudTts = {
+    saveTextExport: async () => undefined,
     beginAudioExport: async () => ({ token: 'test' }),
     appendAudioExport: async () => undefined,
     finishAudioExport: async () => undefined,

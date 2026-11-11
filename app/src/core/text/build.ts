@@ -81,7 +81,7 @@ function clampLevel(n: number): number {
   return Math.min(6, Math.max(1, Math.round(n)));
 }
 
-function sentencesFor(b: Block, language: string): Sentence[] {
+export function sentencesFor(b: Block, language: string): Sentence[] {
   const segs = b.type === 'code'
     ? [{ text: b.text, start: 0, end: b.text.length }]
     : segmentSentences(b.text, language);

@@ -8,13 +8,15 @@ import { IN_ANDROID_APP, readAloudTts } from '../android/plugin';
 import { toast, useServices, useSettings } from '../services';
 import { saveAudioExport } from '../book-export';
 import { AUDIO_FORMATS, type AudioExportFormat } from '../../core/audio/formats';
+import { usePlayer } from '../hooks/usePlayer';
 
 // Five included narrator choices; legacy reader voices remain available in the normal picker.
 const NARRATORS = ['bf_emma', 'bf_isabella', 'bm_george', 'af_heart', 'am_michael'];
 const filename = (s: string) => s.replace(/[^\p{L}\p{N} ._-]/gu, '_').slice(0, 100).trim() || 'chapter';
 
 export function AudiobookPanel({ doc }: { doc: DocRecord }) {
-  const { player, repo, registry, kokoro, updateSettings } = useServices();
+  const { player, repo, registry, kokoro } = useServices();
+  const playback = usePlayer(player);
   const settings = useSettings();
   const [voiceId, setVoice] = useState(settings.voiceByEngine.kokoro ?? 'bf_emma');
   const [record, setRecord] = useState<NarrationRecord | null>(null);
@@ -36,7 +38,7 @@ export function AudiobookPanel({ doc }: { doc: DocRecord }) {
       .then((whole) => { if (current) setRecord(whole); })
       .catch((e: unknown) => { if (current) setError(String(e)); });
     return () => { current = false; };
-  }, [doc.id, voiceId, settings.skipCodeBlocks, settings.announceHeadings,
+  }, [doc.id, doc.sourceHash, voiceId, settings.skipCodeBlocks, settings.announceHeadings,
     settings.pronunciation, settings.locale,
     settings.pauseAfterHeadingMs, settings.pauseBetweenParagraphsMs, settings.pauseBetweenSentencesMs, player, repo]);
   useEffect(() => {
@@ -46,7 +48,7 @@ export function AudiobookPanel({ doc }: { doc: DocRecord }) {
       .then((selected) => { if (current) setChapterRecord(selected); })
       .catch((e: unknown) => { if (current) setError(String(e)); });
     return () => { current = false; };
-  }, [doc.id, voiceId, chapter, settings.skipCodeBlocks, settings.announceHeadings,
+  }, [doc.id, doc.sourceHash, voiceId, chapter, settings.skipCodeBlocks, settings.announceHeadings,
     settings.pronunciation, settings.locale,
     settings.pauseAfterHeadingMs, settings.pauseBetweenParagraphsMs, settings.pauseBetweenSentencesMs, player, repo]);
 
@@ -85,14 +87,11 @@ export function AudiobookPanel({ doc }: { doc: DocRecord }) {
       const r = await inspectNarration(player.narrationPlan(mode === 'chapter' ? chapter : undefined), voiceId, repo);
       if (!r.ready) throw new Error('The requested audio is not fully prepared for this narrator. No new speech was generated.');
       player.pause(); await player.settled;
-      await updateSettings({ preparedAudioOnly: true, layout: 'scroll', stopAtPageEnd: false,
-        voiceByEngine: { ...settings.voiceByEngine, kokoro: voiceId } });
-      player.setPageEnds(null); player.resetVoice();
       if (mode === 'whole') {
         const first = doc.chapters.find((c) => player.narrationPlan(c.index).texts.length > 0);
         if (!first) throw new Error('This book has no readable chapters.');
-        await player.playChapter(first.index, true);
-      } else await player.playChapter(chapter, mode === 'continue');
+        await player.playChapter(first.index, true, voiceId);
+      } else await player.playChapter(chapter, mode === 'continue', voiceId);
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   };
 
@@ -196,11 +195,13 @@ export function AudiobookPanel({ doc }: { doc: DocRecord }) {
     <p><button disabled={busy || !record?.ready} onClick={() => void listen('whole')}>Play entire book</button>{' '}
       <button disabled={busy || !chapterRecord?.ready} onClick={() => void listen('chapter')}>Play selected chapter only</button>{' '}
       <button disabled={busy || !record?.ready} onClick={() => void listen('continue')}>Continue from selected chapter</button></p>
-    <p>Chapter-only playback stops at that chapter's end. Play again repeats that chapter; Continue reads on through the book.</p>
+    <p>Chapter-only playback stops at that chapter's end. Resume saved audiobook repeats it after completion; Continue reads on through the book.</p>
+    {playback.source === 'audiobook' && <p><button onClick={() => {
+      if (playback.status === 'playing' || playback.status === 'buffering') player.pause();
+      else void player.playPrepared();
+    }}>{playback.status === 'playing' || playback.status === 'buffering' ? 'Pause audiobook' : 'Resume saved audiobook'}</button></p>}
     {busy && <button onClick={() => controller.current?.abort()}>Cancel</button>}
-    <label><input type="checkbox" checked={settings.preparedAudioOnly} disabled={busy} onChange={(e) => {
-      player.pause(); player.resetVoice(); void updateSettings({ preparedAudioOnly: e.currentTarget.checked });
-    }} /> Prepared audio only — stop rather than generate a missing passage</label>
+    <p class="hint">Audiobook playback always uses saved narration only and stops if a passage is missing. Reader Play remains separate: it reads immediately, reusing saved speech where available. No global prepared-only switch is needed.</p>
     <h3>Export narration</h3>
     <p>Whole-book export makes one continuous file in reading order. Windows Edge/Chrome streams to disk; Android uses temporary disk space before its save dialog. WAV is large (about 165 MiB/hour at 24 kHz); compressed files are roughly 41–55 MiB/hour at 96–128 kb/s. WAV and compressed output files must stay below 4 GiB. Keep the app open until saving finishes. Changing listening speed does not change the exported audio.</p>
     <p>One numbered WAV per chapter, at the local voice's native sample rate and normal speed. Your listening speed does not change the exported master. Export only material you have rights to narrate. Publishing still needs listening/QC, credits, metadata and the distributor's current format and digital-narration checks. This does not upload or publish.</p>

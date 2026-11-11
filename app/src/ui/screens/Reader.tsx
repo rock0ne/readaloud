@@ -4,10 +4,12 @@ import { DocIndex } from '../../core/model';
 import { createFlag } from '../../core/flags/corrections';
 import { createNote } from '../../core/notes/notes';
 import { RATE_MAX, RATE_MIN, clampRate } from '../../core/store/settings';
-import { PageIndex } from '../../core/text/pages';
-import type { AiResult, AiSuggestion, DocRecord, EngineId, Flag, Note, Voice } from '../../core/types';
+import { PageIndex, facingPages, fitsSpread } from '../../core/text/pages';
+import type { AiResult, AiSuggestion, DocRecord, EngineId, Flag, Note, Voice, PlayerState } from '../../core/types';
 import type { Pick } from '../../core/engines/registry';
 import { TextPane } from '../components/TextPane';
+import { PANEL_LABELS, ReaderChrome, ReaderIcon, ReaderTransport, ReadingProgress } from '../components/ReaderChrome';
+import type { ReaderPanel } from '../components/ReaderChrome';
 import type { Sheet } from '../components/TextPane';
 import { FlagPanel } from '../components/FlagPanel';
 import { TocPanel } from '../components/TocPanel';
@@ -16,21 +18,25 @@ import { NoteEditor } from '../components/NoteEditor';
 import { NotesPanel } from '../components/NotesPanel';
 import { AiPanel } from '../components/AiPanel';
 import { TextControls } from '../components/TextControls';
+import { ReadingLayoutPicker, readingLayout, layoutSettings } from '../components/ReadingLayout';
+import { ReadRangePicker, ReadRangeNotice } from '../components/ReadRange';
 import { FindBar } from '../components/FindBar';
+import { PreparedModeNotice } from '../components/PlaybackMode';
 import { AudiobookPanel } from '../components/AudiobookPanel';
+import { DraftPanel } from '../components/DraftPanel';
+import { ReadingTools } from '../components/ReadingTools';
 import type { CiteHelpers } from '../components/Reply';
 import { useAiJob } from '../hooks/useAiJob';
 import { KokoroDownload } from '../components/KokoroDownload';
 import { VoicePicker, shortVoiceName } from '../components/VoicePicker';
 import { usePlayer } from '../hooks/usePlayer';
 import { useKeys } from '../hooks/useKeys';
+import { useCompactReader } from '../hooks/useCompactReader';
 import { useMediaSession, useOnline, usePhoneSession, useWakeLock } from '../hooks/useDevice';
 import { toast, useKokoro, useServices, useSettings } from '../services';
 
-type Panel = 'toc' | 'flags' | 'notes' | 'ai' | 'text' | 'audiobook' | null;
+type Panel = ReaderPanel;
 
-/** Two pages go side by side when the text pane is at least this many ems wide (ADR-35). */
-const SPREAD_MIN_EM = 50;
 type Editing = { sentenceId: string; note?: Note };
 
 /** Says which kind of voice is reading, so "natural" is never ambiguous (ADR-30). */
@@ -49,19 +55,40 @@ function upsert<T>(xs: T[], x: T, same: (a: T, b: T) => boolean): T[] {
 }
 
 export function Reader({ docId }: { docId: string }) {
+  const compact = useCompactReader();
   const services = useServices();
-  const { repo, player, registry, kokoro, isTouch } = services;
+  const { repo, player, registry, isTouch } = services;
   const settings = useSettings();
   const kokoroStatus = useKokoro();
   const [doc, setDoc] = useState<DocRecord | null | undefined>(undefined);
   const [flags, setFlags] = useState<Flag[]>([]);
-  const [panel, setPanel] = useState<Panel>(isTouch || innerWidth < 900 ? null : 'toc');
+  const [panel, setPanel] = useState<Panel>(null);
+  const [focused, setFocused] = useState(false);
+  const [fullscreen, setFullscreen] = useState(!!document.fullscreenElement);
+  const readerRoot = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const changed = () => setFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', changed);
+    return () => document.removeEventListener('fullscreenchange', changed);
+  }, []);
+  const toggleFullscreen = async () => {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else if (readerRoot.current?.requestFullscreen) await readerRoot.current.requestFullscreen();
+      else toast('Full screen is not available in this browser. Focus mode is still available.');
+    } catch { toast('Full screen was not opened. You can still use focus mode.'); }
+  };
   const [noteFor, setNoteFor] = useState<Flag | null>(null);
   const [notes, setNotes] = useState<Note[]>([]);
   const [editing, setEditing] = useState<Editing | null>(null);
   const [aiResults, setAiResults] = useState<AiResult[]>([]);
   const [returnTo, setReturnTo] = useState<string | null>(null);
   const [finding, setFinding] = useState(false);
+  const [modeBusy, setModeBusy] = useState(false);
+  const draftDirty = useRef(false);
+  const onDraftDirty = useCallback((dirty: boolean) => { draftDirty.current = dirty; }, []);
+  const leaveDraft = () => !draftDirty.current || confirm('Discard the unsaved paragraph edit?');
+  const closePanel = () => { if (leaveDraft()) setPanel(null); };
   const [paneWidth, setPaneWidth] = useState(0);
   const [voices, setVoices] = useState<Voice[]>([]);
   const [auto, setAuto] = useState<Pick | null | undefined>(undefined);
@@ -107,11 +134,8 @@ export function Reader({ docId }: { docId: string }) {
     void loadVoices();
   }, [loadVoices]);
 
-  // Load the Kokoro model while the reader opens, so the first Play starts quickly.
-  useEffect(() => {
-    if (settings.preparedAudioOnly) return;
-    void kokoro.installed().then((ok) => (ok ? kokoro.load() : undefined)).catch(() => undefined);
-  }, [kokoro, settings.preparedAudioOnly]);
+  // Load the speech model only when live speech/preparation is requested. Opening a book
+  // for saved Audiobook playback must not eagerly initialise an otherwise unused model.
 
   // The natural voice has just been downloaded: switch to it (ADR-22).
   const kokoroInstalled = kokoroStatus.installed;
@@ -161,23 +185,19 @@ export function Reader({ docId }: { docId: string }) {
 
   // Page by page (ADR-35): the page being read, and the page facing it when two fit side by side.
   const paged = settings.layout === 'pages';
-  const twoUp = paged && settings.twoPages && paneWidth >= settings.fontSizePx * SPREAD_MIN_EM;
+  const twoUp = paged && settings.twoPages && fitsSpread(paneWidth, settings.fontSizePx);
   const hereKey = (view.currentId && pages?.ofSentence(view.currentId)?.key) || '';
   const sheets = useMemo((): Sheet[] | null => {
     if (!paged || !pages) return null;
     const inChapter = pages.inChapter(chapterIndex);
     const here = pages.get(hereKey) ?? inChapter[0];
     if (!here) return null;
-    const i = inChapter.indexOf(here);
-    const shown = twoUp && i >= 0 ? inChapter.slice(i - (i % 2), i - (i % 2) + 2) : [here];
-    return shown.map((p) => ({ key: p.key, label: p.label, blocks: pages.blocksOf(p, blocks) }));
-  }, [paged, twoUp, pages, chapterIndex, hereKey, blocks]);
+    return facingPages(pages.pages, here, twoUp).map((p) => ({ key: p.key, label: p.label, blocks: pages.blocksOf(p, doc?.blocks ?? []) }));
+  }, [paged, twoUp, pages, chapterIndex, hereKey, doc]);
   // ...and it can stop at the end of each page, to study it.
-  const stopAtPages = paged && settings.stopAtPageEnd;
   useEffect(() => {
-    player.setPageEnds(stopAtPages && pages ? new Set(pages.pages.map((p) => p.lastSentenceId).filter(Boolean)) : null);
-    return () => player.setPageEnds(null);
-  }, [player, pages, stopAtPages]);
+    player.setPageEnds(null);
+  }, [player, docId]);
   const turn = (dir: 1 | -1) => {
     if (!pages || !sheets?.length) return;
     const edge = dir === 1 ? sheets.at(-1) : sheets[0];
@@ -305,8 +325,66 @@ export function Reader({ docId }: { docId: string }) {
     void services.updateSettings({ rate });
   };
 
+  const selectReadRange = async (kind: PlayerState['readerRange'], play = false) => {
+    if (!index || !pages) return;
+    try {
+      const here = player.currentSentenceId;
+      const page = here ? pages.ofSentence(here) : pages.pages[0];
+      const chapter = index.order.filter((item) => item.block.chapterIndex === chapterIndex);
+      await player.selectReaderRange(kind, kind === 'page' ? page?.firstSentenceId : chapter[0]?.sentence.id,
+        kind === 'page' ? page?.lastSentenceId : chapter.at(-1)?.sentence.id);
+      if (play) await player.playReader();
+    } catch (e) { toast(e instanceof Error ? e.message : String(e), 'error'); }
+  };
+
+  const returnToReader = async () => {
+    if (modeBusy) return;
+    setModeBusy(true);
+    try {
+      await player.selectSource('reader');
+      toast('Live reader ready. Press Play to read now; no book preparation is required.');
+    } catch (e) {
+      toast(`Could not change listening mode: ${e instanceof Error ? e.message : String(e)}`, 'error');
+    } finally { setModeBusy(false); }
+  };
+
+  const createWorkingDraft = async () => {
+    if (!doc) return;
+    player.pause(); await player.settled;
+    const d = await repo.enableEditing(doc.id);
+    await player.load(d, current?.sentence.id);
+    setDoc(d);
+  };
+  const restoreImportedDocument = async () => {
+    if (!doc?.draft) return;
+    if (ai.job) throw new Error('Stop the active AI request before restoring this document.');
+    player.pause(); await player.settled;
+    const restored = await repo.restoreOriginalDocument(doc.id, doc.draft.revision, doc.sourceHash);
+    await player.load(restored);
+    setDoc(restored); setAiResults([]);
+    const [f, n] = await Promise.all([repo.listFlags(restored.id), repo.listNotes(restored.id)]);
+    setFlags(f); setNotes(n);
+  };
+  const saveWorkingDraft = async (blockId: string, text: string, undo: boolean, listen: boolean) => {
+    if (!doc?.draft) throw new Error('Enable editing this document first.');
+    if (ai.job) throw new Error('Stop the active AI request before editing this draft.');
+    player.pause(); await player.settled;
+    const saved = await repo.saveDraft(doc.id, doc.draft.revision, blockId, text, undo, doc.sourceHash);
+    const targetId = undo ? doc.draft.edits.at(-1)?.blockId : blockId;
+    await player.load(saved, saved.blocks.find((b) => b.id === targetId)?.sentences[0]?.id);
+    setDoc(saved); setAiResults([]);
+    const [f, n] = await Promise.all([repo.listFlags(saved.id), repo.listNotes(saved.id)]);
+    setFlags(f); setNotes(n);
+    if (listen) {
+      // On a phone return to the reader so Pause is not hidden behind the editor.
+      if (compact) setPanel(null);
+      void player.playReader();
+    }
+    return saved;
+  };
+
   useKeys({
-    Space: () => void player.toggle(),
+    Space: () => void player.toggleReader(),
     ArrowLeft: () => player.prev(),
     ArrowRight: () => player.next(),
     r: () => player.replay(),
@@ -315,10 +393,10 @@ export function Reader({ docId }: { docId: string }) {
     '[': () => setRate(view.rate - 0.1),
     ']': () => setRate(view.rate + 0.1),
     m: () => writeNote(),
-    g: () => setPanel('toc'),
+    g: () => { if (leaveDraft()) { setFocused(false); setPanel('toc'); } },
     '/': () => setFinding(true),
     ...(paged ? { PageDown: () => turn(1), PageUp: () => turn(-1) } : {}),
-    Escape: () => (editing ? setEditing(null) : noteFor ? setNoteFor(null) : finding ? setFinding(false) : setPanel(null)),
+    Escape: () => (editing ? setEditing(null) : noteFor ? setNoteFor(null) : finding ? setFinding(false) : panel ? closePanel() : setFocused(false)),
   });
 
   if (doc === undefined) return <main class="boot">Opening…</main>;
@@ -351,40 +429,36 @@ export function Reader({ docId }: { docId: string }) {
             : 'Looking for voices…';
   const page = view.currentId ? pages.ofSentence(view.currentId) : undefined;
   const chapterLine = [index.chapter(chapterIndex)?.title ?? '', page ? `page ${page.label}` : ''].filter(Boolean).join(' · ');
-  const toggle = (p: Exclude<Panel, null>) => setPanel(panel === p ? null : p);
+  const toggle = (p: Exclude<Panel, null>) => {
+    if (!leaveDraft()) return;
+    if (p === 'draft') player.pause();
+    setPanel(panel === p ? null : p);
+  };
+  const ordinal = view.currentId ? index.get(view.currentId)?.ordinal ?? 0 : 0;
+  const progress = index.order.length > 1 ? ordinal / (index.order.length - 1) * 100 : view.status === 'ended' ? 100 : 0;
+  const transport = () => <ReaderTransport playing={playing} audiobook={view.source === 'audiobook'} onPrevious={() => player.prev()} onNext={() => player.next()} onToggle={() => void player.toggleReader()} onReplay={() => player.replay()}
+    rangePicker={<ReadRangePicker value={view.readerRange} onChange={(kind) => void selectReadRange(kind)} />} />;
+  const voiceStatus = () => <div class="status" aria-live="polite" title={status}>
+    {status}
+    {view.rate > 2 && player.currentVoice?.engineId === 'webspeech' ? ' · capped at 2.0× for browser voices' : ''}
+  </div>;
   const editingAt = editing ? index.get(editing.sentenceId) : undefined;
   const placeOf = (chapter: number, title: string, paragraph: number) => `${title || `Chapter ${chapter + 1}`} · Paragraph ${paragraph}`;
 
   return (
-    <main class={`reader${panel ? ' with-panel' : ''}${paged ? ' paged' : ''}`}>
-      <header class="bar">
-        <a class="button" href="#/" aria-label="Back to library">
-          ←
-        </a>
-        <div class="titles">
-          <div class="doc-title">{doc.title}</div>
-          <div class="chapter-title">{chapterLine}</div>
-        </div>
-        <div class="spacer" />
-        <div class="panel-buttons">
-          <button class={panel === 'audiobook' ? 'active' : ''} onClick={() => toggle('audiobook')}>Audiobook</button>
-          <button class={panel === 'toc' ? 'active' : ''} onClick={() => toggle('toc')}>
-            Contents
-          </button>
-          <button class={panel === 'flags' ? 'active' : ''} onClick={() => toggle('flags')}>
-            Flags{flags.length ? ` (${flags.filter((f) => f.status === 'open').length})` : ''}
-          </button>
-          <button class={panel === 'notes' ? 'active' : ''} onClick={() => toggle('notes')}>
-            Notes{notes.length ? ` (${notes.length})` : ''}
-          </button>
-          <button class={panel === 'ai' ? 'active' : ''} onClick={() => toggle('ai')} title="AI study assistant, with your own key">
-            AI{ai.job ? ' …' : ''}
-          </button>
-          <button class={panel === 'text' ? 'active' : ''} onClick={() => toggle('text')} title="Font, spacing and layout" aria-label="Font, spacing and layout">
-            Aa
-          </button>
-        </div>
-      </header>
+    <main ref={readerRoot} data-reading-tone={settings.readerTone} class={`reader reader-studio${panel ? ' with-panel' : ''}${paged ? ' paged' : ''}${focused ? ' reader-focused' : ''}`}>
+      <ReaderChrome title={doc.title} chapter={chapterLine} panel={panel} onPanel={toggle}
+        flags={flags.filter((f) => f.status === 'open').length} notes={notes.length} aiBusy={!!ai.job}
+        focused={focused} onFocus={() => { if (leaveDraft()) { setFocused(!focused); setPanel(null); } }} fullscreen={fullscreen}
+        onFullscreen={() => void toggleFullscreen()} paged={paged}
+        onLayout={() => {
+          void services.updateSettings({ layout: paged ? 'scroll' : 'pages' });
+        }}
+        layoutPicker={<ReadingLayoutPicker value={readingLayout(settings)} onChange={(choice) => void services.updateSettings(layoutSettings(choice))} />}
+        onFind={() => setFinding(!finding)} transport={compact ? null : transport()} />
+
+      <PreparedModeNotice audiobook={view.source === 'audiobook'} busy={modeBusy} playing={playing} onReader={() => void returnToReader()} onResume={() => void player.playPrepared()} />
+      {player.readerRangeFinished && view.readerRange !== 'book' && <ReadRangeNotice kind={view.readerRange} onBook={() => void selectReadRange('book', true)} />}
 
       {kokoroBanner && (
         <div class="banner" role="note">
@@ -403,6 +477,8 @@ export function Reader({ docId }: { docId: string }) {
           onWidth={setPaneWidth}
         >
           {sheets && (
+            <>
+            {settings.twoPages && !twoUp && <p class="spread-hint" role="status">Two-page spread selected. Widen the window, close the tools panel or reduce text size to show both pages.</p>}
             <nav class="pager" aria-label="Pages">
               <button onClick={() => turn(-1)} disabled={sheets[0]?.key === pages.pages[0]?.key} title="Previous page (Page Up)">
                 ‹ Previous
@@ -414,11 +490,14 @@ export function Reader({ docId }: { docId: string }) {
                 Next ›
               </button>
             </nav>
+            </>
           )}
         </TextPane>
         {panel && (
-          <aside class="side-panel">
-            {panel === 'audiobook' ? <AudiobookPanel key={doc.id} doc={doc} /> : panel === 'toc' ? (
+          <aside class="side-panel" id="reader-tools-panel" aria-label={PANEL_LABELS[panel]}>
+            <div class="reader-panel-heading"><span>{PANEL_LABELS[panel]}</span><button class="icon-button" onClick={closePanel} aria-label="Close reader tools"><ReaderIcon name="close" /></button></div>
+            {panel === 'draft' ? <DraftPanel key={`${doc.id}:${!!doc.draft}`} doc={doc} currentBlockId={current?.block.id}
+              onCreate={createWorkingDraft} onSave={saveWorkingDraft} onRestore={restoreImportedDocument} onDirty={onDraftDirty} /> : panel === 'audiobook' ? <AudiobookPanel key={`${doc.id}:${doc.sourceHash}`} doc={doc} /> : panel === 'toc' ? (
               <TocPanel doc={doc} currentChapter={chapterIndex} onGo={go} />
             ) : panel === 'flags' ? (
               <FlagPanel doc={doc} index={index} flags={flags} currentId={view.currentId} onSave={saveFlag} onDelete={deleteFlag} onJump={(id) => jump(id, false)} />
@@ -469,6 +548,7 @@ export function Reader({ docId }: { docId: string }) {
           </div>
         )}
       </div>
+      <ReadingProgress percent={progress} chapter={index.chapter(chapterIndex)?.title ?? ''} page={page ? `Page ${page.label} / ${pages.pages.at(-1)?.label}` : ''} />
 
       {editing && (
         <NoteEditor
@@ -506,23 +586,9 @@ export function Reader({ docId }: { docId: string }) {
 
       {finding && <FindBar index={index} pages={pages} currentId={view.currentId} onGo={(id) => jump(id, false)} onClose={() => setFinding(false)} />}
       <footer class="controls" aria-label="Playback">
-        <div class="transport">
-          <button onClick={() => player.prev()} aria-label="Previous sentence" title="Previous sentence (←)">
-            ⏮
-          </button>
-          <button class="play" onClick={() => void player.toggle()} aria-label={playing ? 'Pause' : 'Play'} title="Play or pause (Space)">
-            {playing ? '⏸' : '▶'}
-          </button>
-          <button onClick={() => player.next()} aria-label="Next sentence" title="Next sentence (→)">
-            ⏭
-          </button>
-          <button onClick={() => player.replay()} aria-label="Replay sentence" title="Replay sentence (R)">
-            ↺
-          </button>
-          <button class={finding ? 'active' : ''} onClick={() => setFinding(!finding)} aria-label="Go to a page or find text" title="Go to a page or find text (/)">
-            🔍
-          </button>
-        </div>
+        {compact ? transport() : null}
+        {compact ? voiceStatus() : null}
+        <ReadingTools compact={compact}>
         <div class="speed" aria-label="Speed">
           <button onClick={() => setRate(view.rate - 0.1)} disabled={view.rate <= RATE_MIN} aria-label="Slower" title="Slower ([)">
             −
@@ -538,18 +604,16 @@ export function Reader({ docId }: { docId: string }) {
           value={player.currentVoice ? { engineId: player.currentVoice.engineId, voiceId: player.currentVoice.id } : null}
           onPick={(e, v) => void pickVoice(e, v)}
         />
-        <div class="status" aria-live="polite">
-          {status}
-          {view.rate > 2 && player.currentVoice?.engineId === 'webspeech' ? ' · capped at 2.0× for browser voices' : ''}
-        </div>
+        {compact ? null : voiceStatus()}
         <button class="jot" onClick={writeNote} title="Write a note on this sentence (M)">
           ✎ Note
         </button>
         <button class="note" onClick={() => void flagCurrent(true)} title="Flag with a note about the mistake (N)">
           Flag + note
         </button>
+        </ReadingTools>
         <button class="flag-btn" onClick={() => void flagCurrent(false)} title="Flag this sentence (F)">
-          FLAG
+          Flag
         </button>
       </footer>
     </main>

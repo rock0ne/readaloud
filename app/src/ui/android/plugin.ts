@@ -17,6 +17,7 @@ export interface TtsEvents {
 }
 
 export interface ReadAloudTts {
+  saveTextExport(opts: { name: string; text: string; mime: 'text/plain' | 'text/markdown' | 'application/json' }): Promise<void>;
   beginAudioExport(opts: { name: string; expectedBytes?: number; maxBytes?: number }): Promise<{ token: string }>;
   appendAudioExport(opts: { token: string; data: string; position?: number }): Promise<void>;
   finishAudioExport(opts: { token: string; name: string; mime?: string }): Promise<void>;

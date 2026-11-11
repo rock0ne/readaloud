@@ -47,6 +47,17 @@ export interface DocRecord extends ParsedDocument {
   sourceHash: string;  // sha256 hex of the original bytes (duplicate detection)
   addedAt: string;     // ISO 8601
   lastOpenedAt?: string;
+  /** Local editing session on this document; never inferred from an imported file. */
+  draft?: DraftState;
+}
+
+export interface DraftEdit { blockId: string; before: string; after: string; at: string; }
+export interface DraftState {
+  sessionId?: string;
+  baseDocId: string;
+  baseSourceHash: string;
+  revision: number;
+  edits: DraftEdit[]; // Last 50 paragraph edits, newest last. Original remains a separate book.
 }
 
 // ===== Voices =====
@@ -91,6 +102,8 @@ export type PlayerStatus = 'idle' | 'buffering' | 'playing' | 'paused' | 'ended'
 
 export interface PlayerState {
   status: PlayerStatus;
+  source: 'reader' | 'audiobook'; // transient session choice, never a saved global restriction
+  readerRange: 'book' | 'chapter' | 'page';
   docId?: string;
   sentenceId?: string;
   rate: number;        // user speed 0.8..3.0
@@ -206,14 +219,14 @@ export type ReaderFont = 'serif' | 'sans' | 'wide' | 'mono';
 export type ReaderLayout = 'scroll' | 'pages';
 
 export interface Settings {
-  schemaVersion: 4;                             // 2: Kokoro first (ADR-22); 3: ai (ADR-30), paragraph pause (ADR-31); 4: reading font (ADR-33), page by page (ADR-35)
+  schemaVersion: 5;                             // v5: continuous Reader flow; explicit page/chapter/book ranges
   enginePreference: EngineId[];                 // default ['kokoro', 'webspeech']
   voiceByEngine: Partial<Record<EngineId, string>>;
   rate: number;                                 // default 1.0
   locale: string;                               // default 'en-GB'
   azure: { region: string; key: string } | null;
   skipCodeBlocks: boolean;                      // default true
-  preparedAudioOnly: boolean;                  // never synthesize during prepared-book listening
+  preparedAudioOnly: boolean;                  // legacy preference retained for compatibility; playback uses PlayerState.source
   pronunciation: { enabled: boolean; list: string }; // English context hints + literal personal respellings
   announceHeadings: boolean;                    // default true
   pauseAfterHeadingMs: number;                  // default 600
@@ -223,10 +236,11 @@ export interface Settings {
   pauseOnFlag: boolean;                         // default false on desktop, true on touch devices
   fontSizePx: number;                           // default 18
   readerFont: ReaderFont;                       // default 'serif' (ADR-33)
+  readerTone: 'system' | 'paper' | 'sepia' | 'night'; // reader-only palette; no voice/cache identity changes
   lineSpacing: number;                          // default 1.7 (ADR-33)
   layout: ReaderLayout;                         // default 'scroll' (ADR-35)
   twoPages: boolean;                            // default true: two pages side by side on a wide screen (ADR-35)
-  stopAtPageEnd: boolean;                       // default true: page by page stops at the end of each page (ADR-35)
+  stopAtPageEnd: boolean;                       // legacy setting, reset false in v5; Reader now uses explicit page/chapter/book ranges
   theme: 'auto' | 'light' | 'dark';             // default 'auto'
   ai: AiSettings;                               // default { provider: null, models: {} }
 }

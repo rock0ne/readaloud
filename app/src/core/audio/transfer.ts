@@ -22,7 +22,7 @@ export async function exportTransfer(doc: DocRecord, plan: NarrationPlan, chapte
   const chapterChunks = doc.blocks.filter((b) => (chapter === undefined || b.chapterIndex === chapter) && !(b.type === 'code' && settings.skipCodeBlocks))
     .flatMap((b) => b.sentences.flatMap((s) => s.chunks.map((t) => pronunciationText(t, settings.pronunciation, settings.locale))));
   for (const text of plan.texts) if (chapterChunks.some((chunk) => text === chunk || text.startsWith(`${chunk} `))) chapterTexts.add(text);
-  const { id: _id, sourceHash: _hash, sourceName: _name, addedAt: _added, lastOpenedAt: _opened, ...parsed } = doc;
+  const { id: _id, sourceHash: _hash, sourceName: _name, addedAt: _added, lastOpenedAt: _opened, draft: _draft, ...parsed } = doc;
   const json = JSON.stringify(parsed);
   if (new TextEncoder().encode(json).length > TEXT_LIMIT) throw new Error('Document text exceeds the 8 MB transfer limit.');
   const reading = Object.fromEntries(PAUSES.map((p) => [p, settings[p]])) as ReadingSettings;
